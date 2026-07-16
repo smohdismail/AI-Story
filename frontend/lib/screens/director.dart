@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../api.dart';
 
-class WorkspaceScreen extends StatefulWidget {
-  const WorkspaceScreen({super.key});
+class DirectorScreen extends StatefulWidget {
+  final String storyId;
+  final int currentChapterCount;
+  const DirectorScreen({super.key, required this.storyId, required this.currentChapterCount});
 
   @override
-  State<WorkspaceScreen> createState() => _WorkspaceScreenState();
+  State<DirectorScreen> createState() => _DirectorScreenState();
 }
 
-class _WorkspaceScreenState extends State<WorkspaceScreen> {
+class _DirectorScreenState extends State<DirectorScreen> {
   final _editorController = TextEditingController();
   final _promptController = TextEditingController();
   bool _isGenerating = false;
+  bool _isSaving = false;
 
   void _generateText() async {
     if (_promptController.text.isEmpty) return;
@@ -24,11 +27,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         : _editorController.text;
 
     try {
-      await for (final chunk in ApiService.generateChapter(prompt, contextText)) {
+      await for (final chunk in ApiService.generateChapter(widget.storyId, prompt, contextText)) {
         if (!mounted) break;
         setState(() {
           _editorController.text += chunk;
         });
+      }
+      // Finished streaming, now save it as a chapter
+      if (mounted) {
+        setState(() => _isSaving = true);
+        await ApiService.saveChapter(widget.storyId, {
+          'chapter_number': widget.currentChapterCount + 1,
+          'title': 'Chapter ${widget.currentChapterCount + 1}',
+          'content': _editorController.text,
+          'summary': prompt, // We can store the prompt used as the summary for now
+          'status': 'published'
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chapter Saved!')));
+        context.pop(); // Go back to story details
       }
     } catch (e) {
       if (mounted) {
@@ -36,7 +53,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isGenerating = false);
+        setState(() {
+          _isGenerating = false;
+          _isSaving = false;
+        });
       }
     }
   }
@@ -47,22 +67,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
+          onPressed: () => context.pop(),
         ),
-        title: const Text('Writing Workspace'),
-        actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.save),
-            label: const Text('Save Chapter'),
-            onPressed: () {},
-          )
-        ],
+        title: Text('Director: Chapter ${widget.currentChapterCount + 1}'),
       ),
-      body: Row(
+      body: Column(
         children: [
-          // Main Editor Area
+          // Main Editor Area (Takes up remaining space)
           Expanded(
-            flex: 3,
             child: Container(
               padding: const EdgeInsets.all(24),
               child: TextField(
@@ -72,38 +84,36 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 style: const TextStyle(fontSize: 18, height: 1.6),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
-                  hintText: 'Start writing your story here, or use the AI assistant to generate the next chapter...',
+                  hintText: 'The AI will generate the chapter here...',
                 ),
               ),
             ),
           ),
-          // AI Assistant Sidebar
+          // AI Assistant Bottom Panel for Mobile
           Container(
-            width: 350,
             color: Theme.of(context).colorScheme.surfaceVariant,
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('AI Director', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const Divider(height: 32),
-                const Text('Instructions for AI:'),
+                const Text('Instructions for AI:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _promptController,
-                  maxLines: 5,
+                  maxLines: 3,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    hintText: 'e.g., "Write a slow-burn romantic scene where they accidentally touch hands at the coffee shop. Make it highly emotional and dramatic."',
+                    hintText: 'e.g., "Write a slow-burn scene where they accidentally touch hands..."',
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 ElevatedButton.icon(
-                  onPressed: _isGenerating ? null : _generateText,
-                  icon: _isGenerating 
+                  onPressed: (_isGenerating || _isSaving) ? null : _generateText,
+                  icon: (_isGenerating || _isSaving)
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
                       : const Icon(Icons.auto_awesome),
-                  label: Text(_isGenerating ? 'Generating...' : 'Generate Scene'),
+                  label: Text(_isSaving ? 'Saving Chapter...' : _isGenerating ? 'Generating...' : 'Generate Chapter'),
                   style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
                 ),
               ],

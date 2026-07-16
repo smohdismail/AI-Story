@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../api.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -34,6 +36,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('token');
+    if (mounted) context.go('/auth');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -43,7 +51,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => context.go('/create'),
-          )
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+          ),
         ],
       ),
       body: isLoading 
@@ -52,8 +64,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? const Center(child: Text("No stories yet. Click + to create one."))
           : GridView.builder(
               padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 childAspectRatio: 0.7,
@@ -64,7 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return Card(
                   elevation: 4,
                   child: InkWell(
-                    onTap: () => context.go('/workspace'),
+                    onTap: () => context.go('/story/${story['id']}'),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [

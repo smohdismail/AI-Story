@@ -70,6 +70,14 @@ async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.
     result = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
     return result.scalars().all()
 
+@app.get("/api/v1/stories/{story_id}", response_model=schemas.StoryResponse)
+async def get_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
+    story = result.scalars().first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return story
+
 @app.post("/api/v1/stories/{story_id}/characters", response_model=schemas.CharacterResponse)
 async def create_character(story_id: uuid.UUID, character: schemas.CharacterCreate, db: AsyncSession = Depends(get_db)):
     db_character = models.Character(**character.model_dump(), story_id=story_id)

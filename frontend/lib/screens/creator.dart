@@ -17,9 +17,9 @@ class _CreatorScreenState extends State<CreatorScreen> {
   String _selectedSubgenre = 'CEO Romance';
   String _selectedTone = 'Passionate';
   
-  final _genres = ['Romance', 'Fantasy', 'Sci-Fi', 'Mystery'];
-  final _subgenres = ['CEO Romance', 'Enemies to Lovers', 'Slow Burn', 'Mafia Romance', 'Historical Romance'];
-  final _tones = ['Passionate', 'Dark', 'Lighthearted', 'Dramatic'];
+  final _genres = ['Romance', 'Erotica', 'Fantasy', 'Sci-Fi', 'Mystery'];
+  final _subgenres = ['CEO Romance', 'Enemies to Lovers', 'Slow Burn', 'Mafia Romance', 'Historical Romance', 'Family Dynamics', 'Step-Family Taboo', 'Age Gap', 'Forbidden Romance', 'Mom & Son', 'Brother & Sister', 'Step-Mom', 'Step-Sister'];
+  final _tones = ['Passionate', 'Dark', 'Lighthearted', 'Dramatic', 'Extremely Steamy', 'Taboo & Intense', 'Romantic & Sweet'];
 
   bool _isSaving = false;
 
