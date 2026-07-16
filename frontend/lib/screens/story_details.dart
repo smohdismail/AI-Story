@@ -48,7 +48,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
+          onPressed: () => context.pop(),
         ),
         title: const Text('Story Chapters'),
         actions: [
@@ -105,7 +105,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/story/${widget.storyId}/director', extra: {'chapterCount': chapters.length}),
+        onPressed: () async {
+          await context.push('/story/${widget.storyId}/director', extra: {'chapterCount': chapters.length});
+          _loadData();
+        },
         label: const Text('Create Chapter'),
         icon: const Icon(Icons.auto_awesome),
       ),

@@ -36,7 +36,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
       
       await ApiService.createStory(storyData);
       if (mounted) {
-        context.go('/');
+        context.pop();
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

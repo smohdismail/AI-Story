@@ -50,7 +50,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => context.go('/create'),
+            onPressed: () async {
+              await context.push('/create');
+              _loadStories();
+            },
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -76,7 +79,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return Card(
                   elevation: 4,
                   child: InkWell(
-                    onTap: () => context.go('/story/${story['id']}'),
+                    onTap: () async {
+                      await context.push('/story/${story['id']}');
+                      _loadStories();
+                    },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -109,7 +115,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/create'),
+        onPressed: () async {
+          await context.push('/create');
+          _loadStories();
+        },
         label: const Text('New Story'),
         icon: const Icon(Icons.add),
       ),
