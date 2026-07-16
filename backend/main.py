@@ -58,6 +58,19 @@ async def list_characters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db
     result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
     return result.scalars().all()
 
+@app.get("/api/v1/stories/{story_id}/chapters", response_model=list[schemas.ChapterResponse])
+async def list_chapters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number))
+    return result.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/chapters", response_model=schemas.ChapterResponse)
+async def create_chapter(story_id: uuid.UUID, chapter: schemas.ChapterCreate, db: AsyncSession = Depends(get_db)):
+    db_chapter = models.Chapter(**chapter.model_dump(), story_id=story_id)
+    db.add(db_chapter)
+    await db.commit()
+    await db.refresh(db_chapter)
+    return db_chapter
+
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import llm_service
@@ -65,10 +78,17 @@ import llm_service
 class GenerateRequest(BaseModel):
     prompt: str
     context: str = ""
+    story_id: uuid.UUID | None = None
 
 @app.post("/api/v1/generate/chapter")
-async def generate_chapter(request: GenerateRequest):
+async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
+    story_context = ""
+    if request.story_id:
+        story = await db.get(models.Story, request.story_id)
+        if story:
+            story_context = f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
+    
     return StreamingResponse(
-        llm_service.stream_generator(request.prompt, request.context),
+        llm_service.stream_generator(request.prompt, request.context, story_context),
         media_type="text/event-stream"
     )
