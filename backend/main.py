@@ -53,7 +53,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
-
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Uncensored AI Story Generator API is running."}
