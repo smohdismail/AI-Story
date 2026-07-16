@@ -120,6 +120,19 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
         story = await db.get(models.Story, request.story_id)
         if story:
             story_context = f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
+            
+        # Auto-fetch previous chapter for context if it exists and editor is empty
+        last_chapter_result = await db.execute(
+            select(models.Chapter).where(models.Chapter.story_id == request.story_id).order_by(models.Chapter.chapter_number.desc()).limit(1)
+        )
+        last_chapter = last_chapter_result.scalars().first()
+        
+        if last_chapter:
+            story_context += f"IMPORTANT: You are writing Chapter {last_chapter.chapter_number + 1}. Do NOT write 'Chapter 1' or repeat the previous chapter.\n"
+            if not request.context:
+                request.context = f"PREVIOUS CHAPTER CONTEXT:\n{last_chapter.content[-2000:]}\n\n"
+        else:
+            story_context += "IMPORTANT: You are writing Chapter 1.\n"
     
     return StreamingResponse(
         llm_service.stream_generator(request.prompt, request.context, story_context),

@@ -42,6 +42,26 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     }
   }
 
+  Widget _buildParsedText(String text, BuildContext context) {
+    final baseStyle = DefaultTextStyle.of(context).style.copyWith(fontSize: 16, height: 1.5);
+    final italicStyle = baseStyle.copyWith(fontStyle: FontStyle.italic);
+    
+    final parts = text.split('*');
+    final spans = <TextSpan>[];
+    
+    for (int i = 0; i < parts.length; i++) {
+      if (i % 2 == 0) {
+        spans.add(TextSpan(text: parts[i], style: baseStyle));
+      } else {
+        spans.add(TextSpan(text: parts[i], style: italicStyle));
+      }
+    }
+    
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -94,10 +114,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          chapter['content'] ?? '',
-                          style: const TextStyle(fontSize: 16, height: 1.5),
-                        ),
+                        child: _buildParsedText(chapter['content'] ?? '', context),
                       )
                     ],
                   ),
