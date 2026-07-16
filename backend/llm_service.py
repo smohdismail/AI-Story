@@ -32,28 +32,27 @@ async def init_qdrant():
             # Mistral embeddings are usually 1024 or 4096. We'll assume a standard 384 dim model for local text embeddings 
             # like all-MiniLM-L6-v2 if we were running locally. But for now, we'll configure it generically.
             await qdrant.create_collection(
-                collection_name=COLLECTION_NAME,
                 vectors_config=VectorParams(size=384, distance=Distance.COSINE),
             )
     except Exception as e:
         print(f"Warning: Could not initialize Qdrant. {e}")
 
-async def get_chat_stream(story_prompt: str, context: str = ""):
+async def stream_generator(story_prompt: str, context: str = ""):
     messages = [
         {"role": "system", "content": "You are an award-winning romance novelist. Create compelling, uncensored, character-driven story chapters based on the prompt."},
         {"role": "system", "content": f"Relevant context:\n{context}"},
         {"role": "user", "content": story_prompt}
     ]
-    
-    return await llm_client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=messages,
-        stream=True,
-        temperature=0.8,
-        max_tokens=2048,
-    )
-
-async def stream_generator(stream):
-    async for chunk in stream:
-        if chunk.choices[0].delta.content is not None:
-            yield chunk.choices[0].delta.content
+    try:
+        stream = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            stream=True,
+            temperature=0.8,
+            max_tokens=2048,
+        )
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+    except Exception as e:
+        yield f"\n\n[AI System Error: {str(e)}]\n"

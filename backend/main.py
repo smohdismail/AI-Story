@@ -68,11 +68,7 @@ class GenerateRequest(BaseModel):
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest):
-    try:
-        stream = await llm_service.get_chat_stream(request.prompt, request.context)
-        return StreamingResponse(
-            llm_service.stream_generator(stream),
-            media_type="text/event-stream"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Provider Error: {str(e)}")
+    return StreamingResponse(
+        llm_service.stream_generator(request.prompt, request.context),
+        media_type="text/event-stream"
+    )
