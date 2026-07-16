@@ -10,7 +10,7 @@ load_dotenv()
 # We will use OpenRouter or Together API format which is compatible with OpenAI client
 LLM_API_KEY = os.getenv("LLM_API_KEY", "your-api-key")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "mistralai/mistral-7b-instruct:free")
+MODEL_NAME = os.getenv("MODEL_NAME", "openrouter/free")
 
 llm_client = AsyncOpenAI(
     api_key=LLM_API_KEY,
@@ -38,21 +38,22 @@ async def init_qdrant():
     except Exception as e:
         print(f"Warning: Could not initialize Qdrant. {e}")
 
-async def generate_chapter_stream(story_prompt: str, context: str = ""):
+async def get_chat_stream(story_prompt: str, context: str = ""):
     messages = [
         {"role": "system", "content": "You are an award-winning romance novelist. Create compelling, uncensored, character-driven story chapters based on the prompt."},
         {"role": "system", "content": f"Relevant context:\n{context}"},
         {"role": "user", "content": story_prompt}
     ]
     
-    stream = await llm_client.chat.completions.create(
+    return await llm_client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
         stream=True,
         temperature=0.8,
         max_tokens=2048,
     )
-    
+
+async def stream_generator(stream):
     async for chunk in stream:
         if chunk.choices[0].delta.content is not None:
             yield chunk.choices[0].delta.content
