@@ -15,7 +15,8 @@ MODEL_NAME = os.getenv("MODEL_NAME", "openrouter/free")
 llm_client = AsyncOpenAI(
     api_key=LLM_API_KEY,
     base_url=LLM_BASE_URL,
-    max_retries=0
+    max_retries=3,
+    timeout=60.0
 )
 
 # Qdrant client for story memory

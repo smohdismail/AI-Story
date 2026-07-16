@@ -33,8 +33,15 @@ class _DirectorScreenState extends State<DirectorScreen> {
           _editorController.text += chunk;
         });
       }
-      // Finished streaming, now save it as a chapter
+      // Finished streaming, now save it as a chapter if there were no errors
       if (mounted) {
+        if (_editorController.text.contains('[AI System Error:') || _editorController.text.contains('[System Message:')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Generation failed. Please try again.'), backgroundColor: Colors.red),
+          );
+          return;
+        }
+
         setState(() => _isSaving = true);
         await ApiService.saveChapter(widget.storyId, {
           'chapter_number': widget.currentChapterCount + 1,
