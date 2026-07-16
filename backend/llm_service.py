@@ -51,8 +51,13 @@ async def stream_generator(story_prompt: str, context: str = ""):
             temperature=0.8,
             max_tokens=2048,
         )
+        yielded_any = False
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
+                yielded_any = True
+        
+        if not yielded_any:
+            yield "\n\n[System Message: The AI returned an empty response. This usually happens if the free AI model's safety filter blocked your prompt. Try a different prompt or use a custom API key for a truly uncensored model.]\n"
     except Exception as e:
         yield f"\n\n[AI System Error: {str(e)}]\n"
