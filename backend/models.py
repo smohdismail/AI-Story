@@ -1,0 +1,65 @@
+import uuid
+from datetime import datetime
+import enum
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, DateTime, Enum as SQLEnum, Uuid
+from sqlalchemy.orm import relationship
+from database import Base
+
+class StoryStatus(str, enum.Enum):
+    draft = "draft"
+    published = "published"
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True)
+    password_hash = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    stories = relationship("Story", back_populates="user")
+
+class Story(Base):
+    __tablename__ = "stories"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"))
+    title = Column(String)
+    synopsis = Column(Text)
+    genre = Column(String)
+    subgenre = Column(String)
+    story_length = Column(String)
+    perspective = Column(String)
+    tone = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="stories")
+    characters = relationship("Character", back_populates="story", cascade="all, delete-orphan")
+    chapters = relationship("Chapter", back_populates="story", cascade="all, delete-orphan")
+
+class Character(Base):
+    __tablename__ = "characters"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    full_name = Column(String)
+    age = Column(Integer)
+    occupation = Column(String)
+    personality = Column(Text)
+    appearance = Column(Text)
+    goals = Column(Text)
+    weaknesses = Column(Text)
+    relationship_status = Column(String)
+
+    story = relationship("Story", back_populates="characters")
+
+class Chapter(Base):
+    __tablename__ = "chapters"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    chapter_number = Column(Integer)
+    title = Column(String)
+    content = Column(Text)
+    summary = Column(Text)
+    status = Column(SQLEnum(StoryStatus), default=StoryStatus.draft)
+    
+    story = relationship("Story", back_populates="chapters")
