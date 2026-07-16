@@ -6,6 +6,6 @@ pydantic
 qdrant-client
 python-dotenv
 openai
-passlib[bcrypt]
+bcrypt
 python-jose[cryptography]
 python-multipart
