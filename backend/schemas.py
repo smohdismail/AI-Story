@@ -1,7 +1,24 @@
-from pydantic import BaseModel, UUID4, ConfigDict
+from pydantic import BaseModel, UUID4, ConfigDict, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from models import StoryStatus
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: UUID4
+    username: str
+    email: str
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class StoryBase(BaseModel):
     title: str

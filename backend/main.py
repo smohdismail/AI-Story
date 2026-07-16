@@ -8,6 +8,31 @@ import uuid
 from database import engine, Base, get_db
 import models
 import schemas
+import auth
+from fastapi.security import OAuth2PasswordRequestForm
+
+@app.post("/api/v1/auth/register", response_model=schemas.UserResponse)
+async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.User).where(models.User.email == user.email))
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hashed_password = auth.get_password_hash(user.password)
+    db_user = models.User(username=user.username, email=user.email, password_hash=hashed_password)
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+@app.post("/api/v1/auth/login", response_model=schemas.Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.User).where(models.User.username == form_data.username))
+    user = result.scalars().first()
+    if not user or not auth.verify_password(form_data.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    
+    access_token = auth.create_access_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,16 +58,16 @@ def read_root():
     return {"status": "ok", "message": "Uncensored AI Story Generator API is running."}
 
 @app.post("/api/v1/stories", response_model=schemas.StoryResponse)
-async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(get_db)):
-    db_story = models.Story(**story.model_dump())
+async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_story = models.Story(**story.model_dump(), user_id=current_user.id)
     db.add(db_story)
     await db.commit()
     await db.refresh(db_story)
     return db_story
 
 @app.get("/api/v1/stories", response_model=list[schemas.StoryResponse])
-async def list_stories(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(models.Story))
+async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
     return result.scalars().all()
 
 @app.post("/api/v1/stories/{story_id}/characters", response_model=schemas.CharacterResponse)
