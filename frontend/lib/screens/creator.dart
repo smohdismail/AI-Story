@@ -18,7 +18,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   String _selectedTone = 'Passionate';
   
   final _genres = ['Romance', 'Erotica', 'Fantasy', 'Sci-Fi', 'Mystery', 'Thriller', 'Horror', 'Slice of Life', 'Historical Fiction'];
-  final _subgenres = ['CEO Romance', 'Enemies to Lovers', 'Slow Burn', 'Mafia Romance', 'Historical Romance', 'Family Dynamics', 'Step-Family Taboo', 'Age Gap', 'Forbidden Romance', 'Mom & Son', 'Brother & Sister', 'Step-Mom', 'Step-Sister', 'Billionaire Romance', 'Werewolf / Shifter', 'Vampire Romance', 'College Romance', 'Office Romance', 'Friends to Lovers', 'Arranged Marriage', 'Slave / Master'];
+  final _subgenres = ['CEO Romance', 'Enemies to Lovers', 'Slow Burn', 'Mafia Romance', 'Historical Romance', 'Family Dynamics', 'Step-Family Taboo', 'Age Gap', 'Forbidden Romance', 'Mom & Son', 'Brother & Sister', 'Step-Mom', 'Step-Sister', 'Master & Slave', 'BDSM / Submissive', 'Billionaire Romance', 'Werewolf / Shifter', 'Vampire Romance', 'College Romance', 'Office Romance', 'Friends to Lovers', 'Arranged Marriage'];
   final _tones = ['Passionate', 'Dark', 'Lighthearted', 'Dramatic', 'Extremely Steamy', 'Taboo & Intense', 'Romantic & Sweet', 'Angsty & Emotional', 'Suspenseful', 'Fluffy & Cute'];
 
   bool _isSaving = false;
