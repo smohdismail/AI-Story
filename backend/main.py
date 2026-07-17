@@ -98,6 +98,21 @@ async def list_chapters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db))
 
 @app.post("/api/v1/stories/{story_id}/chapters", response_model=schemas.ChapterResponse)
 async def create_chapter(story_id: uuid.UUID, chapter: schemas.ChapterCreate, db: AsyncSession = Depends(get_db)):
+    # Automatically determine the correct next chapter number
+    result = await db.execute(
+        select(models.Chapter)
+        .where(models.Chapter.story_id == story_id)
+        .order_by(models.Chapter.chapter_number.desc())
+        .limit(1)
+    )
+    last_chapter = result.scalars().first()
+    next_number = last_chapter.chapter_number + 1 if last_chapter else 1
+    
+    # Override the incoming chapter number and title
+    chapter.chapter_number = next_number
+    if chapter.title.startswith("Chapter"):
+        chapter.title = f"Chapter {next_number}"
+        
     db_chapter = models.Chapter(**chapter.model_dump(), story_id=story_id)
     db.add(db_chapter)
     await db.commit()

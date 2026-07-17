@@ -38,6 +38,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
         final textLower = _editorController.text.toLowerCase();
         if (textLower.contains('[ai system error:') || 
             textLower.contains('[system message:') ||
+            textLower.contains('[removed]') ||
             textLower.contains('as an ai') ||
             textLower.contains('i cannot fulfill') ||
             textLower.contains('i am sorry') ||
