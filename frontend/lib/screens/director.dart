@@ -35,9 +35,18 @@ class _DirectorScreenState extends State<DirectorScreen> {
       }
       // Finished streaming, now save it as a chapter if there were no errors
       if (mounted) {
-        if (_editorController.text.contains('[AI System Error:') || _editorController.text.contains('[System Message:')) {
+        final textLower = _editorController.text.toLowerCase();
+        if (textLower.contains('[ai system error:') || 
+            textLower.contains('[system message:') ||
+            textLower.contains('as an ai') ||
+            textLower.contains('i cannot fulfill') ||
+            textLower.contains('i am sorry') ||
+            textLower.contains("i'm sorry,") ||
+            textLower.contains('i cannot write') ||
+            textLower.contains('i cannot generate')) {
+          
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Generation failed. Please try again.'), backgroundColor: Colors.red),
+            const SnackBar(content: Text('AI Refusal or Error Detected. Try generating again.'), backgroundColor: Colors.red),
           );
           return;
         }
