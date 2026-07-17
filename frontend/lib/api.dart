@@ -109,6 +109,17 @@ class ApiService {
     }
   }
 
+  static Future<void> deleteChapter(String storyId, int chapterNumber) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/stories/$storyId/chapters/$chapterNumber'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete chapter');
+    }
+  }
+
   // To support streaming, we'll use http.Client().send() for Server-Sent Events
   static Stream<String> generateChapter(String storyId, String prompt, String context) async* {
     final headers = await _getHeaders();
