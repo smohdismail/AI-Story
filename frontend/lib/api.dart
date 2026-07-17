@@ -71,6 +71,31 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> createCharacter(String storyId, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/characters'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to create character');
+    }
+  }
+
+  static Future<void> deleteCharacter(String storyId, String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/stories/$storyId/characters/$characterId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete character');
+    }
+  }
+
   static Future<Map<String, dynamic>> createStory(Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final response = await http.post(
@@ -117,6 +142,20 @@ class ApiService {
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to delete chapter');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateChapter(String storyId, int chapterNumber, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/stories/$storyId/chapters/$chapterNumber'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to update chapter');
     }
   }
 

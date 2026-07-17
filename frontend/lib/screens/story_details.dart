@@ -97,14 +97,22 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Story Chapters'),
-        actions: [
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.pop(),
+          ),
+          title: const Text('Story Details'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.menu_book), text: 'Chapters'),
+              Tab(icon: Icon(Icons.people), text: 'Characters'),
+            ],
+          ),
+          actions: [
           if (story != null && chapters.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
@@ -148,6 +156,18 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () async {
+                              final result = await context.push('/story/${widget.storyId}/edit_chapter', extra: {
+                                'chapterNumber': chapter['chapter_number'],
+                                'chapterData': chapter,
+                              });
+                              if (result == true) {
+                                _loadData();
+                              }
+                            },
+                          ),
+                          IconButton(
                             icon: const Icon(Icons.delete_outline, color: Colors.red),
                             onPressed: () => _deleteChapter(chapter['chapter_number']),
                           ),
@@ -164,6 +184,9 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   );
                 },
             ),
+        ),
+        _buildCharactersTab(),
+      ]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await context.push('/story/${widget.storyId}/director', extra: {'chapterCount': chapters.length});
@@ -171,6 +194,122 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         },
         label: const Text('Create Chapter'),
         icon: const Icon(Icons.auto_awesome),
+      ),
+    ));
+  }
+
+  Widget _buildCharactersTab() {
+    return Scaffold(
+      body: isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : characters.isEmpty
+          ? const Center(child: Text("No characters added yet.", style: TextStyle(fontSize: 18)))
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: characters.length,
+              itemBuilder: (context, index) {
+                final char = characters[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: ListTile(
+                    title: Text(char['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text('Role: ${char['role'] ?? 'N/A'}'),
+                        const SizedBox(height: 4),
+                        Text('Personality: ${char['personality'] ?? 'N/A'}'),
+                        const SizedBox(height: 4),
+                        Text('Appearance: ${char['appearance'] ?? 'N/A'}'),
+                      ],
+                    ),
+                    isThreeLine: true,
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _deleteCharacter(char['id']),
+                    ),
+                  ),
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'add_character_btn',
+        onPressed: _showAddCharacterDialog,
+        child: const Icon(Icons.person_add),
+      ),
+    );
+  }
+
+  Future<void> _deleteCharacter(String characterId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Character'),
+        content: const Text('Are you sure you want to delete this character?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ApiService.deleteCharacter(widget.storyId, characterId);
+        _loadData();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  void _showAddCharacterDialog() {
+    final nameController = TextEditingController();
+    final roleController = TextEditingController();
+    final personalityController = TextEditingController();
+    final appearanceController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Character'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name (e.g., John Doe)')),
+              TextField(controller: roleController, decoration: const InputDecoration(labelText: 'Role (e.g., Protagonist, Brother)')),
+              TextField(controller: personalityController, decoration: const InputDecoration(labelText: 'Personality (e.g., Grumpy, Sweet)')),
+              TextField(controller: appearanceController, decoration: const InputDecoration(labelText: 'Appearance (e.g., Tall, green eyes)')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.isEmpty) return;
+              try {
+                await ApiService.createCharacter(widget.storyId, {
+                  'name': nameController.text,
+                  'role': roleController.text,
+                  'personality': personalityController.text,
+                  'appearance': appearanceController.text,
+                });
+                if (mounted) Navigator.pop(context);
+                _loadData();
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }

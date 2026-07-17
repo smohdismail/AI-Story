@@ -4,6 +4,7 @@ import 'screens/dashboard.dart';
 import 'screens/creator.dart';
 import 'screens/director.dart';
 import 'screens/story_details.dart';
+import 'screens/edit_chapter.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth.dart';
@@ -48,6 +49,18 @@ void main() async {
         final extra = state.extra as Map<String, dynamic>?;
         final chapterCount = extra?['chapterCount'] as int? ?? 0;
         return DirectorScreen(storyId: storyId, currentChapterCount: chapterCount);
+      },
+    ),
+    GoRoute(
+      path: '/story/:id/edit_chapter',
+      builder: (BuildContext context, GoRouterState state) {
+        final storyId = state.pathParameters['id']!;
+        final extra = state.extra as Map<String, dynamic>;
+        return EditChapterScreen(
+          storyId: storyId,
+          chapterNumber: extra['chapterNumber'] as int,
+          chapterData: extra['chapterData'] as Map<String, dynamic>,
+        );
       },
     ),
   ],

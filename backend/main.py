@@ -91,6 +91,16 @@ async def list_characters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db
     result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
     return result.scalars().all()
 
+@app.delete("/api/v1/stories/{story_id}/characters/{character_id}")
+async def delete_character(story_id: uuid.UUID, character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.Character).where(models.Character.id == character_id, models.Character.story_id == story_id))
+    db_char = result.scalars().first()
+    if not db_char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    await db.delete(db_char)
+    await db.commit()
+    return {"status": "success", "message": "Character deleted"}
+
 @app.get("/api/v1/stories/{story_id}/chapters", response_model=list[schemas.ChapterResponse])
 async def list_chapters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number))
@@ -135,6 +145,25 @@ async def delete_chapter(story_id: uuid.UUID, chapter_number: int, db: AsyncSess
     await db.commit()
     return {"status": "success", "message": "Chapter deleted"}
 
+@app.put("/api/v1/stories/{story_id}/chapters/{chapter_number}", response_model=schemas.ChapterResponse)
+async def update_chapter(story_id: uuid.UUID, chapter_number: int, chapter_update: schemas.ChapterCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.Chapter).where(
+            models.Chapter.story_id == story_id, 
+            models.Chapter.chapter_number == chapter_number
+        )
+    )
+    db_chapter = result.scalars().first()
+    if not db_chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    db_chapter.title = chapter_update.title
+    db_chapter.content = chapter_update.content
+    db_chapter.summary = chapter_update.summary
+    await db.commit()
+    await db.refresh(db_chapter)
+    return db_chapter
+
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import llm_service
@@ -151,6 +180,15 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
         story = await db.get(models.Story, request.story_id)
         if story:
             story_context = f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
+            
+            # Fetch and inject characters
+            chars_result = await db.execute(select(models.Character).where(models.Character.story_id == request.story_id))
+            characters = chars_result.scalars().all()
+            if characters:
+                story_context += "\n--- STORY CHARACTERS ---\n"
+                for c in characters:
+                    story_context += f"Name: {c.name}, Role: {c.role}, Personality: {c.personality}, Appearance: {c.appearance}\n"
+                story_context += "------------------------\n\n"
             
         # Fetch ALL previous chapters to build a cohesive long-term memory
         all_chapters_result = await db.execute(

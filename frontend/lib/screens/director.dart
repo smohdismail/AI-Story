@@ -16,11 +16,17 @@ class _DirectorScreenState extends State<DirectorScreen> {
   final _promptController = TextEditingController();
   bool _isGenerating = false;
   bool _isSaving = false;
+  bool _stopRequested = false;
 
   void _generateText() async {
     if (_promptController.text.isEmpty) return;
     
-    setState(() => _isGenerating = true);
+    setState(() {
+      _isGenerating = true;
+      _stopRequested = false;
+      // We do NOT clear _editorController.text here, so Reroll/Continue can be flexible.
+    });
+    
     final prompt = _promptController.text;
     final contextText = _editorController.text.length > 2000 
         ? _editorController.text.substring(_editorController.text.length - 2000) 
@@ -28,11 +34,19 @@ class _DirectorScreenState extends State<DirectorScreen> {
 
     try {
       await for (final chunk in ApiService.generateChapter(widget.storyId, prompt, contextText)) {
-        if (!mounted) break;
+        if (!mounted || _stopRequested) break;
         setState(() {
           _editorController.text += chunk;
         });
       }
+      
+      if (_stopRequested) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Generation stopped.')));
+        }
+        return; // Don't save
+      }
+
       // Finished streaming, now save it as a chapter if there were no errors
       if (mounted) {
         final textLower = _editorController.text.toLowerCase();
@@ -125,14 +139,26 @@ class _DirectorScreenState extends State<DirectorScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: (_isGenerating || _isSaving) ? null : _generateText,
-                  icon: (_isGenerating || _isSaving)
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                      : const Icon(Icons.auto_awesome),
-                  label: Text(_isSaving ? 'Saving Chapter...' : _isGenerating ? 'Generating...' : 'Generate Chapter'),
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
-                ),
+                if (_isGenerating && !_isSaving)
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _stopRequested = true),
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop Generation'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.all(16),
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                    ),
+                  )
+                else
+                  ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _generateText,
+                    icon: _isSaving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                        : const Icon(Icons.auto_awesome),
+                    label: Text(_isSaving ? 'Saving Chapter...' : 'Generate Chapter'),
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+                  ),
               ],
             ),
           )
