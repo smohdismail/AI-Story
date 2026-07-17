@@ -104,6 +104,22 @@ async def create_chapter(story_id: uuid.UUID, chapter: schemas.ChapterCreate, db
     await db.refresh(db_chapter)
     return db_chapter
 
+@app.delete("/api/v1/stories/{story_id}/chapters/{chapter_number}")
+async def delete_chapter(story_id: uuid.UUID, chapter_number: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.Chapter).where(
+            models.Chapter.story_id == story_id, 
+            models.Chapter.chapter_number == chapter_number
+        )
+    )
+    db_chapter = result.scalars().first()
+    if not db_chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    await db.delete(db_chapter)
+    await db.commit()
+    return {"status": "success", "message": "Chapter deleted"}
+
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import llm_service
@@ -121,16 +137,28 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
         if story:
             story_context = f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
             
-        # Auto-fetch previous chapter for context if it exists and editor is empty
-        last_chapter_result = await db.execute(
-            select(models.Chapter).where(models.Chapter.story_id == request.story_id).order_by(models.Chapter.chapter_number.desc()).limit(1)
+        # Fetch ALL previous chapters to build a cohesive long-term memory
+        all_chapters_result = await db.execute(
+            select(models.Chapter).where(models.Chapter.story_id == request.story_id).order_by(models.Chapter.chapter_number.asc())
         )
-        last_chapter = last_chapter_result.scalars().first()
+        all_chapters = all_chapters_result.scalars().all()
         
-        if last_chapter:
-            story_context += f"IMPORTANT: You are writing Chapter {last_chapter.chapter_number + 1}. Do NOT write 'Chapter 1' or repeat the previous chapter.\n"
+        if all_chapters:
+            last_chapter = all_chapters[-1]
+            story_context += f"IMPORTANT: You are writing Chapter {last_chapter.chapter_number + 1}. Do NOT write 'Chapter 1' or repeat the previous chapter.\n\n"
+            
             if not request.context:
-                request.context = f"PREVIOUS CHAPTER CONTEXT:\n{last_chapter.content[-2000:]}\n\n"
+                # Build rolling context from old chapters
+                rolling_context = "STORY PROGRESSION SO FAR:\n"
+                for i, chap in enumerate(all_chapters):
+                    if i == len(all_chapters) - 1:
+                        # Full ending of the immediate previous chapter
+                        rolling_context += f"\n--- END OF CHAPTER {chap.chapter_number} ---\n...{chap.content[-3000:]}\n\n[CONTINUE THE STORY FROM HERE]"
+                    else:
+                        # Short summary / first few sentences of older chapters to establish long-term memory
+                        rolling_context += f"- Ch {chap.chapter_number}: {chap.content[:200]}...\n"
+                
+                request.context = rolling_context
         else:
             story_context += "IMPORTANT: You are writing Chapter 1.\n"
     
