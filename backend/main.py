@@ -129,7 +129,8 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         perspective=original_story.perspective,
         tone=original_story.tone,
         story_summary=original_story.story_summary,
-        custom_rules=original_story.custom_rules
+        custom_rules=original_story.custom_rules,
+        cover_base64=original_story.cover_base64
     )
     db.add(new_story)
     await db.commit()
@@ -494,7 +495,8 @@ async def branch_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         perspective=original.perspective,
         tone=original.tone,
         story_summary=original.story_summary,
-        custom_rules=original.custom_rules
+        custom_rules=original.custom_rules,
+        cover_base64=original.cover_base64
     )
     db.add(new_story)
     await db.commit()

@@ -45,6 +45,7 @@ class StoryBase(BaseModel):
     tone: Optional[str] = None
     story_summary: Optional[str] = None
     custom_rules: Optional[str] = None
+    cover_base64: Optional[str] = None
 
 class StoryCreate(StoryBase):
     pass

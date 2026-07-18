@@ -34,6 +34,7 @@ class Story(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     story_summary = Column(Text, default="")
     custom_rules = Column(Text, default="")
+    cover_base64 = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="stories")
     characters = relationship("Character", back_populates="story", cascade="all, delete-orphan")
