@@ -90,3 +90,57 @@ async def update_master_summary(current_summary: str, new_chapter_text: str) -> 
     except Exception as e:
         print(f"Error updating summary: {e}")
         return current_summary
+
+async def chat_with_character(character_info: str, story_summary: str, message: str) -> str:
+    messages = [
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character and respond to the user as if they are conversing with you directly.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nDo not break character. Do not say you are an AI. Respond naturally to the user's message."}
+    ]
+    messages.append({"role": "user", "content": message})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "*remains silent*"
+    except Exception as e:
+        print(f"Error chatting with character: {e}")
+        return "*could not respond*"
+
+async def copilot_edit(text: str, command: str, story_context: str = "") -> str:
+    system_prompt = "You are an expert AI writing assistant. Follow the user's command to modify or analyze the provided text."
+    
+    if command == "rewrite":
+        cmd_text = "Rewrite the following text to flow better and use stronger vocabulary."
+    elif command == "dramatize":
+        cmd_text = "Make the following text more dramatic, intense, and emotionally impactful."
+    elif command == "expand":
+        cmd_text = "Expand on the following text by adding more sensory details, deeper descriptions, and character thoughts."
+    elif command == "suggest":
+        cmd_text = "Based on the following text (which is the end of a chapter), suggest 3 distinct, brief ideas for what could happen next in the story."
+    else:
+        cmd_text = command
+        
+    messages = [
+        {"role": "system", "content": f"{system_prompt}\nSTORY CONTEXT:\n{story_context}"},
+        {"role": "user", "content": f"{cmd_text}\n\nTEXT:\n{text}"}
+    ]
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=800,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return text
+    except Exception as e:
+        print(f"Error in copilot edit: {e}")
+        return text
+

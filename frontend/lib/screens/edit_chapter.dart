@@ -78,12 +78,74 @@ class _EditChapterScreenState extends State<EditChapterScreen> {
     }
   }
 
+  void _showCopilotMenu() {
+    final selection = _quillController.selection;
+    final selectedText = _quillController.document.getPlainText(selection.start, selection.end - selection.start);
+    
+    if (selectedText.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select some text first.')));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('AI Co-Pilot', style: TextStyle(fontWeight: FontWeight.bold))),
+            _copilotOption('Rewrite', 'rewrite'),
+            _copilotOption('Dramatize', 'dramatize'),
+            _copilotOption('Expand', 'expand'),
+            _copilotOption('Suggest Next', 'suggest'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ListTile _copilotOption(String label, String command) {
+    return ListTile(
+      leading: const Icon(Icons.auto_awesome, color: Colors.purple),
+      title: Text(label),
+      onTap: () {
+        Navigator.pop(context);
+        _runCopilot(command);
+      },
+    );
+  }
+
+  Future<void> _runCopilot(String command) async {
+    final selection = _quillController.selection;
+    final selectedText = _quillController.document.getPlainText(selection.start, selection.end - selection.start);
+    
+    setState(() => _isSaving = true);
+    try {
+      final res = await ApiService.copilotEdit(selectedText, command, widget.chapterData['summary'] ?? '');
+      final newText = res['result'] ?? '';
+      
+      if (newText.isNotEmpty) {
+        _quillController.document.replace(selection.start, selection.end - selection.start, newText);
+        // Remove trailing newlines Quill might add if we don't want them
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copilot Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Chapter'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent),
+            tooltip: 'AI Co-Pilot',
+            onPressed: _showCopilotMenu,
+          ),
           IconButton(
             icon: _isSaving 
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))

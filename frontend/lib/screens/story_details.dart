@@ -121,7 +121,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
 
   Future<void> _forkStory() async {
     try {
-      final newStory = await ApiService.forkStory(widget.storyId);
+      final newStory = await ApiService.branchStory(widget.storyId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Story Forked Successfully!')),
@@ -516,9 +516,23 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                           ],
                         ),
                         isThreeLine: true,
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteCharacter(char['id']),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.chat, color: Colors.blue),
+                              onPressed: () {
+                                context.push('/character_chat', extra: {
+                                  'characterId': char['id'],
+                                  'characterName': char['name'] ?? 'Unknown',
+                                });
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteCharacter(char['id']),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -672,32 +686,61 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                         radius: 40,
                         backgroundImage: MemoryImage(base64Decode(base64Image!)),
                       ),
-                    ),
-                  OutlinedButton.icon(
-                    onPressed: isUploading ? null : () async {
-                      setStateDialog(() => isUploading = true);
-                      try {
-                        final picker = ImagePicker();
-                        final XFile? image = await picker.pickImage(
-                          source: ImageSource.gallery,
-                          imageQuality: 70, // Compresses image to save bandwidth/db space
-                          maxWidth: 512,
-                          maxHeight: 512,
-                        );
-                        if (image != null) {
-                          final bytes = await image.readAsBytes();
-                          setStateDialog(() {
-                            base64Image = base64Encode(bytes);
-                          });
-                        }
-                      } catch (e) {
-                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e')));
-                      } finally {
-                        setStateDialog(() => isUploading = false);
-                      }
-                    },
-                    icon: isUploading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload),
-                    label: const Text('Upload Avatar'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: isUploading ? null : () async {
+                          setStateDialog(() => isUploading = true);
+                          try {
+                            final picker = ImagePicker();
+                            final XFile? image = await picker.pickImage(
+                              source: ImageSource.gallery,
+                              imageQuality: 70,
+                              maxWidth: 512,
+                              maxHeight: 512,
+                            );
+                            if (image != null) {
+                              final bytes = await image.readAsBytes();
+                              setStateDialog(() {
+                                base64Image = base64Encode(bytes);
+                              });
+                            }
+                          } catch (e) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e')));
+                          } finally {
+                            setStateDialog(() => isUploading = false);
+                          }
+                        },
+                        icon: isUploading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload),
+                        label: const Text('Upload'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: isUploading ? null : () async {
+                          if (appearanceController.text.isEmpty && nameController.text.isEmpty) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
+                            return;
+                          }
+                          setStateDialog(() => isUploading = true);
+                          try {
+                            String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
+                            final res = await ApiService.generateImage(prompt);
+                            if (res['base64_image'] != null) {
+                              setStateDialog(() {
+                                base64Image = res['base64_image'];
+                              });
+                            }
+                          } catch (e) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
+                          } finally {
+                            setStateDialog(() => isUploading = false);
+                          }
+                        },
+                        icon: const Icon(Icons.auto_awesome, color: Colors.purple),
+                        label: const Text('AI Generate'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),

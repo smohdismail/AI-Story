@@ -7,6 +7,7 @@ import 'screens/story_details.dart';
 import 'screens/edit_chapter.dart';
 import 'screens/settings.dart';
 import 'screens/zen_reader.dart';
+import 'screens/character_chat.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -83,6 +84,16 @@ void main() async {
           title: extra['title'] as String,
           content: extra['content'] as String,
           backgroundImage: extra['backgroundImage'] as String?,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/character_chat',
+      builder: (BuildContext context, GoRouterState state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return CharacterChatScreen(
+          characterId: extra['characterId'] as String,
+          characterName: extra['characterName'] as String,
         );
       },
     ),

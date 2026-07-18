@@ -105,3 +105,22 @@ class ChapterResponse(ChapterBase):
     story_id: UUID4
 
     model_config = ConfigDict(from_attributes=True)
+
+class ChatMessage(BaseModel):
+    message: str
+    is_ai: int
+    created_at: datetime
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ImageGenRequest(BaseModel):
+    prompt: str
+
+class ImageGenResponse(BaseModel):
+    base64_image: str
+
+class CopilotRequest(BaseModel):
+    text: str
+    command: str
+    story_context: Optional[str] = None

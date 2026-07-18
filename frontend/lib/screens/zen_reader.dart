@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:flutter_tts/flutter_tts.dart';
 
 class ZenReaderScreen extends StatefulWidget {
   final String title;
@@ -23,6 +24,9 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   String _fontFamily = 'Serif';
   late quill.QuillController _quillController;
   
+  final FlutterTts flutterTts = FlutterTts();
+  bool _isPlaying = false;
+  
   @override
   void initState() {
     super.initState();
@@ -38,10 +42,38 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       final doc = quill.Document()..insert(0, widget.content);
       _quillController = quill.QuillController(document: doc, selection: const TextSelection.collapsed(offset: 0));
     }
+    
+    _initTts();
+  }
+  
+  void _initTts() {
+    flutterTts.setCompletionHandler(() {
+      setState(() {
+        _isPlaying = false;
+      });
+    });
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_isPlaying) {
+      await flutterTts.stop();
+      setState(() {
+        _isPlaying = false;
+      });
+    } else {
+      String plainText = _quillController.document.toPlainText();
+      if (plainText.trim().isNotEmpty) {
+        setState(() {
+          _isPlaying = true;
+        });
+        await flutterTts.speak(plainText);
+      }
+    }
   }
 
   @override
   void dispose() {
+    flutterTts.stop();
     _quillController.dispose();
     super.dispose();
   }
@@ -52,6 +84,11 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
+          IconButton(
+            icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
+            tooltip: 'Audiobook Mode',
+            onPressed: _togglePlayback,
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.font_download),
             onSelected: (value) {
@@ -90,7 +127,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   image: MemoryImage(base64Decode(widget.backgroundImage!)),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.85), // Darken the image heavily so text is visible
+                    Colors.black.withOpacity(0.85),
                     BlendMode.darken,
                   ),
                 ),
@@ -99,21 +136,27 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 800),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: DefaultTextStyle(
-                style: TextStyle(
-                  fontSize: _fontSize,
-                  fontFamily: _fontFamily,
-                  height: 1.8,
-                ),
-                child: quill.QuillEditor.basic(
-                  controller: _quillController,
-                  config: const quill.QuillEditorConfig(
-                    padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    child: DefaultTextStyle(
+                      style: TextStyle(
+                        fontSize: _fontSize,
+                        fontFamily: _fontFamily,
+                        height: 1.8,
+                      ),
+                      child: quill.QuillEditor.basic(
+                        controller: _quillController,
+                        config: const quill.QuillEditorConfig(
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),

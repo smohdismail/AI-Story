@@ -455,3 +455,105 @@ async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     epub.write_epub(temp_file.name, book, {})
 
     return FileResponse(path=temp_file.name, filename=f"{story.title}.epub", media_type='application/epub+zip')
+
+import urllib.request
+import base64
+
+@app.post("/api/v1/generate-image", response_model=schemas.ImageGenResponse)
+async def generate_image(request: schemas.ImageGenRequest):
+    prompt_encoded = urllib.parse.quote(request.prompt)
+    url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=512&height=512&nologo=true"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            image_data = response.read()
+            b64 = base64.b64encode(image_data).decode('utf-8')
+            return {"base64_image": b64}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/ai/copilot")
+async def copilot(request: schemas.CopilotRequest):
+    new_text = await llm_service.copilot_edit(request.text, request.command, request.story_context or "")
+    return {"result": new_text}
+
+@app.post("/api/v1/stories/{story_id}/branch", response_model=schemas.StoryResponse)
+async def branch_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.Story).where(models.Story.id == story_id))
+    original = result.scalars().first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    new_story = models.Story(
+        user_id=original.user_id,
+        title=f"{original.title} (Branch)",
+        synopsis=original.synopsis,
+        genre=original.genre,
+        subgenre=original.subgenre,
+        story_length=original.story_length,
+        perspective=original.perspective,
+        tone=original.tone,
+        story_summary=original.story_summary,
+        custom_rules=original.custom_rules
+    )
+    db.add(new_story)
+    await db.commit()
+    await db.refresh(new_story)
+    
+    # Copy Characters
+    char_result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = char_result.scalars().all()
+    for c in chars:
+        new_c = models.Character(story_id=new_story.id, name=c.name, age=c.age, role=c.role, gender=c.gender, personality=c.personality, appearance=c.appearance, goals=c.goals, weaknesses=c.weaknesses, relationship_status=c.relationship_status, avatar_base64=c.avatar_base64)
+        db.add(new_c)
+        
+    # Copy World Items
+    wi_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == story_id))
+    wis = wi_result.scalars().all()
+    for w in wis:
+        new_w = models.WorldItem(story_id=new_story.id, name=w.name, category=w.category, description=w.description)
+        db.add(new_w)
+        
+    # Copy Chapters
+    chap_result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id))
+    chaps = chap_result.scalars().all()
+    for ch in chaps:
+        new_ch = models.Chapter(story_id=new_story.id, chapter_number=ch.chapter_number, title=ch.title, content=ch.content, summary=ch.summary, status=ch.status)
+        db.add(new_ch)
+        
+    await db.commit()
+    return new_story
+
+@app.post("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
+async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.Character).where(models.Character.id == character_id))
+    char = result.scalars().first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    # Save user message
+    user_msg = models.CharacterChat(character_id=character_id, message=request.message, is_ai=0)
+    db.add(user_msg)
+    await db.commit()
+    
+    story_res = await db.execute(select(models.Story).where(models.Story.id == char.story_id))
+    story = story_res.scalars().first()
+    story_summary = story.story_summary if story else ""
+    
+    char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}"
+    
+    ai_reply = await llm_service.chat_with_character(char_info, story_summary, request.message)
+    
+    # Save AI message
+    ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=1)
+    db.add(ai_msg)
+    await db.commit()
+    
+    # Return history
+    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    return hist.scalars().all()
+
+@app.get("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
+async def get_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    return hist.scalars().all()

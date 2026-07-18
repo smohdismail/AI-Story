@@ -56,6 +56,17 @@ class Character(Base):
     avatar_base64 = Column(Text, nullable=True)
 
     story = relationship("Story", back_populates="characters")
+    chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")
+
+class CharacterChat(Base):
+    __tablename__ = "character_chats"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    message = Column(Text)
+    is_ai = Column(Integer) # 1 if AI, 0 if User
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    character = relationship("Character", back_populates="chats")
 
 class Chapter(Base):
     __tablename__ = "chapters"
