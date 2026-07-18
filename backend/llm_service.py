@@ -67,3 +67,26 @@ async def stream_generator(story_prompt: str, context: str = "", story_context: 
             yield "\n\n[System Message: The AI returned an empty response. This usually happens if the free AI model's safety filter blocked your prompt. Try a different prompt or use a custom API key for a truly uncensored model.]\n"
     except Exception as e:
         yield f"\n\n[AI System Error: {str(e)}]\n"
+
+async def update_master_summary(current_summary: str, new_chapter_text: str) -> str:
+    messages = [
+        {"role": "system", "content": "You are an expert story summarizer. Your task is to update a master summary of a story with the events of the newest chapter. You must perfectly merge the old summary and the new chapter's events. IMPORTANT: The total length of your final summary MUST be strictly under 550 words. Do not exceed this limit. Retain the most critical plot points, character actions, and important events."}
+    ]
+    if current_summary:
+        messages.append({"role": "user", "content": f"CURRENT MASTER SUMMARY:\n{current_summary}\n\nNEW CHAPTER EVENTS:\n{new_chapter_text}\n\nPlease output the new merged master summary (under 550 words)."})
+    else:
+        messages.append({"role": "user", "content": f"Please summarize this chapter in under 550 words. Include all important plot points and character actions:\n\n{new_chapter_text}"})
+        
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.5,
+            max_tokens=800,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return current_summary
+    except Exception as e:
+        print(f"Error updating summary: {e}")
+        return current_summary

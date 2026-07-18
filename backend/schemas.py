@@ -20,6 +20,21 @@ class UserResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+class WorldItemBase(BaseModel):
+    name: str
+    category: str
+    description: Optional[str] = None
+
+class WorldItemCreate(WorldItemBase):
+    pass
+
+class WorldItemResponse(WorldItemBase):
+    id: UUID4
+    story_id: UUID4
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
 class StoryBase(BaseModel):
     title: str
     synopsis: Optional[str] = None
@@ -28,6 +43,8 @@ class StoryBase(BaseModel):
     story_length: Optional[str] = None
     perspective: Optional[str] = None
     tone: Optional[str] = None
+    story_summary: Optional[str] = None
+    custom_rules: Optional[str] = None
 
 class StoryCreate(StoryBase):
     pass
@@ -41,17 +58,31 @@ class StoryResponse(StoryBase):
     model_config = ConfigDict(from_attributes=True)
 
 class CharacterBase(BaseModel):
-    full_name: str
+    name: str
     age: Optional[int] = None
-    occupation: Optional[str] = None
+    role: Optional[str] = None
+    gender: Optional[str] = None
     personality: Optional[str] = None
     appearance: Optional[str] = None
     goals: Optional[str] = None
     weaknesses: Optional[str] = None
     relationship_status: Optional[str] = None
+    avatar_base64: Optional[str] = None
 
 class CharacterCreate(CharacterBase):
     pass
+
+class CharacterUpdate(BaseModel):
+    name: Optional[str] = None
+    age: Optional[int] = None
+    role: Optional[str] = None
+    gender: Optional[str] = None
+    personality: Optional[str] = None
+    appearance: Optional[str] = None
+    goals: Optional[str] = None
+    weaknesses: Optional[str] = None
+    relationship_status: Optional[str] = None
+    avatar_base64: Optional[str] = None
 
 class CharacterResponse(CharacterBase):
     id: UUID4

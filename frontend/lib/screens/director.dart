@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
+import '../streak_service.dart';
 
 class DirectorScreen extends StatefulWidget {
   final String storyId;
@@ -33,7 +35,15 @@ class _DirectorScreenState extends State<DirectorScreen> {
         : _editorController.text;
 
     try {
-      await for (final chunk in ApiService.generateChapter(widget.storyId, prompt, contextText)) {
+      final prefs = await SharedPreferences.getInstance();
+      final globalCustomRules = prefs.getString('global_custom_rules') ?? '';
+      
+      await for (final chunk in ApiService.generateChapter(
+          widget.storyId, 
+          prompt, 
+          contextText, 
+          globalCustomRules: globalCustomRules
+      )) {
         if (!mounted || _stopRequested) break;
         setState(() {
           _editorController.text += chunk;
@@ -75,6 +85,9 @@ class _DirectorScreenState extends State<DirectorScreen> {
           'status': 'published'
         });
         
+        int wordCount = _editorController.text.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
+        await StreakService.addWords(wordCount);
+
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chapter Saved!')));
         context.pop(); // Go back to story details
       }
@@ -128,14 +141,14 @@ class _DirectorScreenState extends State<DirectorScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Instructions for AI:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Branching Choice / Next Chapter Focus:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _promptController,
                   maxLines: 3,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    hintText: 'e.g., "Write a slow-burn scene where they accidentally touch hands..."',
+                    hintText: 'Explicitly guide the AI (e.g., "The protagonist chooses the left path and discovers...")',
                   ),
                 ),
                 const SizedBox(height: 12),

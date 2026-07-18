@@ -15,6 +15,22 @@ class ApiService {
     };
   }
 
+  static Future<List<int>?> downloadEpub(String storyId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/stories/$storyId/export/epub'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      }
+    } catch (e) {
+      print('Error downloading EPUB: $e');
+    }
+    return null;
+  }
+
   static Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
@@ -96,6 +112,55 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> updateCharacter(String storyId, String characterId, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/stories/$storyId/characters/$characterId'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to update character');
+    }
+  }
+
+  static Future<List<dynamic>> getWorldItems(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/world-items'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load world items');
+    }
+  }
+
+  static Future<Map<String, dynamic>> createWorldItem(String storyId, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/world-items'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to create world item');
+    }
+  }
+
+  static Future<void> deleteWorldItem(String storyId, String itemId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/stories/$storyId/world-items/$itemId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete world item');
+    }
+  }
+
   static Future<Map<String, dynamic>> createStory(Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final response = await http.post(
@@ -107,6 +172,33 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to create story');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateStory(String storyId, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/stories/$storyId'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to update story');
+    }
+  }
+
+  static Future<Map<String, dynamic>> forkStory(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/fork'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fork story');
     }
   }
 
@@ -160,11 +252,16 @@ class ApiService {
   }
 
   // To support streaming, we'll use http.Client().send() for Server-Sent Events
-  static Stream<String> generateChapter(String storyId, String prompt, String context) async* {
+  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = ''}) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
     request.headers.addAll(headers);
-    request.body = jsonEncode({'prompt': prompt, 'context': context, 'story_id': storyId});
+    request.body = jsonEncode({
+      'prompt': prompt, 
+      'context': context, 
+      'story_id': storyId,
+      'global_custom_rules': globalCustomRules,
+    });
 
     final client = http.Client();
     try {
@@ -179,6 +276,18 @@ class ApiService {
       }
     } finally {
       client.close();
+    }
+  }
+
+  static Future<void> reorderChapters(String storyId, List<String> chapterIds) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/chapters/reorder'),
+      headers: headers,
+      body: jsonEncode({'chapter_ids': chapterIds}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to reorder chapters');
     }
   }
 }

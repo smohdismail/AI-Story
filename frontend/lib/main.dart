@@ -5,9 +5,15 @@ import 'screens/creator.dart';
 import 'screens/director.dart';
 import 'screens/story_details.dart';
 import 'screens/edit_chapter.dart';
+import 'screens/settings.dart';
+import 'screens/zen_reader.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'screens/auth.dart';
+import 'theme_provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,10 +69,32 @@ void main() async {
         );
       },
     ),
+    GoRoute(
+      path: '/settings',
+      builder: (BuildContext context, GoRouterState state) {
+        return const SettingsScreen();
+      },
+    ),
+    GoRoute(
+      path: '/zen_reader',
+      builder: (BuildContext context, GoRouterState state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return ZenReaderScreen(
+          title: extra['title'] as String,
+          content: extra['content'] as String,
+          backgroundImage: extra['backgroundImage'] as String?,
+        );
+      },
+    ),
   ],
   );
   
-  runApp(AiStoryGeneratorApp(router: router));
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: AiStoryGeneratorApp(router: router),
+    ),
+  );
 }
 
 class AiStoryGeneratorApp extends StatelessWidget {
@@ -76,14 +104,23 @@ class AiStoryGeneratorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Uncensored AI Story Generator',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.deepPurple,
-        useMaterial3: true,
-      ),
-      routerConfig: router,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp.router(
+          title: 'Uncensored AI Story Generator',
+          theme: themeProvider.getThemeData(),
+          routerConfig: router,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            quill.FlutterQuillLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en', 'US'),
+          ],
+        );
+      },
     );
   }
 }

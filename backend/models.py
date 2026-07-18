@@ -32,23 +32,28 @@ class Story(Base):
     tone = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    story_summary = Column(Text, default="")
+    custom_rules = Column(Text, default="")
 
     user = relationship("User", back_populates="stories")
     characters = relationship("Character", back_populates="story", cascade="all, delete-orphan")
     chapters = relationship("Chapter", back_populates="story", cascade="all, delete-orphan")
+    world_items = relationship("WorldItem", back_populates="story", cascade="all, delete-orphan")
 
 class Character(Base):
     __tablename__ = "characters"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
-    full_name = Column(String)
+    name = Column(String)
     age = Column(Integer)
-    occupation = Column(String)
+    role = Column(String)
+    gender = Column(String)
     personality = Column(Text)
     appearance = Column(Text)
     goals = Column(Text)
     weaknesses = Column(Text)
     relationship_status = Column(String)
+    avatar_base64 = Column(Text, nullable=True)
 
     story = relationship("Story", back_populates="characters")
 
@@ -63,3 +68,14 @@ class Chapter(Base):
     status = Column(SQLEnum(StoryStatus), default=StoryStatus.draft)
     
     story = relationship("Story", back_populates="chapters")
+
+class WorldItem(Base):
+    __tablename__ = "world_items"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    name = Column(String)
+    category = Column(String)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    story = relationship("Story", back_populates="world_items")
