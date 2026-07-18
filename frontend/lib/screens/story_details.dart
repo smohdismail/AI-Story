@@ -686,6 +686,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                         radius: 40,
                         backgroundImage: MemoryImage(base64Decode(base64Image!)),
                       ),
+                    ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
