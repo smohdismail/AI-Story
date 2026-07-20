@@ -491,7 +491,7 @@ import base64
 
 @app.post("/api/v1/generate-image", response_model=schemas.ImageGenResponse)
 async def generate_image(request: schemas.ImageGenRequest):
-    prompt_encoded = urllib.parse.quote(request.prompt)
+    prompt_encoded = urllib.parse.quote(request.prompt + ", full body shot, head to toe, wide angle, standing")
     url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=512&height=512&nologo=true"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
