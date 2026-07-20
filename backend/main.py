@@ -729,56 +729,26 @@ async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Dep
     return final_res.scalars().all()
 
 @app.post("/api/v1/characters/{character_id}/chat/regenerate", response_model=list[schemas.ChatMessage])
-async def regenerate_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    # Find the last message
-    result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()).limit(2))
-    last_msgs = result.scalars().all()
+async def regenerate_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
+    char = char_res.scalars().first()
+    if not char: raise HTTPException(status_code=404, detail="Character not found")
     
-    if not last_msgs:
-        raise HTTPException(status_code=400, detail="No messages to regenerate")
-        
-    # If the last message is from AI, delete it
-    if last_msgs[0].is_ai == 1:
-        await db.delete(last_msgs[0])
+    # Delete the last AI message
+    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()))
+    last_msg = hist_res.scalars().first()
+    if last_msg and last_msg.is_ai:
+        await db.delete(last_msg)
         await db.commit()
-        
-        # The user's last message is now the prompt
-        user_msg = last_msgs[1].message if len(last_msgs) > 1 else ""
-    else:
-        # Last message was from user, so we just generate a response to it
-        user_msg = last_msgs[0].message
-        
-    char_result = await db.execute(select(models.Character).where(models.Character.id == character_id))
-    char = char_result.scalars().first()
     
-    story_res = await db.execute(select(models.Story).where(models.Story.id == char.story_id))
-    story = story_res.scalars().first()
-    story_summary = story.story_summary if story else ""
-    
-    char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}\nRelationship to you: {char.relationship_status}\nDialogue Style: {char.dialogue_style}"
-    
-    world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == char.story_id))
-    world_items = world_result.scalars().all()
-    world_info = ""
-    for w in world_items:
-        world_info += f"{w.name} ({w.category}): {w.description}\n"
-    
-    ai_reply = await llm_service.chat_with_character(char_info, story_summary, world_info, user_msg)
-    
-    # Parse intimacy delta
-    intimacy_match = re.search(r'\[INTIMACY:([+-]?\d+)\]', ai_reply)
-    if intimacy_match:
-        delta = int(intimacy_match.group(1))
-        char.intimacy_score = (char.intimacy_score or 0) + delta
-        ai_reply = re.sub(r'\[INTIMACY:[+-]?\d+\]', '', ai_reply).strip()
-    
-    ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=1)
-    db.add(ai_msg)
+    # Then continue chat
+    return await continue_character_chat(character_id, BackgroundTasks(), db)
+
+@app.post("/api/v1/characters/{character_id}/chat/clear")
+async def clear_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id == character_id))
     await db.commit()
-    
-    # Return updated history
-    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
-    return hist.scalars().all()
+    return {"status": "success"}
 
 @app.post("/api/v1/characters/{character_id}/diary")
 async def generate_diary(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
