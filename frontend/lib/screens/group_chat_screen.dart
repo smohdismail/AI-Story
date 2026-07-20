@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../api.dart';
 
 class GroupChatScreen extends StatefulWidget {
@@ -125,9 +126,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                   msg['speaker_name'] ?? 'Unknown',
                                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
                                 ),
-                              Text(
-                                msg['message'],
-                                style: const TextStyle(fontSize: 16),
+                              MarkdownBody(
+                                data: msg['message'],
+                                styleSheet: MarkdownStyleSheet(
+                                  p: TextStyle(
+                                    color: isUser ? Colors.white : Theme.of(context).colorScheme.onPrimary,
+                                    fontSize: 16,
+                                  ),
+                                  em: TextStyle(
+                                    color: isUser ? Colors.white70 : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               ),
                             ],
                           ),

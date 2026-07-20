@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../api.dart';
 
 class CharacterChatScreen extends StatefulWidget {
@@ -387,11 +388,17 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                   color: isAi ? _aiBubbleColor : _userBubbleColor,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Text(
-                                  msg['message'],
-                                  style: TextStyle(
-                                    color: isAi ? Colors.white : Theme.of(context).colorScheme.onPrimary,
-                                    fontSize: 15,
+                                child: MarkdownBody(
+                                  data: msg['message'],
+                                  styleSheet: MarkdownStyleSheet(
+                                    p: TextStyle(
+                                      color: isAi ? Colors.white : Theme.of(context).colorScheme.onPrimary,
+                                      fontSize: 15,
+                                    ),
+                                    em: TextStyle(
+                                      color: isAi ? Colors.white70 : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                                      fontStyle: FontStyle.italic,
+                                    ),
                                   ),
                                 ),
                               ),

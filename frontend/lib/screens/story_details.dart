@@ -634,6 +634,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                 context.push('/character_chat', extra: {
                                   'characterId': char['id'],
                                   'characterName': char['name'] ?? 'Unknown',
+                                  'backgroundImage': char['avatar_base64'],
                                 });
                               },
                             ),
