@@ -636,6 +636,98 @@ async def rewind_chat(character_id: uuid.UUID, chat_id: uuid.UUID, db: AsyncSess
     await db.commit()
     return {"status": "success"}
 
+@app.delete("/api/v1/characters/{character_id}/chat/{chat_id}")
+async def delete_chat_message(character_id: uuid.UUID, chat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.id == chat_id, models.CharacterChat.character_id == character_id))
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    await db.delete(msg)
+    await db.commit()
+    return {"status": "success"}
+
+@app.post("/api/v1/characters/{character_id}/chat/continue", response_model=list[schemas.ChatMessage])
+async def continue_character_chat(character_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
+    char = char_res.scalars().first()
+    if not char: raise HTTPException(status_code=404, detail="Character not found")
+    
+    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    chat_history = hist_res.scalars().all()
+    
+    history_str = ""
+    for msg in chat_history:
+        history_str += f"{char.name if msg.is_ai else 'User'}: {msg.message}\n"
+        
+    world_info = "None"
+    if char.story.world_building:
+        world_info = "\n".join([f"{w['title']}: {w['content']}" for w in char.story.world_building])
+        
+    mem_res = await db.execute(select(models.Memory).where(models.Memory.story_id == char.story_id).order_by(models.Memory.created_at.desc()).limit(10))
+    mems = mem_res.scalars().all()
+    mem_str = "\n".join([m.content for m in mems])
+    
+    ai_msg = await llm_service.continue_chat(
+        character_info=f"Name: {char.name}\nPersonality: {char.personality}\nRole: {char.role}",
+        story_summary=char.story.summary,
+        world_info=world_info,
+        chat_history=history_str,
+        relevant_memories=mem_str
+    )
+    
+    chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
+    db.add(chat_ai)
+    await db.commit()
+    
+    final_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    return final_res.scalars().all()
+
+@app.post("/api/v1/characters/{character_id}/chat/suggest")
+async def suggest_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char_res = await db.execute(select(models.Character).where(models.Character.id == character_id))
+    char = char_res.scalars().first()
+    if not char: raise HTTPException(status_code=404, detail="Character not found")
+    
+    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()).limit(10))
+    chat_history = reversed(hist_res.scalars().all())
+    
+    history_str = ""
+    for msg in chat_history:
+        history_str += f"{char.name if msg.is_ai else 'User'}: {msg.message}\n"
+        
+    suggestions = await llm_service.generate_chat_suggestions(
+        character_info=f"Name: {char.name}\nPersonality: {char.personality}",
+        chat_history=history_str
+    )
+    return {"suggestions": suggestions}
+
+@app.post("/api/v1/characters/{character_id}/chat/thought", response_model=list[schemas.ChatMessage])
+async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
+    char = char_res.scalars().first()
+    if not char: raise HTTPException(status_code=404, detail="Character not found")
+    
+    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    chat_history = hist_res.scalars().all()
+    
+    history_str = ""
+    for msg in chat_history:
+        history_str += f"{char.name if msg.is_ai else 'User'}: {msg.message}\n"
+        
+    ai_msg = await llm_service.generate_character_thought(
+        character_info=f"Name: {char.name}\nPersonality: {char.personality}",
+        story_summary=char.story.summary,
+        chat_history=history_str
+    )
+    
+    chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
+    db.add(chat_ai)
+    await db.commit()
+    
+    final_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    return final_res.scalars().all()
+
 @app.post("/api/v1/characters/{character_id}/chat/regenerate", response_model=list[schemas.ChatMessage])
 async def regenerate_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     # Find the last message

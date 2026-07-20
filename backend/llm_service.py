@@ -186,3 +186,68 @@ async def group_chat_with_characters(story_summary: str, characters_info: str, c
         print(f"Error in group chat: {e}")
         return "System: Error generating response."
 
+
+async def continue_chat(character_info: str, story_summary: str, world_info: str, chat_history: str, relevant_memories: str = "") -> str:
+    memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
+    messages = [
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}\n\nCRITICAL RULE: Continue your last response. Do NOT introduce yourself again. Just seamlessly continue the scene, action, or dialogue. Put physical actions inside *asterisks*."}
+    ]
+    messages.append({"role": "user", "content": f"Here is the recent chat history:\n\n{chat_history}\n\nPlease continue your last response or take the next action without the user saying anything."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "*continues*"
+    except Exception as e:
+        print(f"Error continuing chat: {e}")
+        return "*could not continue*"
+
+async def generate_chat_suggestions(character_info: str, chat_history: str) -> list[str]:
+    messages = [
+        {"role": "system", "content": "You are an AI assistant helping a user roleplay. Based on the character they are talking to and the chat history, provide exactly 3 short, distinct suggestions for what the user could say next. Format your response strictly as a JSON array of 3 strings. E.g. [\"Hello there!\", \"How are you?\", \"*smiles*\"]"}
+    ]
+    messages.append({"role": "user", "content": f"Character Info:\n{character_info}\n\nChat History:\n{chat_history}\n\nGenerate 3 suggestions."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=150,
+        )
+        import json
+        if response.choices and response.choices[0].message.content:
+            text = response.choices[0].message.content.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.endswith('```'): text = text[:-3]
+            return json.loads(text.strip())
+        return ["*smile*", "What's next?", "Tell me more."]
+    except Exception as e:
+        print(f"Error generating suggestions: {e}")
+        return ["*smile*", "What's next?", "Tell me more."]
+
+async def generate_character_thought(character_info: str, story_summary: str, chat_history: str) -> str:
+    messages = [
+        {"role": "system", "content": f"You are playing the role of a character in a story.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nBased on the chat history, generate the character's internal thoughts or monologue at this exact moment. What are they thinking but NOT saying out loud? Format the entire response in *italics*."}
+    ]
+    messages.append({"role": "user", "content": f"Here is the recent chat history:\n\n{chat_history}\n\nGenerate your internal thoughts."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=300,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "*thinks silently*"
+    except Exception as e:
+        print(f"Error generating thought: {e}")
+        return "*thinks silently*"
