@@ -670,7 +670,7 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
     
     ai_msg = await llm_service.continue_chat(
         character_info=f"Name: {char.name}\nPersonality: {char.personality}\nRole: {char.role}",
-        story_summary=char.story.summary,
+        story_summary=char.story.synopsis,
         world_info=world_info,
         chat_history=history_str,
         relevant_memories=mem_str
@@ -717,7 +717,7 @@ async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Dep
         
     ai_msg = await llm_service.generate_character_thought(
         character_info=f"Name: {char.name}\nPersonality: {char.personality}",
-        story_summary=char.story.summary,
+        story_summary=char.story.synopsis,
         chat_history=history_str
     )
     
