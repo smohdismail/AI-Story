@@ -210,9 +210,9 @@ async def continue_chat(character_info: str, story_summary: str, world_info: str
 
 async def generate_chat_suggestions(character_info: str, chat_history: str) -> list[str]:
     messages = [
-        {"role": "system", "content": "You are an AI assistant helping a user roleplay. Based on the character they are talking to and the chat history, provide exactly 3 short, distinct suggestions for what the user could say next. Format your response strictly as a JSON array of 3 strings. E.g. [\"Hello there!\", \"How are you?\", \"*smiles*\"]"}
+        {"role": "system", "content": "You are an AI assistant helping a user roleplay. Based on the character they are talking to and the chat history, provide exactly 3 short, distinct suggestions for what the USER (the person talking to the character) could say next. The suggestions MUST be written from the USER's perspective. For example, if the character asks a question, the suggestions should be possible answers the user could give. Use asterisks for user actions like *I smile at you*. Format your response strictly as a JSON array of 3 strings."}
     ]
-    messages.append({"role": "user", "content": f"Character Info:\n{character_info}\n\nChat History:\n{chat_history}\n\nGenerate 3 suggestions."})
+    messages.append({"role": "user", "content": f"Character Info:\n{character_info}\n\nChat History:\n{chat_history}\n\nGenerate 3 suggestions for the USER's next message."})
     
     try:
         response = await llm_client.chat.completions.create(
