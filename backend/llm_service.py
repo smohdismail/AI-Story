@@ -91,9 +91,10 @@ async def update_master_summary(current_summary: str, new_chapter_text: str) -> 
         print(f"Error updating summary: {e}")
         return current_summary
 
-async def chat_with_character(character_info: str, story_summary: str, message: str) -> str:
+async def chat_with_character(character_info: str, story_summary: str, world_info: str, message: str, relevant_memories: str = "") -> str:
+    memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
     messages = [
-        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character and respond to the user as if they are conversing with you directly.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nDo not break character. Do not say you are an AI. Respond naturally to the user's message."}
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character and respond to the user as if they are conversing with you directly.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}\n\nCRITICAL RULE: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1] if the user is nice, [INTIMACY:-1] if they are mean, or [INTIMACY:0] if neutral). This is required. Do not break character. Do not say you are an AI. Respond naturally to the user's message."}
     ]
     messages.append({"role": "user", "content": message})
     
@@ -143,4 +144,45 @@ async def copilot_edit(text: str, command: str, story_context: str = "") -> str:
     except Exception as e:
         print(f"Error in copilot edit: {e}")
         return text
+
+async def generate_character_diary(character_info: str, story_summary: str, chat_history: str) -> str:
+    messages = [
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must write a private diary/journal entry reflecting on your recent conversation and interactions.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nWrite a 2-3 paragraph journal entry. Speak in the first person. Do not break character. Include your secret thoughts and feelings about the user and the events that just happened."}
+    ]
+    messages.append({"role": "user", "content": f"Here is the recent conversation transcript:\n\n{chat_history}\n\nPlease write your diary entry now."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "I have no thoughts right now."
+    except Exception as e:
+        print(f"Error generating diary: {e}")
+        return "I could not write in my diary today."
+
+async def group_chat_with_characters(story_summary: str, characters_info: str, chat_history: str, relevant_memories: str = "") -> str:
+    memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
+    messages = [
+        {"role": "system", "content": f"You are the director of a group chat. You must decide which character should respond next, and generate their response.\n\nSTORY CONTEXT:\n{story_summary}\n\nCHARACTERS IN CHAT:\n{characters_info}{memory_section}\n\nCRITICAL RULE: Your response MUST begin with the name of the character who is speaking, followed by a colon. (e.g. 'John: I don't agree.'). If multiple characters speak, you can output multiple lines like 'John: ...\nMary: ...'. Do not write narrative actions outside of the character's voice."}
+    ]
+    messages.append({"role": "user", "content": f"Here is the recent group chat history:\n\n{chat_history}\n\nPlease generate the next response(s)."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "System: No response."
+    except Exception as e:
+        print(f"Error in group chat: {e}")
+        return "System: Error generating response."
 

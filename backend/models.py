@@ -54,7 +54,9 @@ class Character(Base):
     goals = Column(Text)
     weaknesses = Column(Text)
     relationship_status = Column(String)
+    dialogue_style = Column(Text, nullable=True)
     avatar_base64 = Column(Text, nullable=True)
+    intimacy_score = Column(Integer, default=0)
 
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")
@@ -66,6 +68,7 @@ class CharacterChat(Base):
     message = Column(Text)
     is_ai = Column(Integer) # 1 if AI, 0 if User
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_summarized = Column(Integer, default=0)
 
     character = relationship("Character", back_populates="chats")
 
@@ -91,3 +94,25 @@ class WorldItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     story = relationship("Story", back_populates="world_items")
+
+class GroupChatSession(Base):
+    __tablename__ = "group_chat_sessions"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    story = relationship("Story")
+    messages = relationship("GroupChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+class GroupChatMessage(Base):
+    __tablename__ = "group_chat_messages"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(Uuid(as_uuid=True), ForeignKey("group_chat_sessions.id"))
+    speaker_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True) # Null if user
+    speaker_name = Column(String) # E.g., 'User' or character's name
+    message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_summarized = Column(Integer, default=0)
+    
+    session = relationship("GroupChatSession", back_populates="messages")
+    character = relationship("Character")

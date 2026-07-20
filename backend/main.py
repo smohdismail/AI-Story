@@ -14,9 +14,11 @@ import schemas
 import auth
 from fastapi.security import OAuth2PasswordRequestForm
 import llm_service
+import memory_service
 from ebooklib import epub
 import tempfile
 import os
+import re
 
 async def trigger_summary_update(story_id: uuid.UUID, new_chapter_text: str):
     async for db in get_db():
@@ -26,6 +28,32 @@ async def trigger_summary_update(story_id: uuid.UUID, new_chapter_text: str):
             new_summary = await llm_service.update_master_summary(story.story_summary, new_chapter_text)
             story.story_summary = new_summary
             await db.commit()
+        break
+
+async def bg_summarize_character_chat(character_id: uuid.UUID, story_id: uuid.UUID):
+    async for db in get_db():
+        res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id, models.CharacterChat.is_summarized == 0).order_by(models.CharacterChat.created_at.asc()))
+        unsummarized = res.scalars().all()
+        if len(unsummarized) >= 10:
+            chat_text = "\n".join([f"{'AI' if m.is_ai else 'User'}: {m.message}" for m in unsummarized])
+            summary = await memory_service.summarize_and_store(str(story_id), str(character_id), chat_text, "1-on-1")
+            if summary:
+                for m in unsummarized:
+                    m.is_summarized = 1
+                await db.commit()
+        break
+
+async def bg_summarize_group_chat(session_id: uuid.UUID, story_id: uuid.UUID):
+    async for db in get_db():
+        res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id, models.GroupChatMessage.is_summarized == 0).order_by(models.GroupChatMessage.created_at.asc()))
+        unsummarized = res.scalars().all()
+        if len(unsummarized) >= 10:
+            chat_text = "\n".join([f"{m.speaker_name}: {m.message}" for m in unsummarized])
+            summary = await memory_service.summarize_and_store(str(story_id), "", chat_text, "group chat")
+            if summary:
+                for m in unsummarized:
+                    m.is_summarized = 1
+                await db.commit()
         break
 
 @asynccontextmanager
@@ -143,7 +171,8 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
             story_id=new_story.id,
             name=char.name, age=char.age, role=char.role, gender=char.gender,
             personality=char.personality, appearance=char.appearance, goals=char.goals,
-            weaknesses=char.weaknesses, relationship_status=char.relationship_status
+            weaknesses=char.weaknesses, relationship_status=char.relationship_status,
+            dialogue_style=char.dialogue_style, avatar_base64=char.avatar_base64
         )
         db.add(new_char)
         
@@ -506,7 +535,7 @@ async def branch_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     char_result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
     chars = char_result.scalars().all()
     for c in chars:
-        new_c = models.Character(story_id=new_story.id, name=c.name, age=c.age, role=c.role, gender=c.gender, personality=c.personality, appearance=c.appearance, goals=c.goals, weaknesses=c.weaknesses, relationship_status=c.relationship_status, avatar_base64=c.avatar_base64)
+        new_c = models.Character(story_id=new_story.id, name=c.name, age=c.age, role=c.role, gender=c.gender, personality=c.personality, appearance=c.appearance, goals=c.goals, weaknesses=c.weaknesses, relationship_status=c.relationship_status, dialogue_style=c.dialogue_style, avatar_base64=c.avatar_base64)
         db.add(new_c)
         
     # Copy World Items
@@ -527,7 +556,7 @@ async def branch_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return new_story
 
 @app.post("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
-async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequest, db: AsyncSession = Depends(get_db)):
+async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(models.Character).where(models.Character.id == character_id))
     char = result.scalars().first()
     if not char:
@@ -542,14 +571,33 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     story = story_res.scalars().first()
     story_summary = story.story_summary if story else ""
     
-    char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}"
+    char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}\nRelationship to you: {char.relationship_status}\nDialogue Style: {char.dialogue_style}"
     
-    ai_reply = await llm_service.chat_with_character(char_info, story_summary, request.message)
+    world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == char.story_id))
+    world_items = world_result.scalars().all()
+    world_info = ""
+    for w in world_items:
+        world_info += f"{w.name} ({w.category}): {w.description}\n"
+    
+    # Retrieve relevant memories
+    relevant_memories = await memory_service.retrieve_memories(str(char.story_id), str(char.id), request.message)
+    
+    ai_reply = await llm_service.chat_with_character(char_info, story_summary, world_info, request.message, relevant_memories)
+    
+    # Parse intimacy delta
+    intimacy_match = re.search(r'\[INTIMACY:([+-]?\d+)\]', ai_reply)
+    if intimacy_match:
+        delta = int(intimacy_match.group(1))
+        char.intimacy_score = (char.intimacy_score or 0) + delta
+        ai_reply = re.sub(r'\[INTIMACY:[+-]?\d+\]', '', ai_reply).strip()
     
     # Save AI message
     ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=1)
     db.add(ai_msg)
     await db.commit()
+    
+    # Trigger background summary check
+    background_tasks.add_task(bg_summarize_character_chat, character_id, char.story_id)
     
     # Return history
     hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
@@ -559,3 +607,183 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
 async def get_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
     return hist.scalars().all()
+
+@app.put("/api/v1/characters/{character_id}/chat/{chat_id}")
+async def edit_chat_message(character_id: uuid.UUID, chat_id: uuid.UUID, request: schemas.ChatRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.id == chat_id, models.CharacterChat.character_id == character_id))
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    msg.message = request.message
+    await db.commit()
+    return {"status": "success"}
+
+@app.delete("/api/v1/characters/{character_id}/chat/{chat_id}/rewind")
+async def rewind_chat(character_id: uuid.UUID, chat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.id == chat_id, models.CharacterChat.character_id == character_id))
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    # Delete this message and all messages created after it
+    await db.execute(
+        models.CharacterChat.__table__.delete().where(
+            models.CharacterChat.character_id == character_id,
+            models.CharacterChat.created_at >= msg.created_at
+        )
+    )
+    await db.commit()
+    return {"status": "success"}
+
+@app.post("/api/v1/characters/{character_id}/chat/regenerate", response_model=list[schemas.ChatMessage])
+async def regenerate_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    # Find the last message
+    result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()).limit(2))
+    last_msgs = result.scalars().all()
+    
+    if not last_msgs:
+        raise HTTPException(status_code=400, detail="No messages to regenerate")
+        
+    # If the last message is from AI, delete it
+    if last_msgs[0].is_ai == 1:
+        await db.delete(last_msgs[0])
+        await db.commit()
+        
+        # The user's last message is now the prompt
+        user_msg = last_msgs[1].message if len(last_msgs) > 1 else ""
+    else:
+        # Last message was from user, so we just generate a response to it
+        user_msg = last_msgs[0].message
+        
+    char_result = await db.execute(select(models.Character).where(models.Character.id == character_id))
+    char = char_result.scalars().first()
+    
+    story_res = await db.execute(select(models.Story).where(models.Story.id == char.story_id))
+    story = story_res.scalars().first()
+    story_summary = story.story_summary if story else ""
+    
+    char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}\nRelationship to you: {char.relationship_status}\nDialogue Style: {char.dialogue_style}"
+    
+    world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == char.story_id))
+    world_items = world_result.scalars().all()
+    world_info = ""
+    for w in world_items:
+        world_info += f"{w.name} ({w.category}): {w.description}\n"
+    
+    ai_reply = await llm_service.chat_with_character(char_info, story_summary, world_info, user_msg)
+    
+    # Parse intimacy delta
+    intimacy_match = re.search(r'\[INTIMACY:([+-]?\d+)\]', ai_reply)
+    if intimacy_match:
+        delta = int(intimacy_match.group(1))
+        char.intimacy_score = (char.intimacy_score or 0) + delta
+        ai_reply = re.sub(r'\[INTIMACY:[+-]?\d+\]', '', ai_reply).strip()
+    
+    ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=1)
+    db.add(ai_msg)
+    await db.commit()
+    
+    # Return updated history
+    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    return hist.scalars().all()
+
+@app.post("/api/v1/characters/{character_id}/diary")
+async def generate_diary(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char_result = await db.execute(select(models.Character).where(models.Character.id == character_id))
+    char = char_result.scalars().first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    story_res = await db.execute(select(models.Story).where(models.Story.id == char.story_id))
+    story = story_res.scalars().first()
+    story_summary = story.story_summary if story else ""
+    
+    char_info = f"Name: {char.name}\nRole: {char.role}\nPersonality: {char.personality}\nRelationship to you: {char.relationship_status}"
+    
+    hist_result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    hist = hist_result.scalars().all()
+    
+    chat_history_str = ""
+    for msg in hist:
+        speaker = char.name if msg.is_ai == 1 else "User"
+        chat_history_str += f"{speaker}: {msg.message}\n"
+        
+    diary_entry = await llm_service.generate_character_diary(char_info, story_summary, chat_history_str)
+    return {"diary_entry": diary_entry}
+
+@app.post("/api/v1/stories/{story_id}/group_chats", response_model=schemas.GroupChatSessionResponse)
+async def create_group_chat(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    session = models.GroupChatSession(story_id=story_id)
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+@app.get("/api/v1/group_chats/{session_id}/messages", response_model=list[schemas.GroupChatMessageResponse])
+async def get_group_chat_messages(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()))
+    return result.scalars().all()
+
+@app.post("/api/v1/group_chats/{session_id}/messages", response_model=list[schemas.GroupChatMessageResponse])
+async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    # 1. Save user message
+    user_msg = models.GroupChatMessage(session_id=session_id, speaker_name="User", message=request.message)
+    db.add(user_msg)
+    await db.commit()
+    
+    # 2. Get all characters for the story
+    session_res = await db.execute(select(models.GroupChatSession).where(models.GroupChatSession.id == session_id))
+    session = session_res.scalars().first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == session.story_id))
+    chars = chars_res.scalars().all()
+    
+    char_info_str = "\n---\n".join([f"Name: {c.name}\nRole: {c.role}\nPersonality: {c.personality}\nStyle: {c.dialogue_style}" for c in chars])
+    
+    story_res = await db.execute(select(models.Story).where(models.Story.id == session.story_id))
+    story = story_res.scalars().first()
+    
+    # 3. Get recent chat history
+    hist_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()).limit(20))
+    hist = hist_res.scalars().all()
+    chat_history_str = "\n".join([f"{m.speaker_name}: {m.message}" for m in hist])
+    
+    # Retrieve relevant memories
+    relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", request.message)
+    
+    # 4. Generate AI response
+    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories)
+    
+    # 5. Save AI response(s). The AI might output multiple lines like "Char1: text \n Char2: text"
+    lines = ai_reply.split('\n')
+    for line in lines:
+        if ':' in line:
+            speaker, msg = line.split(':', 1)
+            speaker = speaker.strip()
+            msg = msg.strip()
+            # Try to match speaker to a character ID
+            speaker_char = next((c for c in chars if c.name.lower() in speaker.lower()), None)
+            speaker_id = speaker_char.id if speaker_char else None
+            
+            ai_msg = models.GroupChatMessage(session_id=session_id, speaker_name=speaker, speaker_id=speaker_id, message=msg)
+            db.add(ai_msg)
+            
+    await db.commit()
+    
+    # Trigger background summary check
+    background_tasks.add_task(bg_summarize_group_chat, session_id, session.story_id)
+    
+    # Return updated history
+    final_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()))
+    return final_res.scalars().all()
+
+@app.get("/api/v1/characters/{character_id}", response_model=schemas.CharacterResponse)
+async def get_character(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.Character).where(models.Character.id == character_id))
+    char = result.scalars().first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return char

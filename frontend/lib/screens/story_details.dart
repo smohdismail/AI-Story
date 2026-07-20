@@ -8,6 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import '../api.dart';
 import '../pdf_export.dart';
+import '../utils/name_generator.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -300,14 +302,94 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     );
   }
 
+  int _calculateWordCount() {
+    int count = 0;
+    for (var ch in chapters) {
+      String text = ch['content'] ?? '';
+      if (text.startsWith('[{')) {
+        try {
+          final doc = quill.Document.fromJson(jsonDecode(text));
+          text = doc.toPlainText();
+        } catch (_) {}
+      }
+      count += text.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
+    }
+    return count;
+  }
+
   Widget _buildChaptersTab() {
-    return isLoading 
-      ? const Center(child: CircularProgressIndicator())
-      : chapters.isEmpty 
-        ? const Center(child: Text("There is no chapter yet.", style: TextStyle(fontSize: 18)))
-        : ReorderableListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            itemCount: chapters.length,
+    if (isLoading) return const Center(child: CircularProgressIndicator());
+    
+    int totalWords = _calculateWordCount();
+    int readTimeMinutes = (totalWords / 250).ceil();
+    bool isGeneratingCover = false;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              if (story != null && story!['cover_base64'] != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(
+                    base64Decode(story!['cover_base64']),
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              else if (story != null)
+                StatefulBuilder(
+                  builder: (context, setStateCover) {
+                    return OutlinedButton.icon(
+                      onPressed: isGeneratingCover ? null : () async {
+                        final confirm = await _confirmCreditUsage(context, 'generate a book cover');
+                        if (!confirm) return;
+
+                        setStateCover(() => isGeneratingCover = true);
+                        try {
+                          String prompt = "Book cover for a story titled '${story!['title']}'. Genre: ${story!['genre']}. Subgenre: ${story!['subgenre']}. Tone: ${story!['tone']}. ${story!['synopsis']}";
+                          final res = await ApiService.generateImage(prompt);
+                          if (res['base64_image'] != null) {
+                            await ApiService.updateStory(widget.storyId, {'cover_base64': res['base64_image']});
+                            _loadData();
+                          }
+                        } catch (e) {
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
+                        } finally {
+                          if (mounted) setStateCover(() => isGeneratingCover = false);
+                        }
+                      },
+                      icon: isGeneratingCover ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.auto_awesome, color: Colors.purple),
+                      label: const Text('Generate AI Cover'),
+                    );
+                  }
+                ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.text_snippet, size: 16),
+                    label: Text('$totalWords words'),
+                  ),
+                  Chip(
+                    avatar: const Icon(Icons.timer, size: 16),
+                    label: Text('~ $readTimeMinutes min read'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: chapters.isEmpty 
+            ? const Center(child: Text("There is no chapter yet.", style: TextStyle(fontSize: 18)))
+            : ReorderableListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: chapters.length,
             onReorder: (int oldIndex, int newIndex) async {
               setState(() {
                 if (newIndex > oldIndex) {
@@ -391,7 +473,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 ),
               );
             },
-          );
+          ),
+        ),
+      ],
+    );
   }
 
   String _getPlainText(String content) {
@@ -439,6 +524,30 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                final session = await ApiService.createGroupChat(widget.storyId);
+                if (context.mounted) {
+                  context.push('/group_chat', extra: {
+                    'storyId': widget.storyId,
+                    'sessionId': session['id'],
+                  });
+                }
+              } catch(e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+            icon: const Icon(Icons.groups, color: Colors.white),
+            label: const Text('Enter Tavern (Group Chat)', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 50),
+              backgroundColor: Colors.amber[800],
+            ),
           ),
         ),
         Padding(
@@ -666,6 +775,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     final genderController = TextEditingController();
     final personalityController = TextEditingController();
     final appearanceController = TextEditingController();
+    final relationshipController = TextEditingController();
+    final dialogueStyleController = TextEditingController();
     String? base64Image;
     bool isUploading = false;
 
@@ -723,6 +834,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                             if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
                             return;
                           }
+                          
+                          final confirm = await _confirmCreditUsage(context, 'generate a character avatar');
+                          if (!confirm) return;
+
                           setStateDialog(() => isUploading = true);
                           try {
                             String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
@@ -744,11 +859,36 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      suffixIcon: PopupMenuButton<String>(
+                        icon: const Icon(Icons.casino, color: Colors.purple),
+                        tooltip: 'Generate Name',
+                        onSelected: (value) {
+                          if (value == 'Fantasy') {
+                            nameController.text = NameGenerator.generateFantasyName();
+                          } else if (value == 'Sci-Fi') {
+                            nameController.text = NameGenerator.generateSciFiName();
+                          } else {
+                            nameController.text = NameGenerator.generateModernName();
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => [
+                          const PopupMenuItem(value: 'Fantasy', child: Text('Fantasy Name')),
+                          const PopupMenuItem(value: 'Sci-Fi', child: Text('Sci-Fi Name')),
+                          const PopupMenuItem(value: 'Modern', child: Text('Modern Name')),
+                        ],
+                      ),
+                    ),
+                  ),
                   TextField(controller: roleController, decoration: const InputDecoration(labelText: 'Role (e.g., Protagonist, Villain)')),
                   TextField(controller: genderController, decoration: const InputDecoration(labelText: 'Gender')),
                   TextField(controller: personalityController, decoration: const InputDecoration(labelText: 'Personality')),
                   TextField(controller: appearanceController, decoration: const InputDecoration(labelText: 'Appearance (e.g., Tall, green eyes)')),
+                  TextField(controller: relationshipController, decoration: const InputDecoration(labelText: 'Relationship to User')),
+                  TextField(controller: dialogueStyleController, decoration: const InputDecoration(labelText: 'Dialogue Style (e.g., Uses old English)')),
                 ],
               ),
             ),
@@ -764,6 +904,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       'gender': genderController.text,
                       'personality': personalityController.text,
                       'appearance': appearanceController.text,
+                      'relationship_status': relationshipController.text,
+                      'dialogue_style': dialogueStyleController.text,
                       if (base64Image != null) 'avatar_base64': base64Image,
                     });
                     if (mounted) Navigator.pop(context);
@@ -794,7 +936,30 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name (e.g., The Silent City)')),
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'Name (e.g., The Silent City)',
+                  suffixIcon: PopupMenuButton<String>(
+                    icon: const Icon(Icons.casino, color: Colors.purple),
+                    tooltip: 'Generate Name',
+                    onSelected: (value) {
+                      if (value == 'Fantasy') {
+                        nameController.text = NameGenerator.generateFantasyName();
+                      } else if (value == 'Sci-Fi') {
+                        nameController.text = NameGenerator.generateSciFiName();
+                      } else {
+                        nameController.text = NameGenerator.generateModernName();
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      const PopupMenuItem(value: 'Fantasy', child: Text('Fantasy Name')),
+                      const PopupMenuItem(value: 'Sci-Fi', child: Text('Sci-Fi Name')),
+                      const PopupMenuItem(value: 'Modern', child: Text('Modern Name')),
+                    ],
+                  ),
+                ),
+              ),
               TextField(controller: categoryController, decoration: const InputDecoration(labelText: 'Category (e.g., Location, Faction, Item)')),
               TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Description'), maxLines: 3),
             ],
@@ -855,21 +1020,77 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showEditStoryDialog();
+            },
+            child: const Text('Edit Story'),
+          ),
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))
         ],
       ),
     );
   }
 
-  int _calculateWordCount() {
-    int words = 0;
-    for (var chapter in chapters) {
-      final content = chapter['content'] as String? ?? '';
-      if (content.isNotEmpty) {
-        words += content.split(RegExp(r'\s+')).length;
-      }
-    }
-    return words;
+  void _showEditStoryDialog() {
+    final titleController = TextEditingController(text: story!['title']);
+    final synopsisController = TextEditingController(text: story!['synopsis']);
+    final genreController = TextEditingController(text: story!['genre']);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Story Info'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
+              TextField(controller: synopsisController, decoration: const InputDecoration(labelText: 'Synopsis'), maxLines: 3),
+              TextField(controller: genreController, decoration: const InputDecoration(labelText: 'Genre')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (titleController.text.isEmpty) return;
+              try {
+                await ApiService.updateStory(widget.storyId, {
+                  'title': titleController.text,
+                  'synopsis': synopsisController.text,
+                  'genre': genreController.text,
+                });
+                if (mounted) Navigator.pop(context);
+                _loadData(); // Refresh UI
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating story: $e')));
+              }
+            },
+            child: const Text('Save Changes'),
+          ),
+        ],
+      ),
+    );
+  }
+  Future<bool> _confirmCreditUsage(BuildContext context, String action) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Use AI Credits?'),
+        content: Text('Are you sure you want to $action? This will cost API credits.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: const Text('Proceed', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   void _showTranslateDialog(String originalText) {
@@ -988,14 +1209,18 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(8.0),
-                          child: Text('Relationship Status: ${char['relationship_status'] ?? 'None'}'),
+                          child: Text('Relationship to User: ${char['relationship_status'] ?? 'None'}'),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text('Dialogue Style: ${char['dialogue_style'] ?? 'Normal'}'),
                         ),
                         TextButton(
                           onPressed: () {
                             Navigator.pop(context);
-                            _showEditRelationshipStatusDialog(char);
+                            _showEditCharacterPersonalityDialog(char);
                           },
-                          child: const Text('Edit Status'),
+                          child: const Text('Edit Personality Specs'),
                         ),
                       ],
                     );
@@ -1009,26 +1234,47 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     );
   }
 
-  void _showEditRelationshipStatusDialog(Map<String, dynamic> char) {
+  void _showEditCharacterPersonalityDialog(Map<String, dynamic> char) {
     final TextEditingController relController = TextEditingController(text: char['relationship_status'] ?? '');
+    final TextEditingController diagController = TextEditingController(text: char['dialogue_style'] ?? '');
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Edit Relationships: ${char['name']}'),
-        content: TextField(
-          controller: relController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Hates John, secretly loves Mary',
-            border: OutlineInputBorder(),
-          ),
+        title: Text('Edit Persona: ${char['name']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: relController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Relationship to User',
+                hintText: 'e.g. Hates John, secretly loves Mary',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: diagController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Dialogue Style',
+                hintText: 'e.g. Speaks in short, aggressive sentences',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               try {
-                await ApiService.updateCharacter(widget.storyId, char['id'], {'relationship_status': relController.text});
+                await ApiService.updateCharacter(widget.storyId, char['id'], {
+                  'relationship_status': relController.text,
+                  'dialogue_style': diagController.text,
+                });
                 if (mounted) {
                   Navigator.pop(context);
                   _loadData();

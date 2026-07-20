@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../api.dart';
+import 'dart:convert';
 import '../streak_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -205,27 +206,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: Container(
-                      color: Colors.deepPurple.shade800,
-                      child: const Icon(Icons.book, size: 64, color: Colors.white54),
-                    ),
+                    child: story['cover_base64'] != null
+                      ? Image.memory(
+                          base64Decode(story['cover_base64']),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        )
+                      : Container(
+                          color: Colors.deepPurple.shade800,
+                          child: const Icon(Icons.book, size: 64, color: Colors.white54),
+                        ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       story['title'] ?? 'Untitled',
                       style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: Text(
-                      '${story['tone']}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      story['synopsis'] ?? 'No summary available.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),

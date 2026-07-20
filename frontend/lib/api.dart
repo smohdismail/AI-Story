@@ -362,4 +362,100 @@ class ApiService {
       throw Exception('Failed to send message');
     }
   }
+
+  static Future<void> editChatMessage(String characterId, String chatId, String message) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/characters/$characterId/chat/$chatId'),
+      headers: headers,
+      body: jsonEncode({'message': message}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to edit message');
+    }
+  }
+
+  static Future<void> rewindChat(String characterId, String chatId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/characters/$characterId/chat/$chatId/rewind'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to rewind chat');
+    }
+  }
+
+  static Future<List<dynamic>> regenerateChat(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/chat/regenerate'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to regenerate chat');
+    }
+  }
+
+  static Future<Map<String, dynamic>> generateCharacterDiary(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/diary'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to generate diary');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getCharacter(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/characters/$characterId'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load character');
+    }
+  }
+
+  static Future<Map<String, dynamic>> createGroupChat(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/group_chats'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to create group chat');
+    }
+  }
+
+  static Future<List<dynamic>> getGroupChatMessages(String sessionId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/group_chats/$sessionId/messages'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load group chat messages');
+    }
+  }
+
+  static Future<List<dynamic>> sendGroupChatMessage(String sessionId, String message) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/group_chats/$sessionId/messages'),
+      headers: headers,
+      body: jsonEncode({'message': message}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to send group chat message');
+    }
+  }
 }

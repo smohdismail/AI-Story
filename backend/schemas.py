@@ -68,7 +68,9 @@ class CharacterBase(BaseModel):
     goals: Optional[str] = None
     weaknesses: Optional[str] = None
     relationship_status: Optional[str] = None
+    dialogue_style: Optional[str] = None
     avatar_base64: Optional[str] = None
+    intimacy_score: Optional[int] = 0
 
 class CharacterCreate(CharacterBase):
     pass
@@ -83,7 +85,9 @@ class CharacterUpdate(BaseModel):
     goals: Optional[str] = None
     weaknesses: Optional[str] = None
     relationship_status: Optional[str] = None
+    dialogue_style: Optional[str] = None
     avatar_base64: Optional[str] = None
+    intimacy_score: Optional[int] = None
 
 class CharacterResponse(CharacterBase):
     id: UUID4
@@ -125,3 +129,30 @@ class CopilotRequest(BaseModel):
     text: str
     command: str
     story_context: Optional[str] = None
+
+class GroupChatSessionBase(BaseModel):
+    story_id: UUID4
+
+class GroupChatSessionCreate(GroupChatSessionBase):
+    pass
+
+class GroupChatSessionResponse(GroupChatSessionBase):
+    id: UUID4
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class GroupChatMessageBase(BaseModel):
+    speaker_id: Optional[UUID4] = None
+    speaker_name: str
+    message: str
+
+class GroupChatMessageCreate(GroupChatMessageBase):
+    pass
+
+class GroupChatMessageResponse(GroupChatMessageBase):
+    id: UUID4
+    session_id: UUID4
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)

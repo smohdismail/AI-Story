@@ -26,6 +26,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   
   final FlutterTts flutterTts = FlutterTts();
   bool _isPlaying = false;
+  double _ttsSpeed = 0.5;
+  double _ttsPitch = 1.0;
   
   @override
   void initState() {
@@ -71,6 +73,66 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     }
   }
 
+  void _showTtsSettings() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Audiobook Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.speed),
+                      const SizedBox(width: 16),
+                      const Text('Speed'),
+                      Expanded(
+                        child: Slider(
+                          value: _ttsSpeed,
+                          min: 0.1,
+                          max: 2.0,
+                          onChanged: (val) {
+                            setSheetState(() => _ttsSpeed = val);
+                            setState(() => _ttsSpeed = val);
+                            flutterTts.setSpeechRate(val);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      const Icon(Icons.record_voice_over),
+                      const SizedBox(width: 16),
+                      const Text('Pitch'),
+                      Expanded(
+                        child: Slider(
+                          value: _ttsPitch,
+                          min: 0.5,
+                          max: 2.0,
+                          onChanged: (val) {
+                            setSheetState(() => _ttsPitch = val);
+                            setState(() => _ttsPitch = val);
+                            flutterTts.setPitch(val);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     flutterTts.stop();
@@ -88,6 +150,11 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
             icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
             tooltip: 'Audiobook Mode',
             onPressed: _togglePlayback,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_voice),
+            tooltip: 'Voice Settings',
+            onPressed: _showTtsSettings,
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.font_download),

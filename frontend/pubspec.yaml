@@ -48,6 +48,7 @@ dependencies:
   image_picker: ^1.2.1
   flutter_quill: ^11.5.0
   flutter_tts: ^4.2.5
+  audioplayers: ^5.2.1
 
 dev_dependencies:
   flutter_test:
