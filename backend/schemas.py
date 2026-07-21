@@ -112,9 +112,12 @@ class ChapterResponse(ChapterBase):
     model_config = ConfigDict(from_attributes=True)
 
 class ChatMessage(BaseModel):
+    id: UUID4
     message: str
     is_ai: int
     created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatRequest(BaseModel):
     message: str

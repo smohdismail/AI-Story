@@ -9,14 +9,7 @@ load_dotenv()
 # but it's easily swappable to postgres by changing the URL to postgresql+asyncpg://...
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./storygen.db")
 
-if DATABASE_URL.startswith("postgresql"):
-    engine = create_async_engine(DATABASE_URL, echo=True, connect_args={
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0
-    })
-else:
-    engine = create_async_engine(DATABASE_URL, echo=True)
-
+engine = create_async_engine(DATABASE_URL, echo=True)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
@@ -24,3 +17,4 @@ Base = declarative_base()
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
