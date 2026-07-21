@@ -456,6 +456,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: _isImmersionMode ? null : AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           widget.characterName,
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
