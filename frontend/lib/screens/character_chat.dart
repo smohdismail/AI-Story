@@ -553,6 +553,18 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                             child: Column(
                               crossAxisAlignment: isAi ? CrossAxisAlignment.start : CrossAxisAlignment.end,
                               children: [
+                                if (isAi)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4, bottom: 2),
+                                    child: Text(
+                                      widget.characterName,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber[700],
+                                      ),
+                                    ),
+                                  ),
                                 GestureDetector(
                                   behavior: HitTestBehavior.opaque,
                                   onLongPress: () {
