@@ -661,8 +661,8 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
         history_str += f"{char.name if msg.is_ai else 'User'}: {msg.message}\n"
         
     world_info = "None"
-    if char.story.world_building:
-        world_info = "\n".join([f"{w['title']}: {w['content']}" for w in char.story.world_building])
+    if getattr(char.story, 'world_items', None):
+        world_info = "\n".join([f"{w.title}: {w.content}" for w in char.story.world_items])
         
     mem_res = await db.execute(select(models.Memory).where(models.Memory.story_id == char.story_id).order_by(models.Memory.created_at.desc()).limit(10))
     mems = mem_res.scalars().all()
