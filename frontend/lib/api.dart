@@ -399,6 +399,68 @@ class ApiService {
     }
   }
 
+  static Future<void> clearChat(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/chat/clear'),
+      headers: headers,
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to clear chat');
+    }
+  }
+
+  static Future<void> deleteChatMessage(String characterId, String chatId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/characters/$characterId/chat/$chatId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete chat message');
+    }
+  }
+
+  static Future<List<dynamic>> continueChat(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/chat/continue'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to continue chat');
+    }
+  }
+
+  static Future<List<String>> getChatSuggestions(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/chat/suggest'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      return List<String>.from(data['suggestions'] ?? []);
+    } else {
+      throw Exception('Failed to get suggestions');
+    }
+  }
+
+  static Future<List<dynamic>> getCharacterThought(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/chat/thought'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to get character thought');
+    }
+  }
+
   static Future<Map<String, dynamic>> generateCharacterDiary(String characterId) async {
     final headers = await _getHeaders();
     final response = await http.post(

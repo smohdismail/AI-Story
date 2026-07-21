@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:go_router/go_router.dart';
+import 'package:gal/gal.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../api.dart';
 
 class CharacterChatScreen extends StatefulWidget {
@@ -26,6 +30,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
   bool _isLoading = true;
   bool _isSending = false;
   bool _isImmersionMode = false;
+  bool _showBackgroundImage = true;
+  List<String> _suggestions = [];
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
@@ -96,6 +102,130 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  Future<void> _continueChat() async {
+    setState(() {
+      _isSending = true;
+      _suggestions.clear();
+    });
+    try {
+      final msgs = await ApiService.continueChat(widget.characterId);
+      setState(() {
+        _messages = msgs;
+        _isSending = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<void> _generateThought() async {
+    setState(() {
+      _isSending = true;
+      _suggestions.clear();
+    });
+    try {
+      final msgs = await ApiService.getCharacterThought(widget.characterId);
+      setState(() {
+        _messages = msgs;
+        _isSending = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<void> _regenerateChat() async {
+    setState(() {
+      _isSending = true;
+      _suggestions.clear();
+    });
+    try {
+      final msgs = await ApiService.regenerateChat(widget.characterId);
+      setState(() {
+        _messages = msgs;
+        _isSending = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<void> _restartChat() async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restart Chat'),
+        content: const Text('Are you sure you want to delete all messages and start over?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restart', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    ) ?? false;
+    
+    if (!confirm) return;
+    
+    setState(() {
+      _isSending = true;
+      _suggestions.clear();
+    });
+    try {
+      await ApiService.clearChat(widget.characterId);
+      setState(() {
+        _messages.clear();
+        _isSending = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<void> _getSuggestions() async {
+    if (_suggestions.isNotEmpty) {
+      setState(() => _suggestions.clear());
+      return;
+    }
+    setState(() => _isSending = true);
+    try {
+      final sugs = await ApiService.getChatSuggestions(widget.characterId);
+      setState(() {
+        _suggestions = sugs;
+        _isSending = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<void> _deleteMessage(String id) async {
+    try {
+      await ApiService.deleteChatMessage(widget.characterId, id);
+      await _loadChat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   Future<void> _regenerate() async {
     if (_messages.isEmpty) return;
     setState(() => _isSending = true);
@@ -111,6 +241,24 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error regenerating: $e')));
         setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<void> _downloadImage() async {
+    if (widget.backgroundImage == null) return;
+    try {
+      final bytes = base64Decode(widget.backgroundImage!);
+      await Gal.putImageBytes(
+        Uint8List.fromList(bytes),
+        name: 'character_${widget.characterId}_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Image saved to Gallery')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving image: $e')));
       }
     }
   }
@@ -308,36 +456,59 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: _isImmersionMode ? null : AppBar(
-        title: Row(
-          children: [
-            Expanded(child: Text(widget.characterName, overflow: TextOverflow.ellipsis)),
-            const Icon(Icons.favorite, color: Colors.pink, size: 20),
-            const SizedBox(width: 4),
-            Text('$_intimacyScore', style: const TextStyle(fontSize: 16)),
-          ],
+        title: Text(
+          widget.characterName,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.favorite, color: Colors.pink, size: 20),
+                  const SizedBox(width: 4),
+                  Text('$_intimacyScore', style: const TextStyle(fontSize: 16)),
+                ],
+              ),
+            ),
+          ),
           IconButton(
             icon: Icon(_isAudioPlaying ? Icons.volume_up : Icons.volume_off),
             tooltip: 'Ambient Sound',
             onPressed: _toggleAudio,
           ),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _currentTheme,
-              icon: const Icon(Icons.palette, color: Colors.white),
-              onChanged: (String? newValue) {
-                if (newValue != null) setState(() => _currentTheme = newValue);
-              },
-              items: <String>['Dark Mode', 'Cyberpunk', 'Fantasy', 'Romance']
-                  .map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.palette, color: Colors.white),
+            tooltip: 'Change Theme',
+            onSelected: (String newValue) {
+              setState(() => _currentTheme = newValue);
+            },
+            itemBuilder: (BuildContext context) {
+              return ['Dark Mode', 'Cyberpunk', 'Fantasy', 'Romance'].map((String choice) {
+                return PopupMenuItem<String>(
+                  value: choice,
+                  child: Text(choice),
                 );
-              }).toList(),
-            ),
+              }).toList();
+            },
           ),
+          IconButton(
+            icon: Icon(_showBackgroundImage ? Icons.image : Icons.hide_image, color: Colors.white),
+            tooltip: 'Toggle Background',
+            onPressed: () {
+              setState(() {
+                _showBackgroundImage = !_showBackgroundImage;
+              });
+            },
+          ),
+          if (widget.backgroundImage != null)
+            IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'Download Image',
+              onPressed: _downloadImage,
+            ),
           IconButton(
             icon: const Icon(Icons.menu_book),
             tooltip: 'View Diary',
@@ -348,23 +519,28 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : GestureDetector(
-              onTap: () => setState(() => _isImmersionMode = !_isImmersionMode),
+              onDoubleTap: () => setState(() => _isImmersionMode = !_isImmersionMode),
               child: Container(
-                decoration: widget.backgroundImage != null
+                width: double.infinity,
+                height: double.infinity,
+                decoration: widget.backgroundImage != null && _showBackgroundImage
                     ? BoxDecoration(
                         image: DecorationImage(
                           image: MemoryImage(base64Decode(widget.backgroundImage!)),
                           fit: BoxFit.cover,
-                          colorFilter: ColorFilter.mode(
-                            Colors.black.withOpacity(_isImmersionMode ? 0.3 : 0.85),
-                            BlendMode.darken,
-                          ),
+                          colorFilter: _isImmersionMode
+                              ? null
+                              : ColorFilter.mode(
+                                  Colors.black.withOpacity(0.6),
+                                  BlendMode.darken,
+                                ),
                         ),
                       )
                     : null, // Note: For Cyberpunk/Fantasy/Romance, we can also tint this if background is null
                 child: Column(
                   children: [
-                    Expanded(
+                    if (!_isImmersionMode)
+                      Expanded(
                       child: ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(16),
@@ -374,34 +550,52 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                           final isAi = msg['is_ai'] == 1;
                           return Align(
                             alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
-                            child: GestureDetector(
-                              onLongPress: () {
-                                if (msg['id'] != null) {
-                                  _showContextMenu(msg);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                                decoration: BoxDecoration(
-                                  color: isAi ? _aiBubbleColor : _userBubbleColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: MarkdownBody(
-                                  data: msg['message'],
-                                  styleSheet: MarkdownStyleSheet(
-                                    p: TextStyle(
-                                      color: isAi ? Colors.white : Theme.of(context).colorScheme.onPrimary,
-                                      fontSize: 15,
+                            child: Column(
+                              crossAxisAlignment: isAi ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                              children: [
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onLongPress: () {
+                                    if (msg['id'] != null) {
+                                      _showContextMenu(msg);
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    margin: const EdgeInsets.symmetric(vertical: 4),
+                                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                                    decoration: BoxDecoration(
+                                      color: isAi ? _aiBubbleColor : _userBubbleColor,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    em: TextStyle(
-                                      color: isAi ? Colors.white70 : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
-                                      fontStyle: FontStyle.italic,
+                                    child: MarkdownBody(
+                                      data: msg['message'],
+                                      styleSheet: MarkdownStyleSheet(
+                                        p: TextStyle(
+                                          color: isAi ? Colors.white : Theme.of(context).colorScheme.onPrimary,
+                                          fontSize: 15,
+                                        ),
+                                        em: TextStyle(
+                                          color: isAi ? Colors.white70 : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
+                                if (msg['id'] != null && !_isImmersionMode)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2.0),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        InkWell(onTap: () => _showEditDialog(msg), child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.edit, size: 18, color: Colors.white70))),
+                                        InkWell(onTap: () => _confirmRewind(msg), child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.fast_rewind, size: 18, color: Colors.white70))),
+                                        InkWell(onTap: () => _deleteMessage(msg['id']), child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.delete, size: 18, color: Colors.redAccent))),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
                           );
                         },
@@ -416,31 +610,64 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                       Container(
                         padding: const EdgeInsets.all(8.0),
                         color: Colors.black.withOpacity(0.5),
-                        child: Row(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _msgController,
-                                decoration: InputDecoration(
-                                  hintText: 'Type a message...',
-                                  filled: true,
-                                  fillColor: Colors.grey[900],
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            if (_suggestions.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Wrap(
+                                  spacing: 8,
+                                  children: _suggestions.map((s) => ActionChip(
+                                    label: Text(s, style: const TextStyle(fontSize: 12)),
+                                    onPressed: () {
+                                      _msgController.text = s;
+                                      _sendMessage();
+                                      setState(() => _suggestions.clear());
+                                    },
+                                  )).toList(),
                                 ),
-                                onSubmitted: (_) => _sendMessage(),
+                              ),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  TextButton.icon(icon: const Icon(Icons.play_arrow, size: 16), label: const Text('Continue'), onPressed: _isSending ? null : _continueChat),
+                                  TextButton.icon(icon: const Icon(Icons.lightbulb, size: 16), label: const Text('Suggest'), onPressed: _isSending ? null : _getSuggestions),
+                                  TextButton.icon(icon: const Icon(Icons.psychology, size: 16), label: const Text('Thought'), onPressed: _isSending ? null : _generateThought),
+                                  TextButton.icon(icon: const Icon(Icons.refresh, size: 16), label: const Text('Regenerate'), onPressed: _isSending ? null : _regenerateChat),
+                                  TextButton.icon(icon: const Icon(Icons.restart_alt, size: 16, color: Colors.red), label: const Text('Restart', style: TextStyle(color: Colors.red)), onPressed: _isSending ? null : _restartChat),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            CircleAvatar(
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              child: IconButton(
-                                icon: const Icon(Icons.send, color: Colors.white),
-                                onPressed: _isSending ? null : _sendMessage,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _msgController,
+                                    decoration: InputDecoration(
+                                      hintText: 'Type a message...',
+                                      filled: true,
+                                      fillColor: Colors.grey[900],
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    ),
+                                    onSubmitted: (_) => _sendMessage(),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                CircleAvatar(
+                                  backgroundColor: Theme.of(context).colorScheme.primary,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.send, color: Colors.white),
+                                    onPressed: _isSending ? null : _sendMessage,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
