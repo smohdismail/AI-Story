@@ -81,7 +81,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     
     setState(() {
       _isSending = true;
-      _messages.add({'message': text, 'is_ai': 0, 'created_at': DateTime.now().toIso8601String()});
+      _messages.add({'message': text, 'is_ai': false, 'created_at': DateTime.now().toIso8601String()});
       _msgController.clear();
     });
     _scrollToBottom();
@@ -591,7 +591,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
                           final msg = _messages[index];
-                          final isAi = msg['is_ai'] == 1;
+                          final isAi = msg['is_ai'] == true || msg['is_ai'] == 1;
                           return Align(
                             alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
                             child: Column(
@@ -624,7 +624,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                       color: isAi ? _aiBubbleColor : _userBubbleColor,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: msg['is_image'] == 1 && msg['image_url'] != null
+                                    child: (msg['is_image'] == true || msg['is_image'] == 1) && msg['image_url'] != null
                                         ? Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [

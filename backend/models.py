@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 import enum
-from sqlalchemy import Column, String, Integer, Text, ForeignKey, DateTime, Enum as SQLEnum, Uuid
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, DateTime, Enum as SQLEnum, Uuid, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -80,10 +80,10 @@ class CharacterChat(Base):
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
     message = Column(Text)
-    is_ai = Column(Integer) # 1 if AI, 0 if User
+    is_ai = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_summarized = Column(Integer, default=0)
-    is_image = Column(Integer, default=0) # 1 if this message is an image
+    is_image = Column(Boolean, default=False)
     image_url = Column(Text, nullable=True)
 
     character = relationship("Character", back_populates="chats")

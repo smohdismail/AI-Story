@@ -143,8 +143,8 @@ class ChapterResponse(ChapterBase):
 class ChatMessage(BaseModel):
     id: UUID4
     message: str
-    is_ai: int
-    is_image: Optional[int] = 0
+    is_ai: bool
+    is_image: Optional[bool] = False
     image_url: Optional[str] = None
     created_at: datetime
     
