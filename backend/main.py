@@ -842,6 +842,93 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
     final_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()))
     return final_res.scalars().all()
 
+
+@app.put("/api/v1/group_chats/{session_id}/messages/{msg_id}")
+async def edit_group_chat_message(session_id: uuid.UUID, msg_id: uuid.UUID, request: schemas.ChatRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.id == msg_id, models.GroupChatMessage.session_id == session_id))
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(404, "Message not found")
+    msg.message = request.message
+    await db.commit()
+    return {"status": "updated"}
+
+@app.delete("/api/v1/group_chats/{session_id}/messages/{msg_id}/rewind")
+async def rewind_group_chat(session_id: uuid.UUID, msg_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.id == msg_id, models.GroupChatMessage.session_id == session_id))
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(404, "Message not found")
+    # Delete this message and all after it
+    await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id, models.GroupChatMessage.created_at >= msg.created_at))
+    await db.commit()
+    return {"status": "rewound"}
+
+@app.delete("/api/v1/group_chats/{session_id}/messages/{msg_id}")
+async def delete_group_chat_message(session_id: uuid.UUID, msg_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.id == msg_id, models.GroupChatMessage.session_id == session_id))
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(404, "Message not found")
+    await db.delete(msg)
+    await db.commit()
+    return {"status": "deleted"}
+
+@app.post("/api/v1/group_chats/{session_id}/continue", response_model=list[schemas.GroupChatMessageResponse])
+async def continue_group_chat(session_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    # Very similar to send_group_chat_message but without adding a user message
+    session_res = await db.execute(select(models.GroupChatSession).where(models.GroupChatSession.id == session_id))
+    session = session_res.scalars().first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == session.story_id))
+    chars = chars_res.scalars().all()
+    char_info_str = "\n---\n".join([f"Name: {c.name}\nRole: {c.role}\nPersonality: {c.personality}\nStyle: {c.dialogue_style}" for c in chars])
+    
+    story_res = await db.execute(select(models.Story).where(models.Story.id == session.story_id))
+    story = story_res.scalars().first()
+    
+    hist_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()).limit(20))
+    hist = hist_res.scalars().all()
+    chat_history_str = "\n".join([f"{m.speaker_name}: {m.message}" for m in hist])
+    
+    relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", "Continue the conversation naturally.")
+    
+    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories)
+    
+    lines = ai_reply.split('\n')
+    for line in lines:
+        if ':' in line:
+            speaker, msg = line.split(':', 1)
+            speaker = speaker.strip()
+            msg = msg.strip()
+            speaker_char = next((c for c in chars if c.name.lower() in speaker.lower()), None)
+            speaker_id = speaker_char.id if speaker_char else None
+            ai_msg = models.GroupChatMessage(session_id=session_id, speaker_name=speaker, speaker_id=speaker_id, message=msg)
+            db.add(ai_msg)
+            
+    await db.commit()
+    background_tasks.add_task(bg_summarize_group_chat, session_id, session.story_id)
+    final_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()))
+    return final_res.scalars().all()
+
+@app.post("/api/v1/group_chats/{session_id}/regenerate", response_model=list[schemas.GroupChatMessageResponse])
+async def regenerate_group_chat(session_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    hist_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.desc()).limit(1))
+    last_msg = hist_res.scalars().first()
+    if last_msg and last_msg.speaker_name != "User":
+        await db.delete(last_msg)
+        await db.commit()
+    return await continue_group_chat(session_id, background_tasks, db)
+
+@app.post("/api/v1/group_chats/{session_id}/clear")
+async def clear_group_chat(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id))
+    await db.commit()
+    return {"status": "cleared"}
+
+
 @app.get("/api/v1/characters/{character_id}", response_model=schemas.CharacterResponse)
 async def get_character(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(models.Character).where(models.Character.id == character_id))
