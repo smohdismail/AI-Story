@@ -817,21 +817,29 @@ async def clear_character_chat(character_id: uuid.UUID, db: AsyncSession = Depen
     return {"status": "success"}
 
 @app.post("/api/v1/characters/{character_id}/chat/request_selfie", response_model=list[schemas.ChatMessage])
-async def request_selfie(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
     
     # Save a generic user message saying they requested a photo
-    user_msg = models.CharacterChat(character_id=character_id, message="*Takes out phone and points it at you* Say cheese!", is_ai=0)
+    user_msg_text = "*Takes out phone and points it at you* Say cheese!"
+    if custom_prompt:
+        user_msg_text = f"*Takes out phone* {custom_prompt}"
+    user_msg = models.CharacterChat(character_id=character_id, message=user_msg_text, is_ai=0)
     db.add(user_msg)
     
     # Generate the image prompt based on their appearance
-    prompt = f"RAW selfie photo of {char.name}, {char.appearance}, looking directly at camera, detailed face, photorealistic"
+    prompt = f"RAW selfie photo of {char.name}"
+    if custom_prompt:
+        prompt += f", {custom_prompt}"
+    prompt += f", {char.appearance}, looking directly at camera, detailed face, photorealistic"
     safe_prompt = urllib.parse.quote(prompt)
     
-    # Generate a seed based on character name so their face is somewhat consistent
-    seed = int(hashlib.md5(char.name.encode('utf-8')).hexdigest()[:8], 16)
+    # Generate a seed based on character name so their face is somewhat consistent (and add a random element so new selfies are slightly different)
+    import random
+    seed_base = char.name + str(random.randint(1, 10000))
+    seed = int(hashlib.md5(seed_base.encode('utf-8')).hexdigest()[:8], 16)
     
     image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?seed={seed}&nologo=true&width=512&height=768"
     
