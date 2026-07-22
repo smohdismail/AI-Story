@@ -82,10 +82,14 @@ class ApiService {
     throw Exception('Failed to save persona');
   }
 
-  static Future<List<dynamic>> requestSelfie(String characterId) async {
+  static Future<List<dynamic>> requestSelfie(String characterId, {String? customPrompt}) async {
     final headers = await _getHeaders();
+    String url = '$baseUrl/characters/$characterId/chat/request_selfie';
+    if (customPrompt != null && customPrompt.isNotEmpty) {
+      url += '?custom_prompt=${Uri.encodeComponent(customPrompt)}';
+    }
     final response = await http.post(
-      Uri.parse('$baseUrl/characters/$characterId/chat/request_selfie'),
+      Uri.parse(url),
       headers: headers,
     );
     if (response.statusCode == 200) {

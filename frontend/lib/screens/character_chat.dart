@@ -103,12 +103,33 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
   }
 
   Future<void> _requestSelfie() async {
+    final promptController = TextEditingController();
+    final customPrompt = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Request a Photo'),
+        content: TextField(
+          controller: promptController,
+          decoration: const InputDecoration(
+            hintText: '(Optional) E.g. wearing a red dress, smiling...',
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, promptController.text), child: const Text('Request')),
+        ],
+      ),
+    );
+
+    if (customPrompt == null) return; // cancelled
+
     setState(() {
       _isSending = true;
       _suggestions.clear();
     });
     try {
-      final msgs = await ApiService.requestSelfie(widget.characterId);
+      final msgs = await ApiService.requestSelfie(widget.characterId, customPrompt: customPrompt);
       setState(() {
         _messages = msgs;
         _isSending = false;
@@ -606,9 +627,83 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                         ? Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              ClipRRect(
-                                                borderRadius: BorderRadius.circular(8),
-                                                child: Image.network(msg['image_url'], height: 250, fit: BoxFit.cover),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  showDialog(
+                                                    context: context,
+                                                    builder: (context) => Dialog(
+                                                      backgroundColor: Colors.transparent,
+                                                      insetPadding: EdgeInsets.zero,
+                                                      child: Stack(
+                                                        alignment: Alignment.center,
+                                                        children: [
+                                                          InteractiveViewer(
+                                                            child: Image.network(msg['image_url']),
+                                                          ),
+                                                          Positioned(
+                                                            top: 40, right: 20,
+                                                            child: Row(
+                                                              children: [
+                                                                IconButton(
+                                                                  icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                                                                  onPressed: () async {
+                                                                    // Launch URL to download or just show a message
+                                                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Long press image in browser to save')));
+                                                                    final Uri url = Uri.parse(msg['image_url']);
+                                                                    try {
+                                                                      // Assuming url_launcher is available, but if not we just show the message
+                                                                      // await launchUrl(url); 
+                                                                    } catch (_) {}
+                                                                  },
+                                                                ),
+                                                                const SizedBox(width: 8),
+                                                                IconButton(
+                                                                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                                                  onPressed: () => Navigator.pop(context),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    msg['image_url'],
+                                                    height: 250,
+                                                    width: double.infinity,
+                                                    fit: BoxFit.cover,
+                                                    loadingBuilder: (context, child, loadingProgress) {
+                                                      if (loadingProgress == null) return child;
+                                                      return SizedBox(
+                                                        height: 250,
+                                                        child: Center(
+                                                          child: CircularProgressIndicator(
+                                                            value: loadingProgress.expectedTotalBytes != null
+                                                                ? loadingProgress.cumulativeBytesLoaded / (loadingProgress.expectedTotalBytes ?? 1)
+                                                                : null,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    errorBuilder: (context, error, stackTrace) => const SizedBox(
+                                                      height: 250,
+                                                      child: Center(
+                                                        child: Column(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.error_outline, color: Colors.red, size: 40),
+                                                            SizedBox(height: 8),
+                                                            Text('Failed to load image', style: TextStyle(color: Colors.white70)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
                                               const SizedBox(height: 8),
                                               MarkdownBody(

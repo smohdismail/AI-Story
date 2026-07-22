@@ -574,74 +574,96 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     final char = filteredChars[index];
                     return Card(
                       margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: ListTile(
-                        leading: GestureDetector(
-                          onTap: () async {
-                            final picker = ImagePicker();
-                            final pickedFile = await picker.pickImage(
-                              source: ImageSource.gallery,
-                              imageQuality: 50,
-                              maxWidth: 256,
-                              maxHeight: 256,
-                            );
-                            if (pickedFile != null) {
-                              final bytes = await pickedFile.readAsBytes();
-                              final base64Image = base64Encode(bytes);
-                              await ApiService.updateCharacter(
-                                widget.storyId,
-                                char['id'],
-                                {'avatar_base64': base64Image},
-                              );
-                              _loadData();
-                            }
-                          },
-                          child: CircleAvatar(
-                            radius: 25,
-                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                            backgroundImage: (char['avatar_base64'] != null && char['avatar_base64'].isNotEmpty)
-                                ? MemoryImage(base64Decode(char['avatar_base64']))
-                                : null,
-                            child: (char['avatar_base64'] == null || char['avatar_base64'].isEmpty)
-                                ? const Icon(Icons.person, color: Colors.white)
-                                : null,
-                          ),
-                        ),
-                        title: Text(char['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 4),
-                            Text('Role: ${char['role'] ?? 'N/A'}'),
-                            const SizedBox(height: 4),
-                            Text('Gender: ${char['gender'] ?? 'N/A'}'),
-                            const SizedBox(height: 4),
-                            Text('Personality: ${char['personality'] ?? 'N/A'}'),
-                            const SizedBox(height: 4),
-                            Text('Appearance: ${char['appearance'] ?? 'N/A'}'),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: GestureDetector(
+                                onTap: () async {
+                                  final picker = ImagePicker();
+                                  final pickedFile = await picker.pickImage(
+                                    source: ImageSource.gallery,
+                                    imageQuality: 50,
+                                    maxWidth: 256,
+                                    maxHeight: 256,
+                                  );
+                                  if (pickedFile != null) {
+                                    final bytes = await pickedFile.readAsBytes();
+                                    final base64Image = base64Encode(bytes);
+                                    await ApiService.updateCharacter(
+                                      widget.storyId,
+                                      char['id'],
+                                      {'avatar_base64': base64Image},
+                                    );
+                                    _loadData();
+                                  }
+                                },
+                                child: CircleAvatar(
+                                  radius: 25,
+                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                  backgroundImage: (char['avatar_base64'] != null && char['avatar_base64'].isNotEmpty)
+                                      ? MemoryImage(base64Decode(char['avatar_base64']))
+                                      : null,
+                                  child: (char['avatar_base64'] == null || char['avatar_base64'].isEmpty)
+                                      ? const Icon(Icons.person, color: Colors.white)
+                                      : null,
+                                ),
+                              ),
+                              title: Text(char['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                              subtitle: Text('${char['gender'] ?? 'N/A'} • ${char['role'] ?? 'N/A'}', style: TextStyle(color: Colors.grey[400])),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.chat, color: Colors.blue),
+                                    onPressed: () {
+                                      context.push('/character_chat', extra: {
+                                        'characterId': char['id'],
+                                        'characterName': char['name'] ?? 'Unknown',
+                                        'backgroundImage': char['avatar_base64'],
+                                      });
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                    onPressed: () async {
+                                      bool confirm = await showDialog(
+                                        context: context,
+                                        builder: (c) => AlertDialog(
+                                          title: const Text('Delete Character'),
+                                          content: const Text('Are you sure?'),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                                            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+                                          ],
+                                        ),
+                                      ) ?? false;
+                                      if (confirm) {
+                                        await ApiService.deleteCharacter(widget.storyId, char['id']);
+                                        _loadData();
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Divider(),
+                            const SizedBox(height: 8),
                             if (char['relationship_status'] != null && char['relationship_status'].toString().isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('Relationship: ${char['relationship_status']}', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.deepPurple)),
+                              Text('Relationship: ${char['relationship_status']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
+                              const SizedBox(height: 8),
                             ],
-                          ],
-                        ),
-                        isThreeLine: true,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.chat, color: Colors.blue),
-                              onPressed: () {
-                                context.push('/character_chat', extra: {
-                                  'characterId': char['id'],
-                                  'characterName': char['name'] ?? 'Unknown',
-                                  'backgroundImage': char['avatar_base64'],
-                                });
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteCharacter(char['id']),
-                            ),
+                            const Text('Personality', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+                            const SizedBox(height: 4),
+                            Text(char['personality'] ?? 'N/A', style: const TextStyle(height: 1.4)),
+                            const SizedBox(height: 12),
+                            const Text('Appearance', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+                            const SizedBox(height: 4),
+                            Text(char['appearance'] ?? 'N/A', style: const TextStyle(height: 1.4)),
                           ],
                         ),
                       ),
