@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import '../api.dart';
 
 class CharacterChatScreen extends StatefulWidget {
@@ -651,13 +652,24 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                                                 IconButton(
                                                                   icon: const Icon(Icons.download, color: Colors.white, size: 30),
                                                                   onPressed: () async {
-                                                                    // Launch URL to download or just show a message
-                                                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Long press image in browser to save')));
-                                                                    final Uri url = Uri.parse(msg['image_url']);
                                                                     try {
-                                                                      // Assuming url_launcher is available, but if not we just show the message
-                                                                      // await launchUrl(url); 
-                                                                    } catch (_) {}
+                                                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Downloading image...')));
+                                                                      final response = await http.get(
+                                                                        Uri.parse(msg['image_url']),
+                                                                        headers: const {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'},
+                                                                      );
+                                                                      final tempDir = await getTemporaryDirectory();
+                                                                      final file = File('${tempDir.path}/downloaded_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                                                                      await file.writeAsBytes(response.bodyBytes);
+                                                                      await Gal.putImage(file.path);
+                                                                      if (mounted) {
+                                                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Image saved to Gallery!')));
+                                                                      }
+                                                                    } catch (e) {
+                                                                      if (mounted) {
+                                                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save image: $e')));
+                                                                      }
+                                                                    }
                                                                   },
                                                                 ),
                                                                 const SizedBox(width: 8),

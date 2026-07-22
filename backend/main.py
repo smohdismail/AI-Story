@@ -832,10 +832,10 @@ async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] =
     db.add(user_msg)
     
     # Generate the image prompt based on their appearance
-    prompt = f"RAW selfie photo of {char.name}"
+    prompt = f"RAW high-quality masterpiece photo of {char.name}"
     if custom_prompt:
         prompt += f", {custom_prompt}"
-    prompt += f", {char.appearance}, looking directly at camera, detailed face, photorealistic"
+    prompt += f", {char.appearance}, highly detailed, photorealistic, 8k resolution, cinematic lighting"
     safe_prompt = urllib.parse.quote(prompt)
     
     # Generate a seed based on character name so their face is somewhat consistent (and add a random element so new selfies are slightly different)
