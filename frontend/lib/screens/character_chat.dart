@@ -638,7 +638,11 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                                         alignment: Alignment.center,
                                                         children: [
                                                           InteractiveViewer(
-                                                            child: Image.network(msg['image_url']),
+                                                            child: Image.network(
+                                                              msg['image_url'],
+                                                              fit: BoxFit.contain,
+                                                              headers: const {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'},
+                                                            ),
                                                           ),
                                                           Positioned(
                                                             top: 40, right: 20,
@@ -676,6 +680,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                                     height: 250,
                                                     width: double.infinity,
                                                     fit: BoxFit.cover,
+                                                    headers: const {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'},
                                                     loadingBuilder: (context, child, loadingProgress) {
                                                       if (loadingProgress == null) return child;
                                                       return SizedBox(
