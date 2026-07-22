@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 from contextlib import asynccontextmanager
 import uuid
 from pydantic import BaseModel
+from typing import Optional, List, Dict
 
 from database import engine, Base, get_db
 import models
