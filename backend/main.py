@@ -22,6 +22,7 @@ import os
 import re
 import urllib.parse
 import hashlib
+import random
 
 async def trigger_summary_update(story_id: uuid.UUID, new_chapter_text: str):
     async for db in get_db():
@@ -603,7 +604,7 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
         raise HTTPException(status_code=404, detail="Character not found")
         
     # Save user message
-    user_msg = models.CharacterChat(character_id=character_id, message=request.message, is_ai=0)
+    user_msg = models.CharacterChat(character_id=character_id, message=request.message, is_ai=False)
     db.add(user_msg)
     await db.commit()
     
@@ -651,7 +652,7 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
         ai_reply = re.sub(r'\[INTIMACY:[+-]?\d+\]', '', ai_reply).strip()
     
     # Save AI message
-    ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=1)
+    ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=True)
     db.add(ai_msg)
     await db.commit()
     
@@ -827,7 +828,7 @@ async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] =
     user_msg_text = "*Takes out phone and points it at you* Say cheese!"
     if custom_prompt:
         user_msg_text = f"*Takes out phone* {custom_prompt}"
-    user_msg = models.CharacterChat(character_id=character_id, message=user_msg_text, is_ai=0)
+    user_msg = models.CharacterChat(character_id=character_id, message=user_msg_text, is_ai=False)
     db.add(user_msg)
     
     # Generate the image prompt based on their appearance
@@ -845,7 +846,7 @@ async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] =
     image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?seed={seed}&nologo=true&width=512&height=768"
     
     # Save AI message as an image
-    ai_msg = models.CharacterChat(character_id=character_id, message="Here you go! 📸", is_ai=1, is_image=1, image_url=image_url)
+    ai_msg = models.CharacterChat(character_id=character_id, message="Here you go! 📸", is_ai=True, is_image=True, image_url=image_url)
     db.add(ai_msg)
     await db.commit()
     
