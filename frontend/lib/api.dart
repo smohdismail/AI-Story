@@ -520,4 +520,46 @@ class ApiService {
       throw Exception('Failed to send group chat message');
     }
   }
+
+  static Future<void> editGroupChatMessage(String sessionId, String msgId, String message) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/group_chats/$sessionId/messages/$msgId'),
+      headers: headers,
+      body: jsonEncode({'message': message}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to edit group chat message');
+  }
+
+  static Future<void> rewindGroupChat(String sessionId, String msgId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(Uri.parse('$baseUrl/group_chats/$sessionId/messages/$msgId/rewind'), headers: headers);
+    if (response.statusCode != 200) throw Exception('Failed to rewind group chat');
+  }
+
+  static Future<void> deleteGroupChatMessage(String sessionId, String msgId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(Uri.parse('$baseUrl/group_chats/$sessionId/messages/$msgId'), headers: headers);
+    if (response.statusCode != 200) throw Exception('Failed to delete group chat message');
+  }
+
+  static Future<List<dynamic>> continueGroupChat(String sessionId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/group_chats/$sessionId/continue'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to continue group chat');
+  }
+
+  static Future<List<dynamic>> regenerateGroupChat(String sessionId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/group_chats/$sessionId/regenerate'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to regenerate group chat');
+  }
+
+  static Future<void> clearGroupChat(String sessionId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/group_chats/$sessionId/clear'), headers: headers);
+    if (response.statusCode != 200) throw Exception('Failed to clear group chat');
+  }
 }
