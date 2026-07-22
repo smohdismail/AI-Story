@@ -259,10 +259,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: AppBar(
-        title: Text('Tavern (Group Chat)', style: TextStyle(color: _textColor)),
-        backgroundColor: Colors.black.withOpacity(0.5),
+        title: Text('Tavern (Group Chat)', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.black,
         elevation: 0,
-        iconTheme: IconThemeData(color: _textColor),
+        iconTheme: IconThemeData(color: Colors.white),
         actions: [
           if (widget.backgroundImage != null)
             IconButton(

@@ -57,6 +57,43 @@ class ApiService {
     }
   }
 
+  // --- PERSONA API ---
+  static Future<Map<String, dynamic>?> getPersona() async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/users/me/persona'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else if (response.statusCode == 404) {
+      return null;
+    }
+    throw Exception('Failed to fetch persona');
+  }
+
+  static Future<Map<String, dynamic>> savePersona(Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/users/me/persona'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to save persona');
+  }
+
+  static Future<List<dynamic>> requestSelfie(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/chat/request_selfie'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to request selfie');
+  }
+
   static Future<List<dynamic>> getStories() async {
     final headers = await _getHeaders();
     final response = await http.get(Uri.parse('$baseUrl/stories'), headers: headers);

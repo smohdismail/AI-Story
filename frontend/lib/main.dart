@@ -9,6 +9,7 @@ import 'screens/settings.dart';
 import 'screens/zen_reader.dart';
 import 'screens/character_chat.dart';
 import 'screens/group_chat_screen.dart';
+import 'screens/persona_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -75,6 +76,12 @@ void main() async {
       path: '/settings',
       builder: (BuildContext context, GoRouterState state) {
         return const SettingsScreen();
+      },
+    ),
+    GoRoute(
+      path: '/persona',
+      builder: (BuildContext context, GoRouterState state) {
+        return PersonaScreen();
       },
     ),
     GoRoute(

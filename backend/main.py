@@ -19,6 +19,8 @@ from ebooklib import epub
 import tempfile
 import os
 import re
+import urllib.parse
+import hashlib
 
 async def trigger_summary_update(story_id: uuid.UUID, new_chapter_text: str):
     async for db in get_db():
@@ -97,6 +99,43 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
+
+# --- PERSONA ENDPOINTS ---
+
+@app.get("/api/v1/users/me/persona", response_model=schemas.PersonaResponse)
+async def get_persona(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Persona).where(models.Persona.user_id == current_user.id))
+    persona = result.scalars().first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+    return persona
+
+@app.post("/api/v1/users/me/persona", response_model=schemas.PersonaResponse)
+async def create_or_update_persona(persona: schemas.PersonaCreate, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Persona).where(models.Persona.user_id == current_user.id))
+    db_persona = result.scalars().first()
+    
+    if db_persona:
+        for key, value in persona.model_dump().items():
+            setattr(db_persona, key, value)
+    else:
+        db_persona = models.Persona(**persona.model_dump(), user_id=current_user.id)
+        db.add(db_persona)
+        
+    await db.commit()
+    await db.refresh(db_persona)
+    return db_persona
+
+@app.delete("/api/v1/users/me/persona")
+async def delete_persona(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Persona).where(models.Persona.user_id == current_user.id))
+    db_persona = result.scalars().first()
+    if not db_persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+    
+    await db.delete(db_persona)
+    await db.commit()
+    return {"status": "deleted"}
 
 @app.get("/")
 def read_root():
@@ -582,7 +621,26 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     # Retrieve relevant memories
     relevant_memories = await memory_service.retrieve_memories(str(char.story_id), str(char.id), request.message)
     
-    ai_reply = await llm_service.chat_with_character(char_info, story_summary, world_info, request.message, relevant_memories)
+    # Retrieve Persona and Intimacy Tier
+    persona_info = ""
+    if story and story.user_id:
+        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == story.user_id))
+        persona = persona_res.scalars().first()
+        if persona:
+            persona_info = f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+
+    score = char.intimacy_score or 0
+    tier_prompt = ""
+    if score <= 25:
+        tier_prompt = "You are currently NEUTRAL towards the user. Be polite but guarded."
+    elif score <= 50:
+        tier_prompt = "You are FRIENDLY towards the user. Be warm and open."
+    elif score <= 75:
+        tier_prompt = "You are ROMANTIC towards the user. Be flirtatious and affectionate."
+    else:
+        tier_prompt = "You are DEVOTED/OBSESSED with the user. Be intensely loyal and deeply in love."
+
+    ai_reply = await llm_service.chat_with_character(char_info, story_summary, world_info, request.message, relevant_memories, persona_info, tier_prompt)
     
     # Parse intimacy delta
     intimacy_match = re.search(r'\[INTIMACY:([+-]?\d+)\]', ai_reply)
@@ -668,12 +726,20 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
     mems = mem_res.scalars().all()
     mem_str = "\n".join([m.content for m in mems])
     
+    persona_info = ""
+    if char.story and char.story.user_id:
+        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == char.story.user_id))
+        persona = persona_res.scalars().first()
+        if persona:
+            persona_info = f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+
     ai_msg = await llm_service.continue_chat(
         character_info=f"Name: {char.name}\nPersonality: {char.personality}\nRole: {char.role}",
         story_summary=char.story.synopsis,
         world_info=world_info,
         chat_history=history_str,
-        relevant_memories=mem_str
+        relevant_memories=mem_str,
+        persona_info=persona_info
     )
     
     chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
@@ -750,6 +816,33 @@ async def clear_character_chat(character_id: uuid.UUID, db: AsyncSession = Depen
     await db.commit()
     return {"status": "success"}
 
+@app.post("/api/v1/characters/{character_id}/chat/request_selfie", response_model=list[schemas.ChatMessage])
+async def request_selfie(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char_res = await db.execute(select(models.Character).where(models.Character.id == character_id))
+    char = char_res.scalars().first()
+    if not char: raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Save a generic user message saying they requested a photo
+    user_msg = models.CharacterChat(character_id=character_id, message="*Takes out phone and points it at you* Say cheese!", is_ai=0)
+    db.add(user_msg)
+    
+    # Generate the image prompt based on their appearance
+    prompt = f"RAW selfie photo of {char.name}, {char.appearance}, looking directly at camera, detailed face, photorealistic"
+    safe_prompt = urllib.parse.quote(prompt)
+    
+    # Generate a seed based on character name so their face is somewhat consistent
+    seed = int(hashlib.md5(char.name.encode('utf-8')).hexdigest()[:8], 16)
+    
+    image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?seed={seed}&nologo=true&width=512&height=768"
+    
+    # Save AI message as an image
+    ai_msg = models.CharacterChat(character_id=character_id, message="Here you go! 📸", is_ai=1, is_image=1, image_url=image_url)
+    db.add(ai_msg)
+    await db.commit()
+    
+    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    return hist.scalars().all()
+
 @app.post("/api/v1/characters/{character_id}/diary")
 async def generate_diary(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     char_result = await db.execute(select(models.Character).where(models.Character.id == character_id))
@@ -816,8 +909,16 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
     # Retrieve relevant memories
     relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", request.message)
     
+    # Retrieve Persona
+    persona_info = ""
+    if story and story.user_id:
+        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == story.user_id))
+        persona = persona_res.scalars().first()
+        if persona:
+            persona_info = f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+
     # 4. Generate AI response
-    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories)
+    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories, persona_info)
     
     # 5. Save AI response(s). The AI might output multiple lines like "Char1: text \n Char2: text"
     lines = ai_reply.split('\n')

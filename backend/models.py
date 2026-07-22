@@ -18,6 +18,20 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     stories = relationship("Story", back_populates="user")
+    persona = relationship("Persona", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+class Persona(Base):
+    __tablename__ = "personas"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), unique=True)
+    name = Column(String)
+    age = Column(Integer)
+    appearance = Column(Text)
+    personality = Column(Text)
+    backstory = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="persona")
 
 class Story(Base):
     __tablename__ = "stories"
@@ -69,6 +83,8 @@ class CharacterChat(Base):
     is_ai = Column(Integer) # 1 if AI, 0 if User
     created_at = Column(DateTime, default=datetime.utcnow)
     is_summarized = Column(Integer, default=0)
+    is_image = Column(Integer, default=0) # 1 if this message is an image
+    image_url = Column(Text, nullable=True)
 
     character = relationship("Character", back_populates="chats")
 
@@ -113,6 +129,8 @@ class GroupChatMessage(Base):
     message = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_summarized = Column(Integer, default=0)
+    is_image = Column(Integer, default=0)
+    image_url = Column(Text, nullable=True)
     
     session = relationship("GroupChatSession", back_populates="messages")
     character = relationship("Character")

@@ -102,6 +102,26 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  Future<void> _requestSelfie() async {
+    setState(() {
+      _isSending = true;
+      _suggestions.clear();
+    });
+    try {
+      final msgs = await ApiService.requestSelfie(widget.characterId);
+      setState(() {
+        _messages = msgs;
+        _isSending = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
   Future<void> _continueChat() async {
     setState(() {
       _isSending = true;
@@ -454,6 +474,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: _bgColor,
       appBar: _isImmersionMode ? null : AppBar(
         backgroundColor: Colors.black.withOpacity(0.5),
@@ -461,7 +482,18 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           widget.characterName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          overflow: TextOverflow.ellipsis,
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(4.0),
+          child: LinearProgressIndicator(
+            value: (_intimacyScore >= 100) ? 1.0 : (_intimacyScore % 25) / 25.0,
+            backgroundColor: Colors.white24,
+            valueColor: AlwaysStoppedAnimation<Color>(
+               _intimacyScore < 25 ? Colors.lightBlue : _intimacyScore < 50 ? Colors.green : _intimacyScore < 75 ? Colors.orange : Colors.pink,
+            ),
+          ),
         ),
         actions: [
           Center(
@@ -477,45 +509,32 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
               ),
             ),
           ),
-          IconButton(
-            icon: Icon(_isAudioPlaying ? Icons.volume_up : Icons.volume_off),
-            tooltip: 'Ambient Sound',
-            onPressed: _toggleAudio,
-          ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.palette, color: Colors.white),
-            tooltip: 'Change Theme',
-            onSelected: (String newValue) {
-              setState(() => _currentTheme = newValue);
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: 'More options',
+            onSelected: (String choice) {
+              if (choice == 'Toggle Audio') {
+                _toggleAudio();
+              } else if (choice == 'Toggle Background') {
+                setState(() => _showBackgroundImage = !_showBackgroundImage);
+              } else if (choice == 'Download Image') {
+                _downloadImage();
+              } else if (choice == 'View Diary') {
+                if (!_isSending) _viewDiary();
+              } else if (choice.startsWith('Theme:')) {
+                setState(() => _currentTheme = choice.split(': ')[1]);
+              }
             },
             itemBuilder: (BuildContext context) {
-              return ['Dark Mode', 'Cyberpunk', 'Fantasy', 'Romance'].map((String choice) {
-                return PopupMenuItem<String>(
-                  value: choice,
-                  child: Text(choice),
-                );
-              }).toList();
+              return [
+                PopupMenuItem(value: 'Toggle Audio', child: Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')),
+                PopupMenuItem(value: 'Toggle Background', child: Text(_showBackgroundImage ? 'Hide Background' : 'Show Background')),
+                if (widget.backgroundImage != null) const PopupMenuItem(value: 'Download Image', child: Text('Download Image')),
+                const PopupMenuItem(value: 'View Diary', child: Text('View Diary')),
+                const PopupMenuDivider(),
+                ...['Dark Mode', 'Cyberpunk', 'Fantasy', 'Romance'].map((t) => PopupMenuItem(value: 'Theme: $t', child: Text('Theme: $t'))),
+              ];
             },
-          ),
-          IconButton(
-            icon: Icon(_showBackgroundImage ? Icons.image : Icons.hide_image, color: Colors.white),
-            tooltip: 'Toggle Background',
-            onPressed: () {
-              setState(() {
-                _showBackgroundImage = !_showBackgroundImage;
-              });
-            },
-          ),
-          if (widget.backgroundImage != null)
-            IconButton(
-              icon: const Icon(Icons.download),
-              tooltip: 'Download Image',
-              onPressed: _downloadImage,
-            ),
-          IconButton(
-            icon: const Icon(Icons.menu_book),
-            tooltip: 'View Diary',
-            onPressed: _isSending ? null : _viewDiary,
           ),
         ],
       ),
@@ -583,19 +602,37 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                       color: isAi ? _aiBubbleColor : _userBubbleColor,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: MarkdownBody(
-                                      data: msg['message'],
-                                      styleSheet: MarkdownStyleSheet(
-                                        p: TextStyle(
-                                          color: isAi ? Colors.white : Theme.of(context).colorScheme.onPrimary,
-                                          fontSize: 15,
-                                        ),
-                                        em: TextStyle(
-                                          color: isAi ? Colors.white70 : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ),
+                                    child: msg['is_image'] == 1 && msg['image_url'] != null
+                                        ? Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Image.network(msg['image_url'], height: 250, fit: BoxFit.cover),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              MarkdownBody(
+                                                data: msg['message'],
+                                                styleSheet: MarkdownStyleSheet(
+                                                  p: const TextStyle(color: Colors.white, fontSize: 15),
+                                                  em: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : MarkdownBody(
+                                            data: msg['message'],
+                                            styleSheet: MarkdownStyleSheet(
+                                              p: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                              ),
+                                              em: const TextStyle(
+                                                color: Colors.white70,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                            ),
+                                          ),
                                   ),
                                 ),
                                 if (msg['id'] != null && !_isImmersionMode)
@@ -674,14 +711,22 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                     onSubmitted: (_) => _sendMessage(),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                CircleAvatar(
-                                  backgroundColor: Theme.of(context).colorScheme.primary,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.send, color: Colors.white),
-                                    onPressed: _isSending ? null : _sendMessage,
+                                  const SizedBox(width: 8),
+                                  CircleAvatar(
+                                    backgroundColor: Colors.pinkAccent,
+                                    child: IconButton(
+                                      icon: const Icon(Icons.camera_alt, color: Colors.white),
+                                      onPressed: _isSending ? null : _requestSelfie,
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 8),
+                                  CircleAvatar(
+                                    backgroundColor: Theme.of(context).colorScheme.primary,
+                                    child: IconButton(
+                                      icon: const Icon(Icons.send, color: Colors.white),
+                                      onPressed: _isSending ? null : _sendMessage,
+                                    ),
+                                  ),
                               ],
                             ),
                           ],

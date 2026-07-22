@@ -83,6 +83,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Text(title),
         actions: [
           IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'My Persona',
+            onPressed: () {
+              context.push('/persona');
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               context.push('/settings');

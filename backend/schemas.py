@@ -20,6 +20,23 @@ class UserResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+class PersonaBase(BaseModel):
+    name: str
+    age: int
+    appearance: str
+    personality: str
+    backstory: str
+
+class PersonaCreate(PersonaBase):
+    pass
+
+class PersonaResponse(PersonaBase):
+    id: UUID4
+    user_id: UUID4
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
 class WorldItemBase(BaseModel):
     name: str
     category: str
@@ -115,6 +132,8 @@ class ChatMessage(BaseModel):
     id: UUID4
     message: str
     is_ai: int
+    is_image: Optional[int] = 0
+    image_url: Optional[str] = None
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
@@ -149,6 +168,8 @@ class GroupChatMessageBase(BaseModel):
     speaker_id: Optional[UUID4] = None
     speaker_name: str
     message: str
+    is_image: Optional[int] = 0
+    image_url: Optional[str] = None
 
 class GroupChatMessageCreate(GroupChatMessageBase):
     pass
