@@ -67,6 +67,18 @@ class StoryBase(BaseModel):
 class StoryCreate(StoryBase):
     pass
 
+class StoryUpdate(BaseModel):
+    title: Optional[str] = None
+    synopsis: Optional[str] = None
+    genre: Optional[str] = None
+    subgenre: Optional[str] = None
+    story_length: Optional[str] = None
+    perspective: Optional[str] = None
+    tone: Optional[str] = None
+    story_summary: Optional[str] = None
+    custom_rules: Optional[str] = None
+    cover_base64: Optional[str] = None
+
 class StoryResponse(StoryBase):
     id: UUID4
     user_id: Optional[UUID4] = None

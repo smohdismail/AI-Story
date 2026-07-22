@@ -163,7 +163,7 @@ async def get_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cur
     return story
 
 @app.put("/api/v1/stories/{story_id}", response_model=schemas.StoryResponse)
-async def update_story(story_id: uuid.UUID, story_update: schemas.StoryCreate, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+async def update_story(story_id: uuid.UUID, story_update: schemas.StoryUpdate, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
     db_story = result.scalars().first()
     if not db_story:
