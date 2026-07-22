@@ -12,7 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./storygen.db")
 engine = create_async_engine(
     DATABASE_URL, 
     echo=True,
-    connect_args={"server_settings": {"statement_cache_size": "0"}} if "asyncpg" in DATABASE_URL else {}
+    connect_args={"statement_cache_size": 0} if "asyncpg" in DATABASE_URL else {}
 )
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
