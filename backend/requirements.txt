@@ -1,4 +1,4 @@
-﻿fastapi
+fastapi
 uvicorn[standard]
 sqlalchemy
 asyncpg
@@ -10,3 +10,5 @@ bcrypt
 python-jose[cryptography]
 python-multipart
 EbookLib==0.20
+supabase
+Pillow

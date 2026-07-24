@@ -191,7 +191,9 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         decoration: widget.backgroundImage != null
             ? BoxDecoration(
                 image: DecorationImage(
-                  image: MemoryImage(base64Decode(widget.backgroundImage!)),
+                  image: widget.backgroundImage!.startsWith('http')
+                      ? NetworkImage(widget.backgroundImage!)
+                      : MemoryImage(base64Decode(widget.backgroundImage!)) as ImageProvider,
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
                     Colors.black.withOpacity(0.85),

@@ -585,12 +585,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                               leading: GestureDetector(
                                 onTap: () async {
                                   final picker = ImagePicker();
-                                  final pickedFile = await picker.pickImage(
-                                    source: ImageSource.gallery,
-                                    imageQuality: 50,
-                                    maxWidth: 256,
-                                    maxHeight: 256,
-                                  );
+                                    final pickedFile = await picker.pickImage(
+                                      source: ImageSource.gallery,
+                                      imageQuality: 90,
+                                      maxWidth: 1080,
+                                      maxHeight: 1080,
+                                    );
                                   if (pickedFile != null) {
                                     final bytes = await pickedFile.readAsBytes();
                                     final base64Image = base64Encode(bytes);
@@ -606,7 +606,9 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                   radius: 25,
                                   backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                   backgroundImage: (char['avatar_base64'] != null && char['avatar_base64'].isNotEmpty)
-                                      ? MemoryImage(base64Decode(char['avatar_base64']))
+                                      ? (char['avatar_base64'].startsWith('http')
+                                          ? NetworkImage(char['avatar_base64'])
+                                          : MemoryImage(base64Decode(char['avatar_base64']))) as ImageProvider
                                       : null,
                                   child: (char['avatar_base64'] == null || char['avatar_base64'].isEmpty)
                                       ? const Icon(Icons.person, color: Colors.white)
@@ -831,9 +833,9 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                             final picker = ImagePicker();
                             final XFile? image = await picker.pickImage(
                               source: ImageSource.gallery,
-                              imageQuality: 70,
-                              maxWidth: 512,
-                              maxHeight: 512,
+                              imageQuality: 90,
+                              maxWidth: 1080,
+                              maxHeight: 1080,
                             );
                             if (image != null) {
                               final bytes = await image.readAsBytes();

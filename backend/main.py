@@ -24,6 +24,46 @@ import urllib.parse
 import hashlib
 import random
 
+import base64
+from supabase import create_client, Client
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+
+import io
+from PIL import Image
+
+def upload_avatar_to_supabase(base64_string: str) -> str:
+    if not supabase or not base64_string:
+        return base64_string
+    if base64_string.startswith("http"):
+        return base64_string
+    try:
+        # Generate random unique filename
+        filename = f"{uuid.uuid4()}.webp"
+        image_bytes = base64.b64decode(base64_string)
+        
+        # Compress with Pillow
+        image = Image.open(io.BytesIO(image_bytes))
+        output_buffer = io.BytesIO()
+        image.save(output_buffer, format="WEBP", quality=80, method=6)
+        compressed_bytes = output_buffer.getvalue()
+        
+        # Upload to supabase avatars bucket
+        supabase.storage.from_("avatars").upload(
+            path=filename,
+            file=compressed_bytes,
+            file_options={"content-type": "image/webp"}
+        )
+        
+        # Get public url
+        public_url = supabase.storage.from_("avatars").get_public_url(filename)
+        return public_url
+    except Exception as e:
+        print(f"Error uploading avatar to supabase: {e}")
+        return base64_string
+
 async def trigger_summary_update(story_id: uuid.UUID, new_chapter_text: str):
     async for db in get_db():
         result = await db.execute(select(models.Story).where(models.Story.id == story_id))
@@ -241,6 +281,8 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
 
 @app.post("/api/v1/stories/{story_id}/characters", response_model=schemas.CharacterResponse)
 async def create_character(story_id: uuid.UUID, character: schemas.CharacterCreate, db: AsyncSession = Depends(get_db)):
+    if character.avatar_base64:
+        character.avatar_base64 = upload_avatar_to_supabase(character.avatar_base64)
     db_character = models.Character(**character.model_dump(), story_id=story_id)
     db.add(db_character)
     await db.commit()
@@ -260,6 +302,8 @@ async def update_character(story_id: uuid.UUID, character_id: uuid.UUID, charact
         raise HTTPException(status_code=404, detail="Character not found")
         
     update_data = character_update.model_dump(exclude_unset=True)
+    if "avatar_base64" in update_data and update_data["avatar_base64"]:
+        update_data["avatar_base64"] = upload_avatar_to_supabase(update_data["avatar_base64"])
     for key, value in update_data.items():
         setattr(db_char, key, value)
         
