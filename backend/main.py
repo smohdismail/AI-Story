@@ -109,7 +109,20 @@ async def lifespan(app: FastAPI):
     # Shutdown
     pass
 
+import traceback
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
 app = FastAPI(title="AI Story Generator API", lifespan=lifespan)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"GLOBAL EXCEPTION: {exc}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "traceback": traceback.format_exc()},
+    )
 
 app.add_middleware(
     CORSMiddleware,
