@@ -876,7 +876,7 @@ async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] =
     db.add(user_msg)
     
     # Generate the image prompt based on their appearance
-    prompt = f"RAW high-quality masterpiece photo of {char.name}"
+    prompt = f"RAW high-quality masterpiece full body photo of {char.name}, standing full body shot head to toe"
     if custom_prompt:
         prompt += f", {custom_prompt}"
     prompt += f", {char.appearance}, highly detailed, photorealistic, 8k resolution, cinematic lighting"
