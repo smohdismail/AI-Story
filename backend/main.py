@@ -200,6 +200,30 @@ async def google_login(request: schemas.GoogleLoginRequest, db: AsyncSession = D
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid Google token: {e}")
 
+async def get_effective_persona_info(story: models.Story, db: AsyncSession) -> str:
+    if not story:
+        return ""
+    if story.user_persona_name or story.user_persona_personality or story.user_persona_appearance or story.user_persona_backstory:
+        parts = []
+        if story.user_persona_name:
+            parts.append(f"Name: {story.user_persona_name}")
+        if story.user_persona_age:
+            parts.append(f"Age: {story.user_persona_age}")
+        if story.user_persona_appearance:
+            parts.append(f"Appearance: {story.user_persona_appearance}")
+        if story.user_persona_personality:
+            parts.append(f"Personality: {story.user_persona_personality}")
+        if story.user_persona_backstory:
+            parts.append(f"Backstory / Role: {story.user_persona_backstory}")
+        return "\n".join(parts)
+    
+    if story.user_id:
+        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == story.user_id))
+        persona = persona_res.scalars().first()
+        if persona:
+            return f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+    return ""
+
 # --- PERSONA ENDPOINTS ---
 
 @app.get("/api/v1/users/me/persona", response_model=schemas.PersonaResponse)
@@ -297,7 +321,12 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         tone=original_story.tone,
         story_summary=original_story.story_summary,
         custom_rules=original_story.custom_rules,
-        cover_base64=original_story.cover_base64
+        cover_base64=original_story.cover_base64,
+        user_persona_name=original_story.user_persona_name,
+        user_persona_age=original_story.user_persona_age,
+        user_persona_appearance=original_story.user_persona_appearance,
+        user_persona_personality=original_story.user_persona_personality,
+        user_persona_backstory=original_story.user_persona_backstory
     )
     db.add(new_story)
     await db.commit()
@@ -547,6 +576,11 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                     story_context += f"Name: {w.name}, Category: {w.category}, Description: {w.description}\n"
                 story_context += "------------------\n\n"
             
+            # Fetch and inject User Persona
+            user_persona_info = await get_effective_persona_info(story, db)
+            if user_persona_info:
+                story_context += f"\n--- PROTAGONIST / USER PERSONA (Who the user plays as in this story) ---\n{user_persona_info}\n-------------------------------------------------------------------------\n\n"
+            
         # Fetch ALL previous chapters to build a cohesive long-term memory
         all_chapters_result = await db.execute(
             select(models.Chapter).where(models.Chapter.story_id == request.story_id).order_by(models.Chapter.chapter_number.asc())
@@ -726,12 +760,7 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     relevant_memories = await memory_service.retrieve_memories(str(char.story_id), str(char.id), request.message)
     
     # Retrieve Persona and Intimacy Tier
-    persona_info = ""
-    if story and story.user_id:
-        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == story.user_id))
-        persona = persona_res.scalars().first()
-        if persona:
-            persona_info = f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+    persona_info = await get_effective_persona_info(story, db)
 
     score = char.intimacy_score or 0
     tier_prompt = ""
@@ -830,12 +859,7 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
     mems = mem_res.scalars().all()
     mem_str = "\n".join([m.content for m in mems])
     
-    persona_info = ""
-    if char.story and char.story.user_id:
-        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == char.story.user_id))
-        persona = persona_res.scalars().first()
-        if persona:
-            persona_info = f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+    persona_info = await get_effective_persona_info(char.story, db)
 
     ai_msg = await llm_service.continue_chat(
         character_info=f"Name: {char.name}\nPersonality: {char.personality}\nRole: {char.role}",
@@ -1022,12 +1046,7 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
     relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", request.message)
     
     # Retrieve Persona
-    persona_info = ""
-    if story and story.user_id:
-        persona_res = await db.execute(select(models.Persona).where(models.Persona.user_id == story.user_id))
-        persona = persona_res.scalars().first()
-        if persona:
-            persona_info = f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
+    persona_info = await get_effective_persona_info(story, db)
 
     # 4. Generate AI response
     ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories, persona_info)

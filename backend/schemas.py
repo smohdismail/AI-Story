@@ -66,6 +66,11 @@ class StoryBase(BaseModel):
     story_summary: Optional[str] = None
     custom_rules: Optional[str] = None
     cover_base64: Optional[str] = None
+    user_persona_name: Optional[str] = None
+    user_persona_age: Optional[int] = None
+    user_persona_appearance: Optional[str] = None
+    user_persona_personality: Optional[str] = None
+    user_persona_backstory: Optional[str] = None
 
 class StoryCreate(StoryBase):
     pass
@@ -81,6 +86,11 @@ class StoryUpdate(BaseModel):
     story_summary: Optional[str] = None
     custom_rules: Optional[str] = None
     cover_base64: Optional[str] = None
+    user_persona_name: Optional[str] = None
+    user_persona_age: Optional[int] = None
+    user_persona_appearance: Optional[str] = None
+    user_persona_personality: Optional[str] = None
+    user_persona_backstory: Optional[str] = None
 
 class StoryResponse(StoryBase):
     id: UUID4

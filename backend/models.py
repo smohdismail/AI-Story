@@ -50,6 +50,13 @@ class Story(Base):
     story_summary = Column(Text, default="")
     custom_rules = Column(Text, default="")
     cover_base64 = Column(Text, nullable=True)
+    
+    # Story-specific user persona
+    user_persona_name = Column(String, nullable=True)
+    user_persona_age = Column(Integer, nullable=True)
+    user_persona_appearance = Column(Text, nullable=True)
+    user_persona_personality = Column(Text, nullable=True)
+    user_persona_backstory = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="stories")
     characters = relationship("Character", back_populates="story", cascade="all, delete-orphan")
