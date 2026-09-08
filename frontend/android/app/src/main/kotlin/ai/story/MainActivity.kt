@@ -1,4 +1,4 @@
-package com.example.frontend
+package ai.story
 
 import io.flutter.embedding.android.FlutterActivity
 
