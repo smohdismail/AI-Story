@@ -1338,16 +1338,22 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: [
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(Icons.person_pin, size: 28, color: Colors.deepPurple),
                           const SizedBox(width: 10),
-                          Text(
-                            hasStoryPersona ? 'Story Protagonist Persona' : 'Global Persona (Fallback)',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          Flexible(
+                            child: Text(
+                              hasStoryPersona ? 'Story Protagonist Persona' : 'Global Persona (Fallback)',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ],
                       ),
