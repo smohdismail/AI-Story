@@ -13,6 +13,13 @@ class _CreatorScreenState extends State<CreatorScreen> {
   final _titleController = TextEditingController();
   final _synopsisController = TextEditingController();
   
+  // User Persona fields for this story
+  final _personaNameController = TextEditingController();
+  final _personaAgeController = TextEditingController();
+  final _personaAppearanceController = TextEditingController();
+  final _personaPersonalityController = TextEditingController();
+  final _personaBackstoryController = TextEditingController();
+  
   String _selectedGenre = 'Romance';
   String _selectedSubgenre = 'CEO Romance';
   String _selectedTone = 'Passionate';
@@ -26,7 +33,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   Future<void> _createStory() async {
     setState(() => _isSaving = true);
     try {
-      final storyData = {
+      final storyData = <String, dynamic>{
         'title': _titleController.text,
         'synopsis': _synopsisController.text,
         'genre': _selectedGenre,
@@ -34,12 +41,28 @@ class _CreatorScreenState extends State<CreatorScreen> {
         'tone': _selectedTone,
       };
       
+      if (_personaNameController.text.trim().isNotEmpty) {
+        storyData['user_persona_name'] = _personaNameController.text.trim();
+      }
+      if (_personaAgeController.text.trim().isNotEmpty) {
+        storyData['user_persona_age'] = int.tryParse(_personaAgeController.text.trim());
+      }
+      if (_personaAppearanceController.text.trim().isNotEmpty) {
+        storyData['user_persona_appearance'] = _personaAppearanceController.text.trim();
+      }
+      if (_personaPersonalityController.text.trim().isNotEmpty) {
+        storyData['user_persona_personality'] = _personaPersonalityController.text.trim();
+      }
+      if (_personaBackstoryController.text.trim().isNotEmpty) {
+        storyData['user_persona_backstory'] = _personaBackstoryController.text.trim();
+      }
+      
       await ApiService.createStory(storyData);
       if (mounted) {
         context.pop();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -88,6 +111,55 @@ class _CreatorScreenState extends State<CreatorScreen> {
                   decoration: const InputDecoration(labelText: 'Tone / Emotional Intensity', border: OutlineInputBorder()),
                   items: _tones.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                   onChanged: (v) => setState(() => _selectedTone = v!),
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: ExpansionTile(
+                    leading: const Icon(Icons.person),
+                    title: const Text('Your Character / Persona in this Story (Optional)'),
+                    subtitle: const Text('Define who you play as in this specific story world'),
+                    childrenPadding: const EdgeInsets.all(16),
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextField(
+                              controller: _personaNameController,
+                              decoration: const InputDecoration(labelText: 'Your Character Name', border: OutlineInputBorder()),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 1,
+                            child: TextField(
+                              controller: _personaAgeController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'Age', border: OutlineInputBorder()),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _personaAppearanceController,
+                        decoration: const InputDecoration(labelText: 'Appearance (hair, eyes, style)', border: OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _personaPersonalityController,
+                        decoration: const InputDecoration(labelText: 'Personality Traits', border: OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _personaBackstoryController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Role / Backstory in Story', border: OutlineInputBorder()),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(

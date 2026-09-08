@@ -194,7 +194,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -203,10 +203,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           ),
           title: const Text('Story Details'),
           bottom: const TabBar(
+            isScrollable: true,
             tabs: [
               Tab(icon: Icon(Icons.menu_book), text: 'Chapters'),
               Tab(icon: Icon(Icons.people), text: 'Characters'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
+              Tab(icon: Icon(Icons.person), text: 'My Persona'),
             ],
           ),
           actions: [
@@ -288,6 +290,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildChaptersTab(),
             _buildCharactersTab(),
             _buildWorldTab(),
+            _buildUserPersonaTab(),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -1315,5 +1318,190 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildUserPersonaTab() {
+    final hasStoryPersona = (story?['user_persona_name'] != null && story!['user_persona_name'].toString().trim().isNotEmpty) ||
+        (story?['user_persona_personality'] != null && story!['user_persona_personality'].toString().trim().isNotEmpty) ||
+        (story?['user_persona_appearance'] != null && story!['user_persona_appearance'].toString().trim().isNotEmpty);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.person_pin, size: 28, color: Colors.deepPurple),
+                          const SizedBox(width: 10),
+                          Text(
+                            hasStoryPersona ? 'Story Protagonist Persona' : 'Global Persona (Fallback)',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _showEditUserPersonaDialog,
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: Text(hasStoryPersona ? 'Edit Persona' : 'Set Custom Persona'),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  if (!hasStoryPersona) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.amber),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'This story currently relies on your global account persona. Tap "Set Custom Persona" above to define a custom role/persona for this story!',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  _buildPersonaDetailRow('Character Name', story?['user_persona_name'] ?? ''),
+                  const SizedBox(height: 12),
+                  _buildPersonaDetailRow('Age', story?['user_persona_age']?.toString() ?? ''),
+                  const SizedBox(height: 12),
+                  _buildPersonaDetailRow('Appearance', story?['user_persona_appearance'] ?? ''),
+                  const SizedBox(height: 12),
+                  _buildPersonaDetailRow('Personality', story?['user_persona_personality'] ?? ''),
+                  const SizedBox(height: 12),
+                  _buildPersonaDetailRow('Backstory / Role in Story', story?['user_persona_backstory'] ?? ''),
+                  if (hasStoryPersona) ...[
+                    const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: _clearStoryPersona,
+                      icon: const Icon(Icons.clear, color: Colors.red),
+                      label: const Text('Reset to Global Persona', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonaDetailRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Text(value.trim().isEmpty ? 'Not set' : value, style: const TextStyle(fontSize: 15)),
+      ],
+    );
+  }
+
+  Future<void> _showEditUserPersonaDialog() async {
+    final nameCtrl = TextEditingController(text: story?['user_persona_name'] ?? '');
+    final ageCtrl = TextEditingController(text: story?['user_persona_age']?.toString() ?? '');
+    final appearanceCtrl = TextEditingController(text: story?['user_persona_appearance'] ?? '');
+    final personalityCtrl = TextEditingController(text: story?['user_persona_personality'] ?? '');
+    final backstoryCtrl = TextEditingController(text: story?['user_persona_backstory'] ?? '');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Story User Persona'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Character Name', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ageCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Age', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: appearanceCtrl,
+                decoration: const InputDecoration(labelText: 'Appearance', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: personalityCtrl,
+                decoration: const InputDecoration(labelText: 'Personality Traits', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: backstoryCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Backstory / Role in Story', border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final updateData = {
+                'user_persona_name': nameCtrl.text.trim(),
+                'user_persona_age': int.tryParse(ageCtrl.text.trim()),
+                'user_persona_appearance': appearanceCtrl.text.trim(),
+                'user_persona_personality': personalityCtrl.text.trim(),
+                'user_persona_backstory': backstoryCtrl.text.trim(),
+              };
+              try {
+                await ApiService.updateStory(widget.storyId, updateData);
+                _loadData();
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating persona: $e')));
+              }
+            },
+            child: const Text('Save Persona'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearStoryPersona() async {
+    final updateData = {
+      'user_persona_name': null,
+      'user_persona_age': null,
+      'user_persona_appearance': null,
+      'user_persona_personality': null,
+      'user_persona_backstory': null,
+    };
+    try {
+      await ApiService.updateStory(widget.storyId, updateData);
+      _loadData();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 }
