@@ -1340,7 +1340,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 children: [
                   Wrap(
                     alignment: WrapAlignment.spaceBetween,
-                    crossAlignment: WrapCrossAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 12,
                     runSpacing: 12,
                     children: [
