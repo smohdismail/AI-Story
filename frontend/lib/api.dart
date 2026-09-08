@@ -44,6 +44,19 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> loginWithGoogle(String idToken) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/google'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'id_token': idToken}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to login with Google: ${response.body}');
+    }
+  }
+
   static Future<Map<String, dynamic>> register(String username, String email, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -40,6 +41,38 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      // NOTE: serverClientId must be replaced with the user's actual Google OAuth Web Client ID.
+      // We pass it to the backend so the backend can verify the token.
+      const String serverClientId = "352946680628-e28emiglvp3dvanfo256eg9sea2rc3fp.apps.googleusercontent.com";
+      final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: serverClientId);
+      
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return; // User canceled
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken != null) {
+        final data = await ApiService.loginWithGoogle(idToken);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', data['access_token']);
+        if (mounted) context.go('/');
+      } else {
+        throw Exception("Failed to get Google ID token");
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google Sign-In Error: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -88,6 +121,24 @@ class _AuthScreenState extends State<AuthScreen> {
                 TextButton(
                   onPressed: () => setState(() => _isLogin = !_isLogin),
                   child: Text(_isLogin ? 'Need an account? Register' : 'Have an account? Login'),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: const [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('OR'),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _handleGoogleSignIn,
+                  icon: const Icon(Icons.login),
+                  label: const Text('Sign in with Google'),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
                 ),
               ],
             ),
