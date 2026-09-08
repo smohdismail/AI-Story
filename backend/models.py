@@ -14,7 +14,8 @@ class User(Base):
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
-    password_hash = Column(String)
+    password_hash = Column(String, nullable=True) # Nullable for Google users
+    google_id = Column(String, unique=True, index=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     stories = relationship("Story", back_populates="user")

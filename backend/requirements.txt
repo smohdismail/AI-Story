@@ -12,3 +12,4 @@ python-multipart
 EbookLib==0.20
 supabase
 Pillow
+google-auth

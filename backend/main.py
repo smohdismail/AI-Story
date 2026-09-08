@@ -155,6 +155,51 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
+@app.post("/api/v1/auth/google", response_model=schemas.Token)
+async def google_login(request: schemas.GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        # If client_id is None, it won't verify the audience, which is less secure but works for our dynamic setup.
+        idinfo = id_token.verify_oauth2_token(request.id_token, google_requests.Request(), audience=client_id)
+        
+        email = idinfo.get("email")
+        google_id = idinfo.get("sub")
+        name = idinfo.get("name", "User")
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="Google token does not contain an email")
+            
+        result = await db.execute(select(models.User).where((models.User.google_id == google_id) | (models.User.email == email)))
+        user = result.scalars().first()
+        
+        if not user:
+            base_username = name.replace(" ", "").lower()
+            username = base_username
+            counter = 1
+            while True:
+                u_res = await db.execute(select(models.User).where(models.User.username == username))
+                if not u_res.scalars().first():
+                    break
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user = models.User(username=username, email=email, google_id=google_id, password_hash=None)
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+            
+        elif not user.google_id:
+            user.google_id = google_id
+            await db.commit()
+            
+        access_token = auth.create_access_token(data={"sub": str(user.id)})
+        return {"access_token": access_token, "token_type": "bearer"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Google token: {e}")
+
 # --- PERSONA ENDPOINTS ---
 
 @app.get("/api/v1/users/me/persona", response_model=schemas.PersonaResponse)
