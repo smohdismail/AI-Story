@@ -20,14 +20,18 @@ else:
 # Ensure collection exists
 try:
     client.get_collection(collection_name=COLLECTION_NAME)
-except Exception:
-    client.create_collection(
-        collection_name=COLLECTION_NAME,
-        vectors_config=rest.VectorParams(
-            size=1536, # OpenAI text-embedding-3-small dimension
-            distance=rest.Distance.COSINE
+except Exception as e:
+    print(f"Warning: Could not get Qdrant collection (maybe it doesn't exist yet): {e}")
+    try:
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=rest.VectorParams(
+                size=1536, # OpenAI text-embedding-3-small dimension
+                distance=rest.Distance.COSINE
+            )
         )
-    )
+    except Exception as create_e:
+        print(f"Error: Could not create Qdrant collection. Memories may not work: {create_e}")
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("LLM_API_KEY"))
 
