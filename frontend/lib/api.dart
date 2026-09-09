@@ -243,16 +243,55 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> forkStory(String storyId) async {
+  static Future<void> deleteStory(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/stories/$storyId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete story');
+    }
+  }
+
+  static Future<Map<String, dynamic>> illustrateScene(String storyId, {String? chapterId, String? customPrompt}) async {
     final headers = await _getHeaders();
     final response = await http.post(
-      Uri.parse('$baseUrl/stories/$storyId/fork'),
+      Uri.parse('$baseUrl/stories/$storyId/illustrate_scene'),
       headers: headers,
+      body: jsonEncode({
+        if (chapterId != null) 'chapter_id': chapterId,
+        if (customPrompt != null && customPrompt.isNotEmpty) 'custom_prompt': customPrompt,
+      }),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to fork story');
+      throw Exception('Failed to illustrate scene');
+    }
+  }
+
+  static Future<List<dynamic>> getIllustrations(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/illustrations'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load illustrations');
+    }
+  }
+
+  static Future<void> deleteIllustration(String storyId, String illustrationId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/stories/$storyId/illustrations/$illustrationId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete illustration');
     }
   }
 

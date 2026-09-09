@@ -225,12 +225,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      story['title'] ?? 'Untitled',
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    padding: const EdgeInsets.only(left: 8.0, right: 4.0, top: 4.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            story['title'] ?? 'Untitled',
+                            style: Theme.of(context).textTheme.titleMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                          tooltip: 'Delete Story',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _confirmDeleteStory(story),
+                        ),
+                      ],
                     ),
                   ),
                   Padding(
@@ -251,6 +264,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       );
+    }
+  }
+
+  Future<void> _confirmDeleteStory(Map<String, dynamic> story) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Story Book'),
+        content: Text('Are you sure you want to delete "${story['title']}"? All chapters and characters in this story will be permanently removed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ApiService.deleteStory(story['id']);
+        _loadStories();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting story: $e')));
+      }
     }
   }
 

@@ -24,6 +24,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   Map<String, dynamic>? story;
   List<dynamic> characters = [];
   List<dynamic> worldItems = [];
+  List<dynamic> illustrations = [];
   String charSearchQuery = '';
   String loreSearchQuery = '';
   bool isLoading = true;
@@ -62,6 +63,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     } catch (e) {
       debugPrint('Error loading world items: $e');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading world items: $e. Did you restart the backend?')));
+    }
+
+    try {
+      final illData = await ApiService.getIllustrations(widget.storyId);
+      setState(() => illustrations = illData);
+    } catch (e) {
+      debugPrint('Error loading illustrations: $e');
     }
 
     setState(() {
@@ -194,7 +202,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -209,6 +217,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               Tab(icon: Icon(Icons.people), text: 'Characters'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
+              Tab(icon: Icon(Icons.palette), text: 'Art Gallery'),
             ],
           ),
           actions: [
@@ -264,6 +273,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 _showStorySettingsDialog();
               } else if (value == 'fork') {
                 _forkStory();
+              } else if (value == 'delete') {
+                _deleteStoryBook();
               }
             },
             itemBuilder: (BuildContext context) {
@@ -280,6 +291,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     children: [Icon(Icons.call_split), SizedBox(width: 8), Text('Fork Story')],
                   ),
                 ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [Icon(Icons.delete, color: Colors.red), SizedBox(width: 8), Text('Delete Story', style: TextStyle(color: Colors.red))],
+                  ),
+                ),
               ];
             },
           ),
@@ -291,6 +308,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildCharactersTab(),
             _buildWorldTab(),
             _buildUserPersonaTab(),
+            _buildArtGalleryTab(),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -426,7 +444,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.menu_book, color: Colors.purpleAccent),
+                        icon: const Icon(Icons.palette, color: Colors.purpleAccent),
+                        tooltip: 'Illustrate Scene',
+                        onPressed: () => _illustrateChapterScene(chapter),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.menu_book, color: Colors.amber),
                         tooltip: 'Zen Reader Mode',
                         onPressed: () {
                           String? bgImage;
@@ -1673,5 +1696,229 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  Future<void> _deleteStoryBook() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Story Book'),
+        content: Text('Are you sure you want to delete "${story?['title'] ?? 'this story'}"? All chapters and characters will be permanently removed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ApiService.deleteStory(widget.storyId);
+        if (mounted) context.pop();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting story: $e')));
+      }
+    }
+  }
+
+  Future<void> _illustrateChapterScene(Map<String, dynamic> chapter) async {
+    final customPromptCtrl = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(chapter['chapter_number'] != null ? 'Illustrate Chapter ${chapter['chapter_number']}' : 'Illustrate Story Scene'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Generate AI visual novel artwork for a scene in this story.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: customPromptCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Custom Art Prompt (Optional)',
+                hintText: 'Leave empty for AI auto-scene generation',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text('Paint Scene'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Painting scene artwork with AI... Please wait')),
+        );
+      }
+      try {
+        await ApiService.illustrateScene(
+          widget.storyId,
+          chapterId: chapter['id'],
+          customPrompt: customPromptCtrl.text.trim(),
+        );
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Scene illustrated! Added to Art Gallery tab.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error illustrating scene: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildArtGalleryTab() {
+    if (illustrations.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.palette_outlined, size: 64, color: Colors.purpleAccent),
+              const SizedBox(height: 16),
+              const Text(
+                'No Scene Artwork Yet',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Go to the Chapters tab and tap the 🎨 palette icon on any chapter to generate visual novel artwork!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => _illustrateChapterScene({}),
+                icon: const Icon(Icons.auto_awesome),
+                label: const Text('Illustrate Story Cover Scene'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: illustrations.length,
+      itemBuilder: (context, index) {
+        final item = illustrations[index];
+        final String imgUrl = item['image_base64'] ?? '';
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: InkWell(
+            onTap: () => _viewFullIllustration(item),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                imgUrl.startsWith('http')
+                    ? Image.network(imgUrl, fit: BoxFit.cover)
+                    : Image.memory(base64Decode(imgUrl), fit: BoxFit.cover),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                    child: Text(
+                      item['caption'] ?? 'Scene Artwork',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _viewFullIllustration(Map<String, dynamic> item) {
+    final String imgUrl = item['image_base64'] ?? '';
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black87,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                imgUrl.startsWith('http')
+                    ? Image.network(imgUrl, fit: BoxFit.contain)
+                    : Image.memory(base64Decode(imgUrl), fit: BoxFit.contain),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item['caption'] ?? 'Scene Artwork',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await ApiService.deleteIllustration(widget.storyId, item['id']);
+                      _loadData();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
