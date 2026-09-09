@@ -624,6 +624,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.amber),
+                                    tooltip: 'Edit Character',
+                                    onPressed: () => _showEditCharacterDialog(char),
+                                  ),
+                                  IconButton(
                                     icon: const Icon(Icons.chat, color: Colors.blue),
                                     onPressed: () {
                                       context.push('/character_chat', extra: {
@@ -943,6 +948,165 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   }
                 },
                 child: const Text('Save'),
+              ),
+            ],
+          );
+        }
+      ),
+    );
+  }
+
+  void _showEditCharacterDialog(Map<String, dynamic> char) {
+    final nameController = TextEditingController(text: char['name'] ?? '');
+    final roleController = TextEditingController(text: char['role'] ?? '');
+    final genderController = TextEditingController(text: char['gender'] ?? '');
+    final personalityController = TextEditingController(text: char['personality'] ?? '');
+    final appearanceController = TextEditingController(text: char['appearance'] ?? '');
+    final relationshipController = TextEditingController(text: char['relationship_status'] ?? '');
+    final dialogueStyleController = TextEditingController(text: char['dialogue_style'] ?? '');
+    String? base64Image = char['avatar_base64'];
+    bool isUploading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: const Text('Edit Character'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (base64Image != null && base64Image!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundImage: (base64Image!.startsWith('http')
+                            ? NetworkImage(base64Image!)
+                            : MemoryImage(base64Decode(base64Image!))) as ImageProvider,
+                      ),
+                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: isUploading ? null : () async {
+                          setStateDialog(() => isUploading = true);
+                          try {
+                            final picker = ImagePicker();
+                            final XFile? image = await picker.pickImage(
+                              source: ImageSource.gallery,
+                              imageQuality: 90,
+                              maxWidth: 1080,
+                              maxHeight: 1080,
+                            );
+                            if (image != null) {
+                              final bytes = await image.readAsBytes();
+                              setStateDialog(() {
+                                base64Image = base64Encode(bytes);
+                              });
+                            }
+                          } catch (e) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e')));
+                          } finally {
+                            setStateDialog(() => isUploading = false);
+                          }
+                        },
+                        icon: isUploading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload),
+                        label: const Text('Upload'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: isUploading ? null : () async {
+                          if (appearanceController.text.isEmpty && nameController.text.isEmpty) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
+                            return;
+                          }
+                          
+                          final confirm = await _confirmCreditUsage(context, 'generate a character avatar');
+                          if (!confirm) return;
+
+                          setStateDialog(() => isUploading = true);
+                          try {
+                            String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
+                            final res = await ApiService.generateImage(prompt);
+                            if (res['base64_image'] != null) {
+                              setStateDialog(() {
+                                base64Image = res['base64_image'];
+                              });
+                            }
+                          } catch (e) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
+                          } finally {
+                            setStateDialog(() => isUploading = false);
+                          }
+                        },
+                        icon: const Icon(Icons.auto_awesome, color: Colors.purple),
+                        label: const Text('AI Generate'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      suffixIcon: PopupMenuButton<String>(
+                        icon: const Icon(Icons.casino, color: Colors.purple),
+                        tooltip: 'Generate Name',
+                        onSelected: (value) {
+                          if (value == 'Fantasy') {
+                            nameController.text = NameGenerator.generateFantasyName();
+                          } else if (value == 'Sci-Fi') {
+                            nameController.text = NameGenerator.generateSciFiName();
+                          } else {
+                            nameController.text = NameGenerator.generateModernName();
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => [
+                          const PopupMenuItem(value: 'Fantasy', child: Text('Fantasy Name')),
+                          const PopupMenuItem(value: 'Sci-Fi', child: Text('Sci-Fi Name')),
+                          const PopupMenuItem(value: 'Modern', child: Text('Modern Name')),
+                        ],
+                      ),
+                    ),
+                  ),
+                  TextField(controller: roleController, decoration: const InputDecoration(labelText: 'Role (e.g., Protagonist, Villain)')),
+                  TextField(controller: genderController, decoration: const InputDecoration(labelText: 'Gender')),
+                  TextField(controller: personalityController, decoration: const InputDecoration(labelText: 'Personality')),
+                  TextField(controller: appearanceController, decoration: const InputDecoration(labelText: 'Appearance (e.g., Tall, green eyes)')),
+                  TextField(controller: relationshipController, decoration: const InputDecoration(labelText: 'Relationship to User')),
+                  TextField(controller: dialogueStyleController, decoration: const InputDecoration(labelText: 'Dialogue Style (e.g., Uses old English)')),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.isEmpty) return;
+                  try {
+                    final updateData = <String, dynamic>{
+                      'name': nameController.text.trim(),
+                      'role': roleController.text.trim(),
+                      'gender': genderController.text.trim(),
+                      'personality': personalityController.text.trim(),
+                      'appearance': appearanceController.text.trim(),
+                      'relationship_status': relationshipController.text.trim(),
+                      'dialogue_style': dialogueStyleController.text.trim(),
+                    };
+                    if (base64Image != null) {
+                      updateData['avatar_base64'] = base64Image;
+                    }
+                    await ApiService.updateCharacter(widget.storyId, char['id'], updateData);
+                    if (mounted) Navigator.pop(context);
+                    _loadData();
+                  } catch (e) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                },
+                child: const Text('Save Changes'),
               ),
             ],
           );
