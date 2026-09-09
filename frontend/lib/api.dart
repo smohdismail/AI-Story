@@ -344,8 +344,7 @@ class ApiService {
     }
   }
 
-  // To support streaming, we'll use http.Client().send() for Server-Sent Events
-  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = ''}) async* {
+  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = '', String? selectedChoice}) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
     request.headers.addAll(headers);
@@ -354,6 +353,7 @@ class ApiService {
       'context': context, 
       'story_id': storyId,
       'global_custom_rules': globalCustomRules,
+      if (selectedChoice != null && selectedChoice.isNotEmpty) 'selected_choice': selectedChoice,
     });
 
     final client = http.Client();
@@ -370,6 +370,21 @@ class ApiService {
     } finally {
       client.close();
     }
+  }
+
+  static Future<List<String>> generateChapterChoices(String storyId, String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/chapters/$chapterId/choices'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['choices'] is List) {
+        return List<String>.from(data['choices']);
+      }
+    }
+    return [];
   }
 
   static Future<void> reorderChapters(String storyId, List<String> chapterIds) async {

@@ -463,6 +463,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                             'title': chapter['title'] ?? 'Chapter ${chapter['chapter_number']}',
                             'content': chapter['content'] ?? '',
                             'backgroundImage': bgImage,
+                            'storyId': widget.storyId,
+                            'chapterId': chapter['id'],
+                            'choicesJson': chapter['choices_json'],
+                            'chapterCount': chapters.length,
                           });
                         },
                       ),

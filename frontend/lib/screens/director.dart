@@ -7,7 +7,16 @@ import '../streak_service.dart';
 class DirectorScreen extends StatefulWidget {
   final String storyId;
   final int currentChapterCount;
-  const DirectorScreen({super.key, required this.storyId, required this.currentChapterCount});
+  final String? initialPrompt;
+  final String? selectedChoice;
+
+  const DirectorScreen({
+    super.key,
+    required this.storyId,
+    required this.currentChapterCount,
+    this.initialPrompt,
+    this.selectedChoice,
+  });
 
   @override
   State<DirectorScreen> createState() => _DirectorScreenState();
@@ -19,6 +28,14 @@ class _DirectorScreenState extends State<DirectorScreen> {
   bool _isGenerating = false;
   bool _isSaving = false;
   bool _stopRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+      _promptController.text = widget.initialPrompt!;
+    }
+  }
 
   void _generateText() async {
     if (_promptController.text.isEmpty) return;
@@ -42,7 +59,8 @@ class _DirectorScreenState extends State<DirectorScreen> {
           widget.storyId, 
           prompt, 
           contextText, 
-          globalCustomRules: globalCustomRules
+          globalCustomRules: globalCustomRules,
+          selectedChoice: widget.selectedChoice,
       )) {
         if (!mounted || _stopRequested) break;
         setState(() {

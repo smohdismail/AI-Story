@@ -57,7 +57,14 @@ void main() async {
         final storyId = state.pathParameters['id']!;
         final extra = state.extra as Map<String, dynamic>?;
         final chapterCount = extra?['chapterCount'] as int? ?? 0;
-        return DirectorScreen(storyId: storyId, currentChapterCount: chapterCount);
+        final initialPrompt = extra?['initialPrompt'] as String?;
+        final selectedChoice = extra?['selectedChoice'] as String?;
+        return DirectorScreen(
+          storyId: storyId,
+          currentChapterCount: chapterCount,
+          initialPrompt: initialPrompt,
+          selectedChoice: selectedChoice,
+        );
       },
     ),
     GoRoute(
