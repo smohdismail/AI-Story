@@ -205,3 +205,17 @@ class GroupChatMessageResponse(GroupChatMessageBase):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+class IllustrateSceneRequest(BaseModel):
+    chapter_id: Optional[UUID4] = None
+    custom_prompt: Optional[str] = None
+
+class SceneIllustrationResponse(BaseModel):
+    id: UUID4
+    story_id: UUID4
+    chapter_id: Optional[UUID4] = None
+    caption: Optional[str] = None
+    image_base64: str
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)

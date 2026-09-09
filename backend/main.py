@@ -301,6 +301,71 @@ async def update_story(story_id: uuid.UUID, story_update: schemas.StoryUpdate, d
     await db.refresh(db_story)
     return db_story
 
+@app.delete("/api/v1/stories/{story_id}")
+async def delete_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
+    story = result.scalars().first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    await db.delete(story)
+    await db.commit()
+    return {"status": "success", "message": "Story deleted"}
+
+@app.post("/api/v1/stories/{story_id}/illustrate_scene", response_model=schemas.SceneIllustrationResponse)
+async def illustrate_scene(story_id: uuid.UUID, request: schemas.IllustrateSceneRequest, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    caption = ""
+    prompt = request.custom_prompt or ""
+    
+    if request.chapter_id:
+        chap = await db.get(models.Chapter, request.chapter_id)
+        if chap:
+            caption = f"Chapter {chap.chapter_number}: {chap.title}"
+            if not prompt:
+                prompt = f"Digital artwork illustration of a climax scene in a story. Genre: {story.genre}, Tone: {story.tone}. Scene: {chap.summary or chap.content[:500]}"
+    
+    if not prompt:
+        prompt = f"Digital artwork illustration of a dramatic scene. Title: {story.title}, Genre: {story.genre}, Synopsis: {story.synopsis}"
+    
+    if not caption:
+        caption = story.title
+        
+    raw_b64 = image_service.generate_image_pollinations(prompt)
+    if not raw_b64:
+        raise HTTPException(status_code=500, detail="Failed to generate scene illustration")
+        
+    img_url = upload_avatar_to_supabase(raw_b64)
+    
+    illustration = models.SceneIllustration(
+        story_id=story_id,
+        chapter_id=request.chapter_id,
+        caption=caption,
+        image_base64=img_url
+    )
+    db.add(illustration)
+    await db.commit()
+    await db.refresh(illustration)
+    return illustration
+
+@app.get("/api/v1/stories/{story_id}/illustrations", response_model=list[schemas.SceneIllustrationResponse])
+async def list_illustrations(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.SceneIllustration).where(models.SceneIllustration.story_id == story_id).order_by(models.SceneIllustration.created_at.desc()))
+    return result.scalars().all()
+
+@app.delete("/api/v1/stories/{story_id}/illustrations/{illustration_id}")
+async def delete_illustration(story_id: uuid.UUID, illustration_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.SceneIllustration).where(models.SceneIllustration.id == illustration_id, models.SceneIllustration.story_id == story_id))
+    img = result.scalars().first()
+    if not img:
+        raise HTTPException(status_code=404, detail="Illustration not found")
+    await db.delete(img)
+    await db.commit()
+    return {"status": "success"}
+
 @app.post("/api/v1/stories/{story_id}/fork", response_model=schemas.StoryResponse)
 async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     # Fetch original story

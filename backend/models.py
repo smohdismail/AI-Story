@@ -62,6 +62,7 @@ class Story(Base):
     characters = relationship("Character", back_populates="story", cascade="all, delete-orphan")
     chapters = relationship("Chapter", back_populates="story", cascade="all, delete-orphan")
     world_items = relationship("WorldItem", back_populates="story", cascade="all, delete-orphan")
+    illustrations = relationship("SceneIllustration", back_populates="story", cascade="all, delete-orphan")
 
 class Character(Base):
     __tablename__ = "characters"
@@ -142,3 +143,14 @@ class GroupChatMessage(Base):
     
     session = relationship("GroupChatSession", back_populates="messages")
     character = relationship("Character")
+
+class SceneIllustration(Base):
+    __tablename__ = "scene_illustrations"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    chapter_id = Column(Uuid(as_uuid=True), ForeignKey("chapters.id"), nullable=True)
+    caption = Column(Text)
+    image_base64 = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    story = relationship("Story", back_populates="illustrations")
