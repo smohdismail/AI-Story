@@ -256,3 +256,39 @@ async def generate_character_thought(character_info: str, story_summary: str, ch
     except Exception as e:
         print(f"Error generating thought: {e}")
         return "*thinks silently*"
+
+async def generate_chapter_choices(chapter_content: str, story_context: str = "") -> list[str]:
+    messages = [
+        {"role": "system", "content": "You are a master storyteller designing interactive Choose Your Own Adventure choices. Based on the chapter content provided, create exactly 3 compelling, dramatic, distinct narrative choices for what the main character could do next. Each choice must be 1 concise sentence describing an action or decision. Return ONLY a JSON array of 3 strings, e.g. [\"Choice 1\", \"Choice 2\", \"Choice 3\"]."}
+    ]
+    messages.append({"role": "user", "content": f"STORY CONTEXT:\n{story_context}\n\nCHAPTER CONTENT:\n{chapter_content[-1500:] if len(chapter_content) > 1500 else chapter_content}\n\nGenerate 3 dramatic choice options for the reader to choose what happens next."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=300,
+        )
+        import json
+        if response.choices and response.choices[0].message.content:
+            text = response.choices[0].message.content.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
+            if text.endswith('```'): text = text[:-3]
+            choices = json.loads(text.strip())
+            if isinstance(choices, list) and len(choices) >= 1:
+                return choices[:3]
+        return [
+            "Confront the immediate threat directly.",
+            "Search the surrounding area for hidden clues or allies.",
+            "Make a quiet escape to reassess the situation."
+        ]
+    except Exception as e:
+        print(f"Error generating chapter choices: {e}")
+        return [
+            "Confront the immediate threat directly.",
+            "Search the surrounding area for hidden clues or allies.",
+            "Make a quiet escape to reassess the situation."
+        ]
+

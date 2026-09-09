@@ -143,9 +143,17 @@ class ChapterBase(BaseModel):
     content: Optional[str] = None
     summary: Optional[str] = None
     status: Optional[StoryStatus] = StoryStatus.draft
+    choices_json: Optional[str] = None
 
 class ChapterCreate(ChapterBase):
     pass
+
+class ChapterUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    summary: Optional[str] = None
+    status: Optional[StoryStatus] = None
+    choices_json: Optional[str] = None
 
 class ChapterResponse(ChapterBase):
     id: UUID4

@@ -106,6 +106,7 @@ class Chapter(Base):
     content = Column(Text)
     summary = Column(Text)
     status = Column(SQLEnum(StoryStatus), default=StoryStatus.draft)
+    choices_json = Column(Text, nullable=True)
     
     story = relationship("Story", back_populates="chapters")
 

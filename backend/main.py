@@ -582,7 +582,7 @@ async def delete_chapter(story_id: uuid.UUID, chapter_number: int, db: AsyncSess
     return {"status": "success", "message": "Chapter deleted"}
 
 @app.put("/api/v1/stories/{story_id}/chapters/{chapter_number}", response_model=schemas.ChapterResponse)
-async def update_chapter(story_id: uuid.UUID, chapter_number: int, chapter_update: schemas.ChapterCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def update_chapter(story_id: uuid.UUID, chapter_number: int, chapter_update: schemas.ChapterUpdate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(models.Chapter).where(
             models.Chapter.story_id == story_id, 
@@ -593,12 +593,35 @@ async def update_chapter(story_id: uuid.UUID, chapter_number: int, chapter_updat
     if not db_chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     
-    db_chapter.title = chapter_update.title
-    db_chapter.content = chapter_update.content
-    db_chapter.summary = chapter_update.summary
+    if chapter_update.title is not None:
+        db_chapter.title = chapter_update.title
+    if chapter_update.content is not None:
+        db_chapter.content = chapter_update.content
+    if chapter_update.summary is not None:
+        db_chapter.summary = chapter_update.summary
+    if chapter_update.choices_json is not None:
+        db_chapter.choices_json = chapter_update.choices_json
     await db.commit()
     await db.refresh(db_chapter)
     return db_chapter
+
+@app.post("/api/v1/stories/{story_id}/chapters/{chapter_id}/choices")
+async def generate_choices_for_chapter(story_id: uuid.UUID, chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    import json
+    result = await db.execute(select(models.Chapter).where(models.Chapter.id == chapter_id, models.Chapter.story_id == story_id))
+    db_chapter = result.scalars().first()
+    if not db_chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    if not db_chapter.content:
+        raise HTTPException(status_code=400, detail="Chapter has no content")
+        
+    choices = await llm_service.generate_chapter_choices(db_chapter.content)
+    db_chapter.choices_json = json.dumps(choices)
+    await db.commit()
+    await db.refresh(db_chapter)
+    return {"choices": choices}
+
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import llm_service
@@ -608,10 +631,14 @@ class GenerateRequest(BaseModel):
     context: str = ""
     story_id: uuid.UUID | None = None
     global_custom_rules: str = ""
+    selected_choice: str | None = None
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
     story_context = ""
+    
+    if request.selected_choice:
+        story_context += f"--- SELECTED NARRATIVE CHOICE ---\nThe reader selected this choice for how the story MUST proceed: \"{request.selected_choice}\"\nYou MUST seamlessly weave this choice into the beginning and progression of this new chapter.\n----------------------------------\n\n"
     
     if request.global_custom_rules:
         story_context += f"--- GLOBAL AI RULES (Strictly Follow) ---\n{request.global_custom_rules}\n-----------------------------------------\n\n"
