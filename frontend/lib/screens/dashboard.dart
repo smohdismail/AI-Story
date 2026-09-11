@@ -359,6 +359,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         );
+      },
+    );
+  }
+
   Widget _buildErrorView() {
     return Center(
       child: SingleChildScrollView(

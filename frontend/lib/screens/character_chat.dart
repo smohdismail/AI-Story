@@ -624,7 +624,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
           child: MarkdownBody(
             data: content,
             styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-              p: const TextStyle(color: Colors.white90, fontSize: 15, height: 1.4),
+              p: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
             ),
           ),
         ),
