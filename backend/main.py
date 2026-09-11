@@ -680,6 +680,8 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
         if story:
             if story.custom_rules:
                 story_context += f"--- STORY-SPECIFIC RULES (Overrides Global) ---\n{story.custom_rules}\n-------------------------------------------------\n\n"
+            if story.nsfw_preferences:
+                story_context += f"--- NSFW & EROTIC TROPES PREFERENCES ---\n{story.nsfw_preferences}\nYou MUST strictly incorporate these adult narrative dynamics into romantic and intimate interactions.\n----------------------------------------\n\n"
             story_context += f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
             
             # Fetch and inject characters
@@ -1536,3 +1538,21 @@ async def delete_world_location(story_id: uuid.UUID, location_id: uuid.UUID, db:
     await db.delete(loc)
     await db.commit()
     return {"status": "success"}
+
+@app.post("/api/v1/generate/rewrite-paragraph")
+async def rewrite_paragraph_endpoint(req: schemas.ParagraphRewriteRequest, db: AsyncSession = Depends(get_db)):
+    nsfw_pref = None
+    if req.story_id:
+        story = await db.get(models.Story, req.story_id)
+        if story and story.nsfw_preferences:
+            nsfw_pref = story.nsfw_preferences
+
+    rewritten = await llm_service.rewrite_paragraph(
+        text=req.text,
+        action=req.action,
+        custom_instruction=req.custom_instruction,
+        context=req.context,
+        nsfw_preferences=nsfw_pref
+    )
+    return {"rewritten_text": rewritten}
+

@@ -73,6 +73,7 @@ class StoryBase(BaseModel):
     user_persona_backstory: Optional[str] = None
     is_published: Optional[bool] = False
     likes_count: Optional[int] = 0
+    nsfw_preferences: Optional[str] = None
 
 class StoryCreate(StoryBase):
     pass
@@ -95,6 +96,14 @@ class StoryUpdate(BaseModel):
     user_persona_backstory: Optional[str] = None
     is_published: Optional[bool] = None
     likes_count: Optional[int] = None
+    nsfw_preferences: Optional[str] = None
+
+class ParagraphRewriteRequest(BaseModel):
+    text: str
+    action: str  # sensual, monologue, intense, rewrite_dialogue, custom
+    custom_instruction: Optional[str] = None
+    story_id: Optional[UUID4] = None
+    context: Optional[str] = None
 
 class StoryResponse(StoryBase):
     id: UUID4

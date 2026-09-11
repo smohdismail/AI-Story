@@ -449,3 +449,46 @@ async def generate_dramatic_twist(story_context: str, twist_type: str) -> str:
         print(f"Error generating twist: {e}")
         return "\n\n[Suddenly, an unexpected twist threw everything into chaos...]\n"
 
+async def rewrite_paragraph(text: str, action: str, custom_instruction: str = None, context: str = None, nsfw_preferences: str = None) -> str:
+    system_instruction = (
+        "You are an expert adult fiction ghostwriter and editor. Your task is to rewrite or transform "
+        "the user's highlighted text excerpt while maintaining narrative flow, character names, and tone. "
+        "Return ONLY the updated replacement text without explanations, intros, or markdown quotes."
+    )
+    if nsfw_preferences:
+        system_instruction += f"\n\n--- NSFW & EROTIC TROPES PREFERENCES ---\n{nsfw_preferences}\n----------------------------------------\n"
+
+    action_instructions = {
+        "sensual": "Rewrite this excerpt to make it significantly more sensual, intimate, passionate, and visceral in detail.",
+        "monologue": "Expand this excerpt by adding deep internal thoughts, emotional monologue, and psychological reactions of the character.",
+        "intense": "Rewrite this excerpt to make it high-voltage, urgent, dramatic, and intensely action-packed.",
+        "rewrite_dialogue": "Focus on enhancing the dialogue in this excerpt to make it punchier, more emotionally charged, and natural.",
+        "custom": custom_instruction or "Enhance and refine this text paragraph."
+    }
+    
+    prompt = action_instructions.get(action, action_instructions["custom"])
+    if context:
+        prompt += f"\n\n--- SURROUNDING STORY CONTEXT ---\n{context[-1000:]}\n----------------------------------\n"
+
+    prompt += f"\n\nTARGET EXCERPT TO REWRITE:\n\"{text}\""
+
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=1000,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return text
+    except Exception as e:
+        print(f"Error in rewrite_paragraph: {e}")
+        return text
+
+

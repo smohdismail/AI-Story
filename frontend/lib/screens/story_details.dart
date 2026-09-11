@@ -1640,41 +1640,114 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     final titleController = TextEditingController(text: story!['title']);
     final synopsisController = TextEditingController(text: story!['synopsis']);
     final genreController = TextEditingController(text: story!['genre']);
+    final customRulesController = TextEditingController(text: story!['custom_rules'] ?? '');
     
+    // Parse existing nsfw_preferences
+    final existingNsfw = story!['nsfw_preferences'] ?? '';
+    final nsfwController = TextEditingController(text: existingNsfw);
+    
+    String romancePacing = 'Slow Burn';
+    String dynamicRole = 'Balanced';
+    String sensoryDetail = 'High Sensual Focus';
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Story Info'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
-              TextField(controller: synopsisController, decoration: const InputDecoration(labelText: 'Synopsis'), maxLines: 3),
-              TextField(controller: genreController, decoration: const InputDecoration(labelText: 'Genre')),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E1E2C),
+            title: const Row(
+              children: [
+                Icon(Icons.explicit, color: Colors.pinkAccent),
+                SizedBox(width: 8),
+                Text('Story Settings & NSFW Engine', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
+                  const SizedBox(height: 8),
+                  TextField(controller: synopsisController, decoration: const InputDecoration(labelText: 'Synopsis'), maxLines: 3),
+                  const SizedBox(height: 8),
+                  TextField(controller: genreController, decoration: const InputDecoration(labelText: 'Genre')),
+                  const SizedBox(height: 8),
+                  TextField(controller: customRulesController, decoration: const InputDecoration(labelText: 'Custom AI Story Rules'), maxLines: 2),
+                  const Divider(color: Colors.white24, height: 24),
+                  const Row(
+                    children: [
+                      Icon(Icons.favorite, color: Colors.pinkAccent, size: 20),
+                      SizedBox(width: 6),
+                      Text('🔞 NSFW & Erotic Trope Preferences', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: romancePacing,
+                    decoration: const InputDecoration(labelText: 'Romance & Tension Pacing'),
+                    dropdownColor: const Color(0xFF2C2C3E),
+                    items: ['Slow Burn', 'Instant Passion', 'Teasing & Tension', 'Balanced']
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setDialogState(() => romancePacing = val!),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: dynamicRole,
+                    decoration: const InputDecoration(labelText: 'Character Dynamics'),
+                    dropdownColor: const Color(0xFF2C2C3E),
+                    items: ['Dominant / Submissive', 'Sworn Enemies to Lovers', 'Equals / Switch', 'Playful Rivalry']
+                        .map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    onChanged: (val) => setDialogState(() => dynamicRole = val!),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: sensoryDetail,
+                    decoration: const InputDecoration(labelText: 'Sensory Detail Focus'),
+                    dropdownColor: const Color(0xFF2C2C3E),
+                    items: ['High Sensual Focus', 'Action & Plot Focus', 'Balanced']
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (val) => setDialogState(() => sensoryDetail = val!),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nsfwController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom Kinks, Tropes & Erotic Preferences',
+                      hintText: 'e.g. Forbidden romance, secret encounters, intense emotional dialogue, dominant heroine...',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
+                onPressed: () async {
+                  if (titleController.text.isEmpty) return;
+                  try {
+                    final combinedNsfw = 'Pacing: $romancePacing\nDynamics: $dynamicRole\nDetail: $sensoryDetail\nCustom Tropes: ${nsfwController.text.trim()}';
+                    await ApiService.updateStory(widget.storyId, {
+                      'title': titleController.text,
+                      'synopsis': synopsisController.text,
+                      'genre': genreController.text,
+                      'custom_rules': customRulesController.text,
+                      'nsfw_preferences': combinedNsfw,
+                    });
+                    if (mounted) Navigator.pop(context);
+                    _loadData(); // Refresh UI
+                  } catch (e) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating story: $e')));
+                  }
+                },
+                child: const Text('Save Settings', style: TextStyle(color: Colors.white)),
+              ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.isEmpty) return;
-              try {
-                await ApiService.updateStory(widget.storyId, {
-                  'title': titleController.text,
-                  'synopsis': synopsisController.text,
-                  'genre': genreController.text,
-                });
-                if (mounted) Navigator.pop(context);
-                _loadData(); // Refresh UI
-              } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating story: $e')));
-              }
-            },
-            child: const Text('Save Changes'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

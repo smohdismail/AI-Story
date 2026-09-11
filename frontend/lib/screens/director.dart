@@ -209,6 +209,188 @@ class _DirectorScreenState extends State<DirectorScreen> {
     );
   }
 
+  Future<void> _showGhostwriterDialog() async {
+    final selection = _editorController.selection;
+    String selectedText = '';
+    
+    if (selection.isValid && !selection.isCollapsed) {
+      selectedText = _editorController.text.substring(selection.start, selection.end).trim();
+    }
+
+    final customCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E2C),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20.0,
+            right: 20.0,
+            top: 20.0,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20.0,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.edit_note, color: Colors.pinkAccent, size: 28),
+                  SizedBox(width: 8),
+                  Text('In-Line AI Ghostwriter', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                selectedText.isNotEmpty
+                    ? 'Transforming highlighted excerpt (${selectedText.length} chars):'
+                    : 'Enter paragraph excerpt to rewrite:',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              if (selectedText.isEmpty) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  onChanged: (val) => selectedText = val,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Highlight text in the editor above, or paste an excerpt here...',
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.pinkAccent.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    '"$selectedText"',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white90, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              const Text('Select Transformation Action:', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.favorite, color: Colors.pinkAccent, size: 18),
+                    label: const Text('🔥 Make More Sensual'),
+                    onPressed: () => _executeRewrite(selectedText, 'sensual', selection),
+                  ),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.psychology, color: Colors.purpleAccent, size: 18),
+                    label: const Text('💭 Add Internal Monologue'),
+                    onPressed: () => _executeRewrite(selectedText, 'monologue', selection),
+                  ),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.flash_on, color: Colors.amber, size: 18),
+                    label: const Text('⚔️ Make More Intense'),
+                    onPressed: () => _executeRewrite(selectedText, 'intense', selection),
+                  ),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.chat_bubble, color: Colors.cyanAccent, size: 18),
+                    label: const Text('🔄 Rewrite Dialogue'),
+                    onPressed: () => _executeRewrite(selectedText, 'rewrite_dialogue', selection),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: customCtrl,
+                      decoration: const InputDecoration(
+                        hintText: 'Custom instruction (e.g., "Add more teasing banter")',
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Colors.pinkAccent),
+                    onPressed: () {
+                      if (customCtrl.text.isNotEmpty) {
+                        _executeRewrite(selectedText, 'custom', selection, customInstruction: customCtrl.text);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _executeRewrite(String textToRewrite, String action, TextSelection selection, {String? customInstruction}) async {
+    if (textToRewrite.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select or enter text to rewrite first!')));
+      return;
+    }
+
+    Navigator.pop(context); // close bottom sheet
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('AI Ghostwriter rewriting excerpt...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final res = await ApiService.rewriteParagraph(
+        textToRewrite,
+        action,
+        customInstruction: customInstruction,
+        storyId: widget.storyId,
+        context: _editorController.text,
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // close loading dialog
+        final rewritten = res['rewritten_text'] ?? textToRewrite;
+
+        setState(() {
+          if (selection.isValid && !selection.isCollapsed) {
+            _editorController.text = _editorController.text.replaceRange(selection.start, selection.end, rewritten);
+          } else {
+            _editorController.text = _editorController.text.replaceAll(textToRewrite, rewritten);
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Paragraph transformed by AI Ghostwriter! ✨')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error in AI Ghostwriter: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -219,6 +401,11 @@ class _DirectorScreenState extends State<DirectorScreen> {
         ),
         title: Text('Director: Chapter ${widget.currentChapterCount + 1}'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_note, color: Colors.pinkAccent),
+            tooltip: 'AI Ghostwriter (Rewrite Paragraph)',
+            onPressed: _showGhostwriterDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.bolt, color: Colors.amber),
             tooltip: 'Spur the Drama (Inject Twist)',
@@ -256,14 +443,28 @@ class _DirectorScreenState extends State<DirectorScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Branching Choice / Next Chapter Focus:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    OutlinedButton.icon(
-                      onPressed: _spurTheDrama,
-                      icon: const Icon(Icons.bolt, color: Colors.amber, size: 18),
-                      label: const Text('Spur Drama ⚡', style: TextStyle(color: Colors.amber)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.amber),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      ),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _showGhostwriterDialog,
+                          icon: const Icon(Icons.edit_note, color: Colors.pinkAccent, size: 18),
+                          label: const Text('Ghostwriter ✍️', style: TextStyle(color: Colors.pinkAccent)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.pinkAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        OutlinedButton.icon(
+                          onPressed: _spurTheDrama,
+                          icon: const Icon(Icons.bolt, color: Colors.amber, size: 18),
+                          label: const Text('Spur Drama ⚡', style: TextStyle(color: Colors.amber)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.amber),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

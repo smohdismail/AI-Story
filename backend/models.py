@@ -52,6 +52,7 @@ class Story(Base):
     cover_base64 = Column(Text, nullable=True)
     is_published = Column(Boolean, default=False)
     likes_count = Column(Integer, default=0)
+    nsfw_preferences = Column(Text, default="")
     
     # Story-specific user persona
     user_persona_name = Column(String, nullable=True)

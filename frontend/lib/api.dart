@@ -784,5 +784,30 @@ class ApiService {
     final response = await http.delete(Uri.parse('$baseUrl/stories/$storyId/locations/$locationId'), headers: headers);
     if (response.statusCode != 200) throw Exception('Failed to delete world location');
   }
+
+  static Future<Map<String, dynamic>> rewriteParagraph(
+    String text,
+    String action, {
+    String? customInstruction,
+    String? storyId,
+    String? context,
+  }) async {
+    final headers = await _getHeaders();
+    final bodyData = {
+      'text': text,
+      'action': action,
+      if (customInstruction != null) 'custom_instruction': customInstruction,
+      if (storyId != null) 'story_id': storyId,
+      if (context != null) 'context': context,
+    };
+    final response = await http.post(
+      Uri.parse('$baseUrl/generate/rewrite-paragraph'),
+      headers: headers,
+      body: jsonEncode(bodyData),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to rewrite paragraph');
+  }
 }
+
 
