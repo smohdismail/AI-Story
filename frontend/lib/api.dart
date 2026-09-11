@@ -670,4 +670,60 @@ class ApiService {
     final response = await http.post(Uri.parse('$baseUrl/group_chats/$sessionId/clear'), headers: headers);
     if (response.statusCode != 200) throw Exception('Failed to clear group chat');
   }
+
+  static Future<List<dynamic>> extractLore(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/extract-lore'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to extract world lore');
+  }
+
+  static Future<Map<String, dynamic>> analyzePlot(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/analyze-plot'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to analyze story plot');
+  }
+
+  static Future<List<dynamic>> getStoryTree(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/tree'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load story tree');
+  }
+
+  static Future<List<dynamic>> getRelationships(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/relationships'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load character relationships');
+  }
+
+  static Future<List<dynamic>> analyzeRelationships(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/relationships/analyze'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to analyze character relationships');
+  }
+
+  static Future<Map<String, dynamic>> publishStory(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/publish'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to publish story');
+  }
+
+  static Future<List<dynamic>> getCommunityFeed() async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/community/feed'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load community feed');
+  }
+
+  static Future<Map<String, dynamic>> likeStory(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/like'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to like story');
+  }
 }

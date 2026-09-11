@@ -109,24 +109,341 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     }
   }
 
-  Widget _buildParsedText(String text, BuildContext context) {
-    final baseStyle = DefaultTextStyle.of(context).style.copyWith(fontSize: 16, height: 1.5);
-    final italicStyle = baseStyle.copyWith(fontStyle: FontStyle.italic);
-    
-    final parts = text.split('*');
-    final spans = <TextSpan>[];
-    
-    for (int i = 0; i < parts.length; i++) {
-      if (i % 2 == 0) {
-        spans.add(TextSpan(text: parts[i], style: baseStyle));
-      } else {
-        spans.add(TextSpan(text: parts[i], style: italicStyle));
+
+  void _autoExtractLore() async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Extracting world lore from chapters with AI...')));
+    try {
+      await ApiService.extractLore(widget.storyId);
+      _loadData();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('World lore extracted successfully!')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error extracting lore: $e')));
+    }
+  }
+
+  void _showPlotAnalyzerDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Expanded(child: Text("AI Beta Reader analyzing plot consistency, pacing & characters...")),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final report = await ApiService.analyzePlot(widget.storyId);
+      if (mounted) Navigator.pop(context); // Close loading dialog
+
+      if (!mounted) return;
+
+      final score = report['overall_score'] ?? 80;
+      final pacing = report['pacing'] ?? 'Good';
+      final characterConsistency = report['character_consistency'] ?? 'Consistent';
+      final plotHoles = List<String>.from(report['plot_holes'] ?? []);
+      final suggestions = List<String>.from(report['suggestions'] ?? []);
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.analytics, color: Colors.purple),
+              SizedBox(width: 8),
+              Text('Plot & Pacing Report'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        '$score / 100',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: score >= 80 ? Colors.green : (score >= 60 ? Colors.amber : Colors.red),
+                        ),
+                      ),
+                      const Text('Overall Story Health Score', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                const Divider(height: 24),
+                const Text('Pacing Analysis', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                const SizedBox(height: 4),
+                Text(pacing, style: const TextStyle(fontSize: 14)),
+                const SizedBox(height: 12),
+                const Text('Character Consistency', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                const SizedBox(height: 4),
+                Text(characterConsistency, style: const TextStyle(fontSize: 14)),
+                if (plotHoles.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Plot Holes & Unresolved Hooks', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                  const SizedBox(height: 4),
+                  ...plotHoles.map((hole) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Text('• $hole', style: const TextStyle(fontSize: 13, color: Colors.redAccent)),
+                  )),
+                ],
+                if (suggestions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('AI Writing Suggestions', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                  const SizedBox(height: 4),
+                  ...suggestions.map((sug) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Text('• $sug', style: const TextStyle(fontSize: 13)),
+                  )),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error analyzing plot: $e')));
       }
     }
-    
-    return RichText(
-      text: TextSpan(children: spans),
+  }
+
+  void _togglePublishStory() async {
+    try {
+      final updated = await ApiService.publishStory(widget.storyId);
+      final isPub = updated['is_published'] == true;
+      _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(isPub ? 'Story Published to Community Feed!' : 'Story Unpublished.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error publishing: $e')));
+    }
+  }
+
+  void _showStoryTreeDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text("Loading Story Tree..."),
+          ],
+        ),
+      ),
     );
+
+    try {
+      final treeData = await ApiService.getStoryTree(widget.storyId);
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.account_tree, color: Colors.cyanAccent),
+              SizedBox(width: 8),
+              Text('Interactive Story Tree'),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: treeData.isEmpty
+              ? const Text('No chapter branches generated yet.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: treeData.length,
+                  itemBuilder: (context, idx) {
+                    final item = treeData[idx];
+                    final isChoice = item['choice_prompt'] != null && item['choice_prompt'].toString().isNotEmpty;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isChoice ? Colors.purple.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: isChoice ? Colors.purpleAccent : Colors.cyan),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isChoice)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4.0),
+                              child: Text(
+                                '⚡ Choice Path: "${item['choice_prompt']}"',
+                                style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          Text(
+                            'Chapter ${item['chapter_number']}: ${item['title']}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          if (item['summary'] != null && item['summary'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(item['summary'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  void _showRelationshipMatrixDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text("Loading Relationship Matrix..."),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      var rels = await ApiService.getRelationships(widget.storyId);
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.hub, color: Colors.pinkAccent),
+                      SizedBox(width: 8),
+                      Text('Relationship Matrix'),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+                    tooltip: 'AI Auto-Analyze Dynamics',
+                    onPressed: () async {
+                      try {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Analyzing character dynamics with AI...')));
+                        final updated = await ApiService.analyzeRelationships(widget.storyId);
+                        setDialogState(() {
+                          rels = updated;
+                        });
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: rels.isEmpty
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('No character relationship dynamics recorded yet.'),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            try {
+                              final updated = await ApiService.analyzeRelationships(widget.storyId);
+                              setDialogState(() {
+                                rels = updated;
+                              });
+                            } catch (e) {
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            }
+                          },
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('AI Auto-Analyze Dynamics'),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: rels.length,
+                      itemBuilder: (context, idx) {
+                        final rel = rels[idx];
+                        final score = rel['sentiment_score'] ?? 0;
+                        final color = score >= 50 ? Colors.green : (score >= 0 ? Colors.blue : (score >= -40 ? Colors.amber : Colors.red));
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: color.withValues(alpha: 0.2),
+                              child: Text('$score', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                            title: Text('${rel['from_name']}  ➔  ${rel['to_name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Chip(
+                                  label: Text(rel['relationship_type'] ?? 'Acquaintance', style: const TextStyle(fontSize: 11)),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                if (rel['notes'] != null && rel['notes'].toString().isNotEmpty)
+                                  Text(rel['notes'], style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+              ],
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 
   Future<void> _forkStory() async {
@@ -263,6 +580,23 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 }
               },
             ),
+          if (story != null && chapters.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.account_tree, color: Colors.cyanAccent),
+              tooltip: 'Interactive Story Tree Flowchart',
+              onPressed: _showStoryTreeDialog,
+            ),
+            IconButton(
+              icon: const Icon(Icons.hub, color: Colors.pinkAccent),
+              tooltip: 'Character Relationship Matrix',
+              onPressed: _showRelationshipMatrixDialog,
+            ),
+            IconButton(
+              icon: const Icon(Icons.analytics, color: Colors.purpleAccent),
+              tooltip: 'AI Plot & Pacing Analyzer',
+              onPressed: _showPlotAnalyzerDialog,
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
@@ -271,6 +605,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             onSelected: (value) {
               if (value == 'settings') {
                 _showStorySettingsDialog();
+              } else if (value == 'publish') {
+                _togglePublishStory();
               } else if (value == 'fork') {
                 _forkStory();
               } else if (value == 'delete') {
@@ -278,7 +614,18 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               }
             },
             itemBuilder: (BuildContext context) {
+              final isPublished = story?['is_published'] == true;
               return [
+                PopupMenuItem(
+                  value: 'publish',
+                  child: Row(
+                    children: [
+                      Icon(isPublished ? Icons.public_off : Icons.public, color: isPublished ? Colors.amber : Colors.cyanAccent),
+                      const SizedBox(width: 8),
+                      Text(isPublished ? 'Unpublish Story' : 'Publish to Community Feed'),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
                   value: 'settings',
                   child: Row(
@@ -717,13 +1064,31 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: ElevatedButton.icon(
-            onPressed: () => _showAddWorldItemDialog(),
-            icon: const Icon(Icons.add_location_alt),
-            label: const Text('Add World Lore'),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _showAddWorldItemDialog(),
+                  icon: const Icon(Icons.add_location_alt),
+                  label: const Text('Add Lore'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 50),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _autoExtractLore,
+                  icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+                  label: const Text('AI Auto-Extract'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 50),
+                    backgroundColor: Colors.purple[800],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         Padding(
@@ -1109,6 +1474,14 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               ),
             ),
             actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _deleteCharacter(char['id']);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               ElevatedButton(
                 onPressed: () async {

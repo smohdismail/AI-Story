@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete
+from sqlalchemy.orm import selectinload
 from contextlib import asynccontextmanager
 import uuid
 from pydantic import BaseModel
@@ -591,6 +592,8 @@ async def create_chapter(story_id: uuid.UUID, chapter: schemas.ChapterCreate, ba
     db.add(db_chapter)
     await db.commit()
     await db.refresh(db_chapter)
+    if db_chapter.content:
+        background_tasks.add_task(trigger_summary_update, story_id, db_chapter.content)
     return db_chapter
 @app.delete("/api/v1/stories/{story_id}/chapters/{chapter_number}")
 async def delete_chapter(story_id: uuid.UUID, chapter_number: int, db: AsyncSession = Depends(get_db)):
@@ -630,6 +633,8 @@ async def update_chapter(story_id: uuid.UUID, chapter_number: int, chapter_updat
         db_chapter.choices_json = chapter_update.choices_json
     await db.commit()
     await db.refresh(db_chapter)
+    if chapter_update.content is not None and db_chapter.content:
+        background_tasks.add_task(trigger_summary_update, story_id, db_chapter.content)
     return db_chapter
 
 @app.post("/api/v1/stories/{story_id}/chapters/{chapter_id}/choices")
@@ -972,20 +977,18 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
         
     world_info = "None"
     if getattr(char.story, 'world_items', None):
-        world_info = "\n".join([f"{w.title}: {w.content}" for w in char.story.world_items])
+        world_info = "\n".join([f"{w.name} ({w.category}): {w.description}" for w in char.story.world_items])
         
-    mem_res = await db.execute(select(models.Memory).where(models.Memory.story_id == char.story_id).order_by(models.Memory.created_at.desc()).limit(10))
-    mems = mem_res.scalars().all()
-    mem_str = "\n".join([m.content for m in mems])
+    relevant_memories = await memory_service.retrieve_memories(str(char.story_id), str(char.id), "Continue the conversation naturally.")
     
     persona_info = await get_effective_persona_info(char.story, db)
 
     ai_msg = await llm_service.continue_chat(
         character_info=f"Name: {char.name}\nPersonality: {char.personality}\nRole: {char.role}",
-        story_summary=char.story.synopsis,
+        story_summary=char.story.synopsis if char.story else "",
         world_info=world_info,
         chat_history=history_str,
-        relevant_memories=mem_str,
+        relevant_memories=relevant_memories,
         persona_info=persona_info
     )
     
@@ -1287,3 +1290,174 @@ async def get_character(character_id: uuid.UUID, db: AsyncSession = Depends(get_
     if not char:
         raise HTTPException(status_code=404, detail="Character not found")
     return char
+
+@app.post("/api/v1/stories/{story_id}/extract-lore", response_model=list[schemas.WorldItemResponse])
+async def extract_story_lore(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chap_res = await db.execute(
+        select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.desc()).limit(3)
+    )
+    chapters = chap_res.scalars().all()
+    if not chapters:
+        return []
+        
+    combined_text = "\n\n".join([f"Chapter {c.chapter_number}: {c.content}" for c in chapters])
+    extracted_items = await llm_service.extract_world_lore(combined_text)
+    
+    existing_res = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == story_id))
+    existing_items = existing_res.scalars().all()
+    existing_names = {e.name.lower() for e in existing_items}
+    
+    created_items = []
+    for item in extracted_items:
+        name = item.get("name", "").strip()
+        category = item.get("category", "General").strip()
+        desc = item.get("description", "").strip()
+        if name and name.lower() not in existing_names:
+            db_item = models.WorldItem(
+                story_id=story_id,
+                name=name,
+                category=category,
+                description=desc
+            )
+            db.add(db_item)
+            created_items.append(db_item)
+            existing_names.add(name.lower())
+            
+    await db.commit()
+    for ci in created_items:
+        await db.refresh(ci)
+        
+    all_res = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == story_id))
+    return all_res.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/analyze-plot")
+async def analyze_story_plot(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chap_res = await db.execute(
+        select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc())
+    )
+    chapters = chap_res.scalars().all()
+    chapters_text = "\n\n".join([f"Chapter {c.chapter_number} ({c.title}): {c.content[:1500]}" for c in chapters])
+    
+    analysis = await llm_service.analyze_story_consistency(story.synopsis or story.title, chapters_text)
+    return analysis
+
+@app.get("/api/v1/stories/{story_id}/tree", response_model=list[schemas.ChapterResponse])
+async def get_story_tree(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()))
+    return result.scalars().all()
+
+@app.get("/api/v1/stories/{story_id}/relationships", response_model=list[schemas.CharacterRelationshipResponse])
+async def get_relationships(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.CharacterRelationship).where(models.CharacterRelationship.story_id == story_id))
+    return result.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/relationships/analyze", response_model=list[schemas.CharacterRelationshipResponse])
+async def analyze_relationships(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    if not chars:
+        return []
+        
+    char_info_str = "\n".join([f"Name: {c.name}, Role: {c.role}, Personality: {c.personality}" for c in chars])
+    
+    chap_res = await db.execute(
+        select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc())
+    )
+    chapters = chap_res.scalars().all()
+    chapters_text = "\n\n".join([f"Chapter {c.chapter_number}: {c.content[:1500]}" for c in chapters])
+    
+    extracted_rel = await llm_service.analyze_character_relationships(char_info_str, story.synopsis or story.title, chapters_text)
+    
+    # Delete previous relations for fresh update
+    await db.execute(delete(models.CharacterRelationship).where(models.CharacterRelationship.story_id == story_id))
+    
+    char_map = {c.name.lower(): c.id for c in chars}
+    
+    new_rels = []
+    for r in extracted_rel:
+        from_name = r.get("from_name", "").strip()
+        to_name = r.get("to_name", "").strip()
+        rel_type = r.get("relationship_type", "Acquaintance").strip()
+        score = int(r.get("sentiment_score", 0))
+        notes = r.get("notes", "").strip()
+        
+        if from_name:
+            from_id = char_map.get(from_name.lower())
+            to_id = char_map.get(to_name.lower()) if to_name else None
+            
+            db_rel = models.CharacterRelationship(
+                story_id=story_id,
+                from_character_id=from_id or chars[0].id,
+                to_character_id=to_id,
+                from_name=from_name,
+                to_name=to_name or "Protagonist",
+                relationship_type=rel_type,
+                sentiment_score=max(-100, min(100, score)),
+                notes=notes
+            )
+            db.add(db_rel)
+            new_rels.append(db_rel)
+            
+    await db.commit()
+    for nr in new_rels:
+        await db.refresh(nr)
+        
+    res = await db.execute(select(models.CharacterRelationship).where(models.CharacterRelationship.story_id == story_id))
+    return res.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/publish", response_model=schemas.StoryResponse)
+async def publish_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
+    story = result.scalars().first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    story.is_published = not story.is_published
+    await db.commit()
+    await db.refresh(story)
+    return story
+
+@app.get("/api/v1/community/feed", response_model=list[schemas.StoryResponse])
+async def get_community_feed(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.Story)
+        .where(models.Story.is_published == True)
+        .order_by(models.Story.created_at.desc())
+    )
+    return result.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/like")
+async def like_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    like_res = await db.execute(
+        select(models.PublicStoryLike).where(models.PublicStoryLike.story_id == story_id, models.PublicStoryLike.user_id == current_user.id)
+    )
+    existing_like = like_res.scalars().first()
+    
+    if existing_like:
+        await db.delete(existing_like)
+        story.likes_count = max(0, (story.likes_count or 0) - 1)
+        liked = False
+    else:
+        new_like = models.PublicStoryLike(story_id=story_id, user_id=current_user.id)
+        db.add(new_like)
+        story.likes_count = (story.likes_count or 0) + 1
+        liked = True
+        
+    await db.commit()
+    return {"status": "success", "liked": liked, "likes_count": story.likes_count}

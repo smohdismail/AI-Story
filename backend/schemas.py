@@ -71,6 +71,8 @@ class StoryBase(BaseModel):
     user_persona_appearance: Optional[str] = None
     user_persona_personality: Optional[str] = None
     user_persona_backstory: Optional[str] = None
+    is_published: Optional[bool] = False
+    likes_count: Optional[int] = 0
 
 class StoryCreate(StoryBase):
     pass
@@ -91,6 +93,8 @@ class StoryUpdate(BaseModel):
     user_persona_appearance: Optional[str] = None
     user_persona_personality: Optional[str] = None
     user_persona_backstory: Optional[str] = None
+    is_published: Optional[bool] = None
+    likes_count: Optional[int] = None
 
 class StoryResponse(StoryBase):
     id: UUID4
@@ -144,6 +148,8 @@ class ChapterBase(BaseModel):
     summary: Optional[str] = None
     status: Optional[StoryStatus] = StoryStatus.draft
     choices_json: Optional[str] = None
+    parent_chapter_id: Optional[UUID4] = None
+    choice_prompt: Optional[str] = None
 
 class ChapterCreate(ChapterBase):
     pass
@@ -154,10 +160,26 @@ class ChapterUpdate(BaseModel):
     summary: Optional[str] = None
     status: Optional[StoryStatus] = None
     choices_json: Optional[str] = None
+    parent_chapter_id: Optional[UUID4] = None
+    choice_prompt: Optional[str] = None
 
 class ChapterResponse(ChapterBase):
     id: UUID4
     story_id: UUID4
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CharacterRelationshipResponse(BaseModel):
+    id: UUID4
+    story_id: UUID4
+    from_character_id: UUID4
+    to_character_id: Optional[UUID4] = None
+    from_name: str
+    to_name: str
+    relationship_type: str
+    sentiment_score: int
+    notes: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

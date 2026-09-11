@@ -50,6 +50,8 @@ class Story(Base):
     story_summary = Column(Text, default="")
     custom_rules = Column(Text, default="")
     cover_base64 = Column(Text, nullable=True)
+    is_published = Column(Boolean, default=False)
+    likes_count = Column(Integer, default=0)
     
     # Story-specific user persona
     user_persona_name = Column(String, nullable=True)
@@ -102,12 +104,14 @@ class Chapter(Base):
     __tablename__ = "chapters"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    parent_chapter_id = Column(Uuid(as_uuid=True), ForeignKey("chapters.id"), nullable=True)
     chapter_number = Column(Integer)
     title = Column(String)
     content = Column(Text)
     summary = Column(Text)
     status = Column(SQLEnum(StoryStatus), default=StoryStatus.draft)
     choices_json = Column(Text, nullable=True)
+    choice_prompt = Column(Text, nullable=True)
     
     story = relationship("Story", back_populates="chapters")
 
@@ -156,3 +160,23 @@ class SceneIllustration(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     story = relationship("Story", back_populates="illustrations")
+
+class CharacterRelationship(Base):
+    __tablename__ = "character_relationships"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    from_character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    to_character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True) # Null if user
+    from_name = Column(String)
+    to_name = Column(String)
+    relationship_type = Column(String) # e.g. Lover, Rival, Ally, Enemy
+    sentiment_score = Column(Integer, default=0) # -100 to +100
+    notes = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class PublicStoryLike(Base):
+    __tablename__ = "public_story_likes"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)

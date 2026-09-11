@@ -80,8 +80,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               )
             : null,
-        title: Text(title),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.public, color: Colors.cyanAccent),
+            tooltip: 'Community Feed',
+            onPressed: () {
+              context.push('/community');
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'My Persona',

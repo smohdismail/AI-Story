@@ -69,7 +69,6 @@ class ThemeProvider extends ChangeNotifier {
           useMaterial3: true,
         );
       case AppThemeMode.dark:
-      default:
         return ThemeData(
           brightness: Brightness.dark,
           primarySwatch: Colors.deepPurple,

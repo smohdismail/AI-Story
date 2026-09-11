@@ -230,8 +230,12 @@ async def generate_chat_suggestions(character_info: str, chat_history: str) -> l
         if response.choices and response.choices[0].message.content:
             text = response.choices[0].message.content.strip()
             if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
             if text.endswith('```'): text = text[:-3]
-            return json.loads(text.strip())
+            text = text.strip()
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed[:3]]
         return ["*smile*", "What's next?", "Tell me more."]
     except Exception as e:
         print(f"Error generating suggestions: {e}")
@@ -291,4 +295,95 @@ async def generate_chapter_choices(chapter_content: str, story_context: str = ""
             "Search the surrounding area for hidden clues or allies.",
             "Make a quiet escape to reassess the situation."
         ]
+
+async def extract_world_lore(chapter_text: str) -> list[dict]:
+    messages = [
+        {"role": "system", "content": "You are a master worldbuilder and lore archivist. Read the provided story chapter text carefully and extract key worldbuilding entities (such as novel Characters, Locations, Factions, Magic/Tech items, or Artifacts). Return ONLY a JSON array of objects, where each object has fields: \"name\" (string), \"category\" (string e.g. Location, Faction, Artifact, Character), and \"description\" (1-2 sentence detailed explanation). Format strictly as JSON."}
+    ]
+    messages.append({"role": "user", "content": f"CHAPTER TEXT:\n{chapter_text[-3000:] if len(chapter_text) > 3000 else chapter_text}\n\nExtract world lore entities."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.5,
+            max_tokens=600,
+        )
+        import json
+        if response.choices and response.choices[0].message.content:
+            text = response.choices[0].message.content.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
+            if text.endswith('```'): text = text[:-3]
+            items = json.loads(text.strip())
+            if isinstance(items, list):
+                return items
+        return []
+    except Exception as e:
+        print(f"Error extracting world lore: {e}")
+        return []
+
+async def analyze_story_consistency(story_summary: str, chapters_text: str) -> dict:
+    messages = [
+        {"role": "system", "content": "You are an expert literary critic and AI story beta reader. Analyze the provided story summary and chapter progression for structural pacing, plot holes, character arc consistency, and unresolved plot hooks. Return ONLY a valid JSON object with the following fields:\n- \"overall_score\": integer (0 to 100)\n- \"pacing\": string\n- \"character_consistency\": string\n- \"plot_holes\": list of strings\n- \"suggestions\": list of strings"}
+    ]
+    messages.append({"role": "user", "content": f"STORY SUMMARY:\n{story_summary}\n\nCHAPTERS TRANSCRIPT:\n{chapters_text[-4000:] if len(chapters_text) > 4000 else chapters_text}\n\nPerform plot & consistency analysis."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.6,
+            max_tokens=800,
+        )
+        import json
+        if response.choices and response.choices[0].message.content:
+            text = response.choices[0].message.content.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
+            if text.endswith('```'): text = text[:-3]
+            return json.loads(text.strip())
+        return {
+            "overall_score": 80,
+            "pacing": "Good flow and progression.",
+            "character_consistency": "Characters maintain their distinct personalities.",
+            "plot_holes": [],
+            "suggestions": ["Continue developing key character relationships."]
+        }
+    except Exception as e:
+        print(f"Error analyzing story consistency: {e}")
+        return {
+            "overall_score": 75,
+            "pacing": "Analysis unavailable.",
+            "character_consistency": "Analysis unavailable.",
+            "plot_holes": ["Could not parse detailed plot check."],
+            "suggestions": ["Keep writing!"]
+        }
+
+async def analyze_character_relationships(characters_info: str, story_summary: str, chapters_text: str) -> list[dict]:
+    messages = [
+        {"role": "system", "content": "You are a master character dynamics analyst. Read the provided list of characters and recent chapter text to analyze the relationships and feelings BETWEEN characters (including the Protagonist/User). Return ONLY a JSON array of objects, where each object has:\n- \"from_name\": string\n- \"to_name\": string\n- \"relationship_type\": string (e.g. Rival, Lover, Secret Crush, Ally, Sworn Enemy, Mentor)\n- \"sentiment_score\": integer (-100 to +100)\n- \"notes\": string (1 short sentence reason)\n\nFormat strictly as valid JSON."}
+    ]
+    messages.append({"role": "user", "content": f"CHARACTERS:\n{characters_info}\n\nSTORY SUMMARY:\n{story_summary}\n\nRECENT CHAPTERS:\n{chapters_text[-3000:] if len(chapters_text) > 3000 else chapters_text}\n\nAnalyze character relationships."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.6,
+            max_tokens=800,
+        )
+        import json
+        if response.choices and response.choices[0].message.content:
+            text = response.choices[0].message.content.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
+            if text.endswith('```'): text = text[:-3]
+            parsed = json.loads(text.strip())
+            if isinstance(parsed, list):
+                return parsed
+        return []
+    except Exception as e:
+        print(f"Error analyzing character relationships: {e}")
+        return []
 

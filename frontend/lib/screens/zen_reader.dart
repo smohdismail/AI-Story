@@ -373,6 +373,17 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
             tooltip: 'Voice Settings',
             onPressed: _showTtsSettings,
           ),
+          IconButton(
+            icon: const Icon(Icons.theater_comedy, color: Colors.purpleAccent),
+            tooltip: 'Visual Novel Mode',
+            onPressed: () {
+              context.push('/visual_novel', extra: {
+                'title': widget.title,
+                'content': _quillController.document.toPlainText(),
+                'backgroundImage': widget.backgroundImage,
+              });
+            },
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.font_download),
             onSelected: (value) {
