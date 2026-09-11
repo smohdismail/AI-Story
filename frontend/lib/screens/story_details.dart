@@ -1642,6 +1642,36 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     final genreController = TextEditingController(text: story!['genre']);
     final customRulesController = TextEditingController(text: story!['custom_rules'] ?? '');
     
+    final tonesList = [
+      '🎭 Comedy & Banter (Witty Banter, Romantic Comedy, Slapstick & Humor)',
+      '⚡ High Action & Adventure (Action-Packed, High-Stakes Battles, Martial Arts)',
+      '❤️‍🔥 Flirty & Flattery (Flirty & Charming, Playful Teasing, Sweet Seduction)',
+      '🖤 Dark & Taboo (Dark Fantasy, Taboo Romance, Gritty Realism, Gothic)',
+      '🕵️ Mystery & Thriller (Suspenseful, Psychological Thriller, Noir Detective)',
+      '🌸 Wholesome & Slice of Life (Cozy & Comforting, Heartfelt, Sweet & Vanilla)',
+      '👑 Royal & High Society (Palace Intrigue, Aristocratic Court Drama, Throne Rivals)',
+      '🐉 Epic Fantasy & Mythology (Magic & Sorcery, Gods & Deities, Dragon Realm)',
+      '🚀 Sci-Fi & Cyberpunk (Futuristic Cyberpunk, Space Opera, AI Romance)',
+      '🐺 Supernatural & Shifters (Alpha Pack, Vampire Clan, Demon/Angel Wars)',
+      '🗡️ Revenge & Anti-Hero (Vengeance Arc, Dark Mastermind, Betrayal & Power)',
+      '🏫 Academy & Campus (Magic Academy, Elite University, Campus Rivalry)',
+      '💋 Mafia & Underworld (Dark Mafia Empire, Crime Syndicate, Obsession)',
+      '🏝️ Isekai & Reincarnation (Transmigration, Reborn as Villainess, LitRPG)',
+      '💍 Arranged Marriage & Forced Proximity (Contract Marriage, Trapped Together)',
+      '🔥 Erotic & Dynamic Roles (Dominant/Submissive, Master/Servant, Bondage)',
+      '⏳ Time Travel & Timelines (Time Loop, Butterfly Effect, Time Paradox)',
+      '🦸 Superhero & Vigilante (Superpowers, Secret Identity, Masked Vigilante)',
+      '⛵ Pirates & High Seas (Pirate Crew, High Seas Adventure, Siren Mythos)',
+      '🎪 Horror & Survival (Supernatural Horror, Zombie Apocalypse, Deadly Game)',
+      'Passionate',
+      'Dark & Steamy',
+    ];
+
+    String selectedTone = story!['tone'] ?? tonesList.first;
+    if (!tonesList.contains(selectedTone)) {
+      tonesList.insert(0, selectedTone);
+    }
+
     // Parse existing nsfw_preferences
     final existingNsfw = story!['nsfw_preferences'] ?? '';
     final nsfwController = TextEditingController(text: existingNsfw);
@@ -1658,9 +1688,9 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             backgroundColor: const Color(0xFF1E1E2C),
             title: const Row(
               children: [
-                Icon(Icons.explicit, color: Colors.pinkAccent),
+                Icon(Icons.palette, color: Colors.amber),
                 SizedBox(width: 8),
-                Text('Story Settings & NSFW Engine', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text('Story Settings & Themes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ],
             ),
             content: SingleChildScrollView(
@@ -1673,6 +1703,15 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   TextField(controller: synopsisController, decoration: const InputDecoration(labelText: 'Synopsis'), maxLines: 3),
                   const SizedBox(height: 8),
                   TextField(controller: genreController, decoration: const InputDecoration(labelText: 'Genre')),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: selectedTone,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '🎭 Story Theme & Mood Preset'),
+                    dropdownColor: const Color(0xFF2C2C3E),
+                    items: tonesList.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: (val) => setDialogState(() => selectedTone = val!),
+                  ),
                   const SizedBox(height: 8),
                   TextField(controller: customRulesController, decoration: const InputDecoration(labelText: 'Custom AI Story Rules'), maxLines: 2),
                   const Divider(color: Colors.white24, height: 24),
@@ -1734,6 +1773,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       'title': titleController.text,
                       'synopsis': synopsisController.text,
                       'genre': genreController.text,
+                      'tone': selectedTone,
                       'custom_rules': customRulesController.text,
                       'nsfw_preferences': combinedNsfw,
                     });

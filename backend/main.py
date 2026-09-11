@@ -682,6 +682,8 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                 story_context += f"--- STORY-SPECIFIC RULES (Overrides Global) ---\n{story.custom_rules}\n-------------------------------------------------\n\n"
             if story.nsfw_preferences:
                 story_context += f"--- NSFW & EROTIC TROPES PREFERENCES ---\n{story.nsfw_preferences}\nYou MUST strictly incorporate these adult narrative dynamics into romantic and intimate interactions.\n----------------------------------------\n\n"
+            if story.tone:
+                story_context += f"--- STORY THEME & NARRATIVE MOOD PRESET ---\nSelected Theme & Mood: {story.tone}\nYou MUST strictly write dialogue, pacing, action, and scene descriptions to honor this exact story theme and atmosphere.\n---------------------------------------------\n\n"
             story_context += f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
             
             # Fetch and inject characters

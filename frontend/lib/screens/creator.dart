@@ -22,11 +22,36 @@ class _CreatorScreenState extends State<CreatorScreen> {
   
   String _selectedGenre = 'Romance';
   String _selectedSubgenre = 'CEO Romance';
-  String _selectedTone = 'Passionate';
+  String _selectedTone = '🎭 Comedy & Banter (Witty Banter, Romantic Comedy, Slapstick & Humor)';
   
   final _genres = ['Romance', 'Erotica', 'Dark Romance', 'Paranormal Romance', 'Contemporary Romance', 'Harem / Reverse Harem', 'Omegaverse', 'Married Life Romance', 'Taboo Romance', 'Cultural/Religious Romance', 'Fantasy', 'Sci-Fi', 'Mystery', 'Thriller', 'Horror', 'Cyberpunk', 'Post-Apocalyptic', 'Slice of Life', 'Historical Fiction', 'Daughter'];
   final _subgenres = ['CEO Romance', 'Enemies to Lovers', 'Fake Dating', 'Grumpy x Sunshine', 'Second Chance Romance', 'Slow Burn', 'Mafia Romance', 'Historical Romance', 'Royal / Aristocracy', 'Family Dynamics', 'Step-Family Taboo', 'Age Gap', 'Teacher / Student', 'Forbidden Romance', 'Mom & Son', 'Brother & Sister', 'Step-Mom', 'Step-Sister', 'Master & Slave', 'BDSM / Submissive', 'Bully Romance', 'Stalker Romance', 'Bodyguard Romance', 'Assassin / Hitman', 'Billionaire Romance', 'Werewolf / Shifter', 'Vampire Romance', 'Demon / Angel', 'Monster Romance', 'Tentacle Romance', 'College Romance', 'Office Romance', 'Friends to Lovers', 'Arranged Marriage', 'Forced Marriage', 'Wife', 'Inter-religion Love', 'Inter-religion Marriage', 'Secret Baby / Pregnancy', 'Polyamory', 'Cuckolding', 'Daughter', 'Father / Daughter'];
-  final _tones = ['Passionate', 'Dark', 'Lighthearted', 'Dramatic', 'Extremely Steamy', 'Taboo & Intense', 'Romantic & Sweet', 'Sweet & Vanilla', 'Comedy & Banter', 'Angsty & Emotional', 'Suspenseful', 'Fluffy & Cute', 'Toxic & Possessive', 'Heartbreaking', 'Sensual & Slow', 'Wholesome', 'Humorous / Comedy', 'Melancholic', 'Obsessive & Yandere', 'Gritty & Realistic', 'Cozy & Comforting', 'Sadistic & Cruel', 'Dark & Twisted', 'Violent & Gore', 'Psychological Thriller', 'Dead Dove: Do Not Eat', 'Enigmatic & Mysterious', 'Action-Packed', 'Epic & Grand', 'Slow & Atmospheric'];
+  final _tones = [
+    '🎭 Comedy & Banter (Witty Banter, Romantic Comedy, Slapstick & Humor)',
+    '⚡ High Action & Adventure (Action-Packed, High-Stakes Battles, Martial Arts)',
+    '❤️‍🔥 Flirty & Flattery (Flirty & Charming, Playful Teasing, Sweet Seduction)',
+    '🖤 Dark & Taboo (Dark Fantasy, Taboo Romance, Gritty Realism, Gothic)',
+    '🕵️ Mystery & Thriller (Suspenseful, Psychological Thriller, Noir Detective)',
+    '🌸 Wholesome & Slice of Life (Cozy & Comforting, Heartfelt, Sweet & Vanilla)',
+    '👑 Royal & High Society (Palace Intrigue, Aristocratic Court Drama, Throne Rivals)',
+    '🐉 Epic Fantasy & Mythology (Magic & Sorcery, Gods & Deities, Dragon Realm)',
+    '🚀 Sci-Fi & Cyberpunk (Futuristic Cyberpunk, Space Opera, AI Romance)',
+    '🐺 Supernatural & Shifters (Alpha Pack, Vampire Clan, Demon/Angel Wars)',
+    '🗡️ Revenge & Anti-Hero (Vengeance Arc, Dark Mastermind, Betrayal & Power)',
+    '🏫 Academy & Campus (Magic Academy, Elite University, Campus Rivalry)',
+    '💋 Mafia & Underworld (Dark Mafia Empire, Crime Syndicate, Obsession)',
+    '🏝️ Isekai & Reincarnation (Transmigration, Reborn as Villainess, LitRPG)',
+    '💍 Arranged Marriage & Forced Proximity (Contract Marriage, Trapped Together)',
+    '🔥 Erotic & Dynamic Roles (Dominant/Submissive, Master/Servant, Bondage)',
+    '⏳ Time Travel & Timelines (Time Loop, Butterfly Effect, Time Paradox)',
+    '🦸 Superhero & Vigilante (Superpowers, Secret Identity, Masked Vigilante)',
+    '⛵ Pirates & High Seas (Pirate Crew, High Seas Adventure, Siren Mythos)',
+    '🎪 Horror & Survival (Supernatural Horror, Zombie Apocalypse, Deadly Game)',
+    'Passionate',
+    'Dark & Steamy',
+    'Lighthearted & Sweet',
+    'Dramatic & Angsty',
+  ];
 
   bool _isSaving = false;
 
