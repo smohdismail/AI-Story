@@ -3,7 +3,8 @@
     <application
         android:label="AI-Story"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name="ai.story.MainActivity"
             android:exported="true"
