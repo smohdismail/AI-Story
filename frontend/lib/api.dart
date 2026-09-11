@@ -12,8 +12,9 @@ class UnauthenticatedException implements Exception {
 class ApiService {
   static const String defaultCloudUrl = 'https://ai-story-mo52.onrender.com/api/v1';
   static const String defaultLocalUrl = 'http://127.0.0.1:8000/api/v1';
+  static const String defaultEmulatorUrl = 'http://10.0.2.2:8000/api/v1';
 
-  static String baseUrl = defaultLocalUrl;
+  static String baseUrl = defaultCloudUrl;
 
   static Future<void> initApiConfig() async {
     final prefs = await SharedPreferences.getInstance();
@@ -21,7 +22,7 @@ class ApiService {
     if (customUrl != null && customUrl.trim().isNotEmpty) {
       baseUrl = customUrl.trim();
     } else {
-      baseUrl = defaultLocalUrl;
+      baseUrl = defaultCloudUrl;
     }
   }
 

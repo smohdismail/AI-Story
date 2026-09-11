@@ -96,17 +96,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   runSpacing: 8,
                   children: [
                     ActionChip(
+                      avatar: const Icon(Icons.cloud, size: 18),
+                      label: const Text('Cloud Server'),
+                      onPressed: () {
+                        _serverUrlController.text = ApiService.defaultCloudUrl;
+                      },
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.phone_android, size: 18),
+                      label: const Text('Emulator (10.0.2.2)'),
+                      onPressed: () {
+                        _serverUrlController.text = ApiService.defaultEmulatorUrl;
+                      },
+                    ),
+                    ActionChip(
                       avatar: const Icon(Icons.computer, size: 18),
                       label: const Text('Local (127.0.0.1)'),
                       onPressed: () {
                         _serverUrlController.text = ApiService.defaultLocalUrl;
-                      },
-                    ),
-                    ActionChip(
-                      avatar: const Icon(Icons.cloud, size: 18),
-                      label: const Text('Cloud (Render)'),
-                      onPressed: () {
-                        _serverUrlController.text = ApiService.defaultCloudUrl;
                       },
                     ),
                   ],
