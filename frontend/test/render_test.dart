@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/screens/edit_chapter.dart';
-import 'package:frontend/screens/zen_reader.dart';
 
 void main() {
   testWidgets('edit chapter renders', (WidgetTester tester) async {

@@ -808,6 +808,46 @@ class ApiService {
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to rewrite paragraph');
   }
+
+  static Future<List<dynamic>> getSocialFeed(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/social-feed'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load social feed');
+  }
+
+  static Future<Map<String, dynamic>> generateSocialPost(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/social-feed/generate'), headers: headers);
+    if (response.statusCode == 200 || response.statusCode == 201) return jsonDecode(response.body);
+    throw Exception('Failed to generate social post');
+  }
+
+  static Future<Map<String, dynamic>> likeSocialPost(String postId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/social-feed/$postId/like'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to like post');
+  }
+
+  static Future<Map<String, dynamic>> commentSocialPost(String postId, String content, {String? authorName}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/social-feed/$postId/comment'),
+      headers: headers,
+      body: jsonEncode({'author_name': authorName ?? 'Reader', 'content': content}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) return jsonDecode(response.body);
+    throw Exception('Failed to comment on post');
+  }
+
+  static Future<Map<String, dynamic>> generateMangaComic(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/chapters/$chapterId/generate-manga'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate manga comic');
+  }
 }
+
 
 

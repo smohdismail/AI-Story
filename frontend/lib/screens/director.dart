@@ -273,7 +273,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
                     '"$selectedText"',
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white90, fontStyle: FontStyle.italic),
+                    style: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
                   ),
                 ),
               ],

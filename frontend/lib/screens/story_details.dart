@@ -606,6 +606,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               tooltip: 'AI Plot & Pacing Analyzer',
               onPressed: _showPlotAnalyzerDialog,
             ),
+            IconButton(
+              icon: const Icon(Icons.phone_android, color: Colors.greenAccent),
+              tooltip: 'Character Social Feed 📱',
+              onPressed: _showSocialFeedDialog,
+            ),
           ],
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -801,6 +806,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.auto_stories, color: Colors.cyanAccent),
+                        tooltip: 'Generate Manga Comic',
+                        onPressed: () => _showMangaComicDialog(chapter),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.palette, color: Colors.purpleAccent),
                         tooltip: 'Illustrate Scene',
@@ -2689,5 +2699,366 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       }
     }
   }
+
+  Future<void> _showSocialFeedDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Loading character social feed...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      List<dynamic> posts = await ApiService.getSocialFeed(widget.storyId);
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF181824),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Container(
+                height: MediaQuery.of(context).size.height * 0.85,
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_android, color: Colors.greenAccent, size: 28),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text('Character Social Feed 📱', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
+                          icon: const Icon(Icons.add_a_photo, size: 16),
+                          label: const Text('New Post'),
+                          onPressed: () async {
+                            try {
+                              final newPost = await ApiService.generateSocialPost(widget.storyId);
+                              posts.insert(0, newPost);
+                              setSheetState(() {});
+                            } catch (e) {
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating post: $e')));
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white70),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white24),
+                    if (posts.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.post_add, color: Colors.grey, size: 48),
+                              const SizedBox(height: 12),
+                              const Text('No character posts yet.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  try {
+                                    final newPost = await ApiService.generateSocialPost(widget.storyId);
+                                    posts.insert(0, newPost);
+                                    setSheetState(() {});
+                                  } catch (e) {
+                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                  }
+                                },
+                                child: const Text('Generate First Post'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: posts.length,
+                          itemBuilder: (context, idx) {
+                            final post = posts[idx];
+                            final charName = post['character_name'] ?? 'Character';
+                            final content = post['content'] ?? '';
+                            final likes = post['likes_count'] ?? 0;
+                            final comments = (post['comments'] as List<dynamic>?) ?? [];
+                            final commentCtrl = TextEditingController();
+
+                            return Card(
+                              color: const Color(0xFF252538),
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          backgroundColor: Colors.pinkAccent,
+                                          child: Text(charName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(charName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                        ),
+                                        TextButton.icon(
+                                          icon: const Icon(Icons.chat_bubble_outline, size: 16, color: Colors.pinkAccent),
+                                          label: const Text('DM', style: TextStyle(color: Colors.pinkAccent)),
+                                          onPressed: () {
+                                            if (post['character_id'] != null) {
+                                              Navigator.pop(ctx);
+                                              context.push('/character_chat/${post['character_id']}', extra: {'characterName': charName});
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(content, style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.4)),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.favorite, color: Colors.pinkAccent),
+                                          onPressed: () async {
+                                            try {
+                                              final res = await ApiService.likeSocialPost(post['id'].toString());
+                                              post['likes_count'] = res['likes_count'];
+                                              setSheetState(() {});
+                                            } catch (_) {}
+                                          },
+                                        ),
+                                        Text('$likes likes', style: const TextStyle(color: Colors.white70)),
+                                        const SizedBox(width: 16),
+                                        const Icon(Icons.mode_comment_outlined, color: Colors.cyanAccent, size: 20),
+                                        const SizedBox(width: 4),
+                                        Text('${comments.length} comments', style: const TextStyle(color: Colors.white70)),
+                                      ],
+                                    ),
+                                    if (comments.isNotEmpty) ...[
+                                      const Divider(color: Colors.white12),
+                                      ...comments.map((c) => Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                        child: RichText(
+                                          text: TextSpan(
+                                            children: [
+                                              TextSpan(text: '${c['author_name']}: ', style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+                                              TextSpan(text: c['content'] ?? '', style: const TextStyle(color: Colors.white70)),
+                                            ],
+                                          ),
+                                        ),
+                                      )),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: commentCtrl,
+                                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                                            decoration: const InputDecoration(
+                                              hintText: 'Add a comment...',
+                                              hintStyle: TextStyle(color: Colors.white38),
+                                              isDense: true,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.send, color: Colors.cyanAccent, size: 20),
+                                          onPressed: () async {
+                                            if (commentCtrl.text.trim().isNotEmpty) {
+                                              try {
+                                                final newComment = await ApiService.commentSocialPost(post['id'].toString(), commentCtrl.text.trim());
+                                                comments.add(newComment);
+                                                commentCtrl.clear();
+                                                setSheetState(() {});
+                                              } catch (e) {
+                                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                              }
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading social feed: $e')));
+      }
+    }
+  }
+
+  Future<void> _showMangaComicDialog(Map<String, dynamic> chapter) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Generating Manga Comic panels...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final res = await ApiService.generateMangaComic(chapter['id'].toString());
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      final title = res['chapter_title'] ?? 'Manga Comic Page';
+      final panels = (res['panels'] as List<dynamic>?) ?? [];
+
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          backgroundColor: const Color(0xFF12121A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 700),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.auto_stories, color: Colors.amber, size: 28),
+                        const SizedBox(width: 8),
+                        Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white70),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (panels.isEmpty)
+                  const Text('No panels generated.', style: TextStyle(color: Colors.grey))
+                else
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.1,
+                            ),
+                            itemCount: panels.length,
+                            itemBuilder: (context, idx) {
+                              final p = panels[idx];
+                              final pNum = p['panel_number'] ?? (idx + 1);
+                              final speaker = p['speaker_name'] ?? 'Narration';
+                              final dialogue = p['dialogue'] ?? '';
+                              final visual = p['visual_description'] ?? '';
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.white38, width: 2),
+                                ),
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(4)),
+                                          child: Text('PANEL $pNum', style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        ),
+                                        Text(speaker, style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Expanded(
+                                      child: Text(
+                                        visual,
+                                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontStyle: FontStyle.italic),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '"$dialogue"',
+                                        style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating manga comic: $e')));
+      }
+    }
+  }
 }
+
 

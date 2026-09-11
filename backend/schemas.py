@@ -290,3 +290,42 @@ class TwistRequest(BaseModel):
     story_id: Optional[UUID4] = None
     twist_type: str = "betrayal"
     context: Optional[str] = ""
+
+class CharacterPostCommentCreate(BaseModel):
+    author_name: Optional[str] = "Reader"
+    content: str
+
+class CharacterPostCommentResponse(BaseModel):
+    id: UUID4
+    post_id: UUID4
+    author_name: str
+    content: str
+    is_ai: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CharacterPostResponse(BaseModel):
+    id: UUID4
+    story_id: UUID4
+    character_id: Optional[UUID4] = None
+    character_name: str
+    content: str
+    image_base64: Optional[str] = None
+    likes_count: int
+    created_at: datetime
+    comments: List[CharacterPostCommentResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+class MangaPanelSchema(BaseModel):
+    panel_number: int
+    speaker_name: str
+    dialogue: str
+    visual_description: str
+    image_prompt: Optional[str] = None
+
+class MangaComicResponse(BaseModel):
+    chapter_title: str
+    panels: List[MangaPanelSchema]
+

@@ -201,3 +201,28 @@ class WorldLocation(Base):
     icon = Column(String, default="location_on")
     assigned_characters_json = Column(Text, nullable=True) # JSON list of character names
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterPost(Base):
+    __tablename__ = "character_posts"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True)
+    character_name = Column(String)
+    content = Column(Text)
+    image_base64 = Column(Text, nullable=True)
+    likes_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    comments = relationship("CharacterPostComment", back_populates="post", cascade="all, delete-orphan")
+
+class CharacterPostComment(Base):
+    __tablename__ = "character_post_comments"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id = Column(Uuid(as_uuid=True), ForeignKey("character_posts.id"))
+    author_name = Column(String)
+    content = Column(Text)
+    is_ai = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    post = relationship("CharacterPost", back_populates="comments")
+

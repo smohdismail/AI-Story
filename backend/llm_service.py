@@ -491,4 +491,69 @@ async def rewrite_paragraph(text: str, action: str, custom_instruction: str = No
         print(f"Error in rewrite_paragraph: {e}")
         return text
 
+async def generate_character_social_posts(character_name: str, personality: str, synopsis: str) -> dict:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an AI generating an in-character social media status update for a fictional character. "
+                "Return a JSON object with keys: "
+                "\"content\" (a 1-3 sentence in-character status update, post, or secret thought), "
+                "\"image_prompt\" (a short visual description prompt to generate a selfie/photo for this post)."
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Character: {character_name}\nPersonality: {personality}\nStory Synopsis: {synopsis}"
+        }
+    ]
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.85,
+        )
+        if response.choices and response.choices[0].message.content:
+            return json.loads(response.choices[0].message.content)
+        return {"content": "Just thinking about today's events...", "image_prompt": f"Anime portrait of {character_name}"}
+    except Exception as e:
+        print(f"Error generating social post: {e}")
+        return {"content": "Reflecting on recent events...", "image_prompt": f"Portrait of {character_name}"}
+
+async def generate_manga_comic_panels(chapter_title: str, chapter_content: str) -> list:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a Manga Artist & Layout Director. Break down the provided chapter into 4 distinct visual comic panels. "
+                "Return a JSON object with key \"panels\" containing a list of 4 objects. Each object must have: "
+                "\"panel_number\" (int 1-4), "
+                "\"speaker_name\" (str), "
+                "\"dialogue\" (1 short punchy line of dialogue or monologue for the speech bubble), "
+                "\"visual_description\" (1-2 sentence description of action and character pose), "
+                "\"image_prompt\" (detailed digital art / manga panel prompt)."
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Chapter Title: {chapter_title}\nChapter Excerpt:\n{chapter_content[:3000]}"
+        }
+    ]
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.8,
+        )
+        if response.choices and response.choices[0].message.content:
+            data = json.loads(response.choices[0].message.content)
+            return data.get("panels", [])
+        return []
+    except Exception as e:
+        print(f"Error generating manga panels: {e}")
+        return []
+
+
 

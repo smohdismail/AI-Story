@@ -1558,3 +1558,83 @@ async def rewrite_paragraph_endpoint(req: schemas.ParagraphRewriteRequest, db: A
     )
     return {"rewritten_text": rewritten}
 
+@app.get("/api/v1/stories/{story_id}/social-feed", response_model=list[schemas.CharacterPostResponse])
+async def get_social_feed(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.CharacterPost)
+        .options(selectinload(models.CharacterPost.comments))
+        .where(models.CharacterPost.story_id == story_id)
+        .order_by(models.CharacterPost.created_at.desc())
+    )
+    return result.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/social-feed/generate", response_model=schemas.CharacterPostResponse)
+async def generate_social_post(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    characters = chars_res.scalars().all()
+    if not characters:
+        raise HTTPException(status_code=400, detail="No characters created for this story yet.")
+        
+    import random
+    char = random.choice(characters)
+    
+    post_data = await llm_service.generate_character_social_posts(char.name, char.personality or "", story.synopsis or "")
+    
+    new_post = models.CharacterPost(
+        story_id=story_id,
+        character_id=char.id,
+        character_name=char.name,
+        content=post_data.get("content", "Enjoying the journey..."),
+        likes_count=random.randint(5, 50)
+    )
+    db.add(new_post)
+    await db.commit()
+    await db.refresh(new_post)
+    
+    res = await db.execute(select(models.CharacterPost).options(selectinload(models.CharacterPost.comments)).where(models.CharacterPost.id == new_post.id))
+    return res.scalars().first()
+
+@app.post("/api/v1/social-feed/{post_id}/like")
+async def like_social_post(post_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    post = await db.get(models.CharacterPost, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    post.likes_count = (post.likes_count or 0) + 1
+    await db.commit()
+    return {"status": "success", "likes_count": post.likes_count}
+
+@app.post("/api/v1/social-feed/{post_id}/comment", response_model=schemas.CharacterPostCommentResponse)
+async def comment_social_post(post_id: uuid.UUID, req: schemas.CharacterPostCommentCreate, db: AsyncSession = Depends(get_db)):
+    post = await db.get(models.CharacterPost, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+        
+    comment = models.CharacterPostComment(
+        post_id=post_id,
+        author_name=req.author_name or "Reader",
+        content=req.content,
+        is_ai=False
+    )
+    db.add(comment)
+    await db.commit()
+    await db.refresh(comment)
+    return comment
+
+@app.post("/api/v1/chapters/{chapter_id}/generate-manga", response_model=schemas.MangaComicResponse)
+async def generate_manga_comic(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+        
+    panels = await llm_service.generate_manga_comic_panels(chapter.title or f"Chapter {chapter.chapter_number}", chapter.content or "")
+    
+    return {
+        "chapter_title": chapter.title or f"Chapter {chapter.chapter_number}",
+        "panels": panels
+    }
+
+
