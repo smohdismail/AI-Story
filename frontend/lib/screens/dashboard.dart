@@ -17,6 +17,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isLoading = true;
   String? errorMessage;
 
+  bool isFolderView = false;
   String? selectedGenre;
   String? selectedSubgenre;
   Map<String, dynamic>? streakInfo;
@@ -105,6 +106,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )
             : null,
         actions: [
+          IconButton(
+            icon: Icon(isFolderView ? Icons.grid_view : Icons.folder_copy, color: Colors.amberAccent),
+            tooltip: isFolderView ? 'Switch to All Stories Grid' : 'Switch to Genre Folders View',
+            onPressed: () {
+              setState(() {
+                isFolderView = !isFolderView;
+                selectedGenre = null;
+                selectedSubgenre = null;
+              });
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.public, color: Colors.cyanAccent),
             tooltip: 'Community Feed',
@@ -204,6 +216,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildBodyContent() {
+    if (!isFolderView) {
+      return _buildStoriesGrid(stories);
+    }
+
     if (selectedGenre == null) {
       // Level 1: Genres
       final genres = stories.map((s) => s['genre'] as String? ?? 'Unknown').toSet().toList();
@@ -226,80 +242,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else {
       // Level 3: Stories within Subgenre
       final subgenreStories = stories.where((s) => s['genre'] == selectedGenre && s['subgenre'] == selectedSubgenre).toList();
-      return GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.7,
-        ),
-        itemCount: subgenreStories.length,
-        itemBuilder: (context, index) {
-          final story = subgenreStories[index];
-          return Card(
-            elevation: 4,
-            child: InkWell(
-              onTap: () async {
-                await context.push('/story/${story['id']}');
-                _loadStories();
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: story['cover_base64'] != null
-                      ? Image.memory(
-                          base64Decode(story['cover_base64']),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                        )
-                      : Container(
-                          color: Colors.deepPurple.shade800,
-                          child: const Icon(Icons.book, size: 64, color: Colors.white54),
-                        ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0, right: 4.0, top: 4.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            story['title'] ?? 'Untitled',
-                            style: Theme.of(context).textTheme.titleMedium,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
-                          tooltip: 'Delete Story',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () => _confirmDeleteStory(story),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text(
-                      story['synopsis'] ?? 'No summary available.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-          );
-        },
-      );
+      return _buildStoriesGrid(subgenreStories);
     }
+  }
+
+  Widget _buildStoriesGrid(List<dynamic> targetStories) {
+    if (targetStories.isEmpty) {
+      return const Center(child: Text("No stories found in this section."));
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.7,
+      ),
+      itemCount: targetStories.length,
+      itemBuilder: (context, index) {
+        final story = targetStories[index];
+        return Card(
+          elevation: 4,
+          child: InkWell(
+            onTap: () async {
+              await context.push('/story/${story['id']}');
+              _loadStories();
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: story['cover_base64'] != null
+                    ? Image.memory(
+                        base64Decode(story['cover_base64']),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      )
+                    : Container(
+                        color: Colors.deepPurple.shade800,
+                        child: const Icon(Icons.book, size: 64, color: Colors.white54),
+                      ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, right: 4.0, top: 4.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          story['title'] ?? 'Untitled',
+                          style: Theme.of(context).textTheme.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                        tooltip: 'Delete Story',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _confirmDeleteStory(story),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(
+                    story['synopsis'] ?? 'No summary available.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (story['genre'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 4.0, top: 2.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${story['genre']}${story['subgenre'] != null ? ' • ${story['subgenre']}' : ''}',
+                        style: const TextStyle(fontSize: 10, color: Colors.amberAccent),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _confirmDeleteStory(Map<String, dynamic> story) async {
