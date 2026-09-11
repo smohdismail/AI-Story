@@ -326,18 +326,29 @@ async def delete_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
     # 2. Delete scene illustrations
     await db.execute(delete(models.SceneIllustration).where(models.SceneIllustration.story_id == story_id))
 
-    # 3. Delete character chats and characters
+    # 3. Delete character posts and comments
+    posts_res = await db.execute(select(models.CharacterPost.id).where(models.CharacterPost.story_id == story_id))
+    post_ids = posts_res.scalars().all()
+    if post_ids:
+        await db.execute(delete(models.CharacterPostComment).where(models.CharacterPostComment.post_id.in_(post_ids)))
+        await db.execute(delete(models.CharacterPost).where(models.CharacterPost.story_id == story_id))
+
+    # 4. Delete character chats, unlocks, relationships, characters
     chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
     char_ids = chars_res.scalars().all()
     if char_ids:
+        await db.execute(delete(models.CharacterUnlock).where(models.CharacterUnlock.character_id.in_(char_ids)))
         await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id.in_(char_ids)))
-        await db.execute(delete(models.Character).where(models.Character.story_id == story_id))
-        
-    # 4. Delete chapters and world items
+    await db.execute(delete(models.CharacterRelationship).where(models.CharacterRelationship.story_id == story_id))
+    await db.execute(delete(models.Character).where(models.Character.story_id == story_id))
+
+    # 5. Delete world locations, public story likes, chapters, world items
+    await db.execute(delete(models.WorldLocation).where(models.WorldLocation.story_id == story_id))
+    await db.execute(delete(models.PublicStoryLike).where(models.PublicStoryLike.story_id == story_id))
     await db.execute(delete(models.Chapter).where(models.Chapter.story_id == story_id))
     await db.execute(delete(models.WorldItem).where(models.WorldItem.story_id == story_id))
     
-    # 5. Delete story itself
+    # 6. Delete story itself
     await db.delete(story)
     await db.commit()
     return {"status": "success", "message": "Story deleted"}
