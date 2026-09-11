@@ -19,7 +19,7 @@ class ApiService {
   static Future<void> initApiConfig() async {
     final prefs = await SharedPreferences.getInstance();
     final customUrl = prefs.getString('custom_api_url');
-    if (customUrl != null && customUrl.trim().isNotEmpty) {
+    if (customUrl != null && customUrl.trim().isNotEmpty && !customUrl.contains('127.0.0.1') && !customUrl.contains('10.0.2.2')) {
       baseUrl = customUrl.trim();
     } else {
       baseUrl = defaultCloudUrl;
