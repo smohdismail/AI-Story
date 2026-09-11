@@ -387,3 +387,65 @@ async def analyze_character_relationships(characters_info: str, story_summary: s
         print(f"Error analyzing character relationships: {e}")
         return []
 
+async def generate_milestone_content(character_info: str, story_summary: str, level: int) -> dict:
+    if level <= 25:
+        prompt_type = "a secret backstory note revealing a deeply personal memory or origin story about yourself that you haven't told anyone else."
+        title = "Secret Backstory Note"
+    elif level <= 50:
+        prompt_type = "a private diary entry reflecting candidly on your growing bond, affection, and hidden feelings toward the user."
+        title = "Private Diary Entry"
+    elif level <= 75:
+        prompt_type = "an intimate 1-on-1 side-quest scenario where you invite the user to a private, highly emotional and romantic setting."
+        title = "Intimate Side-Quest Scenario"
+    else:
+        prompt_type = "an exclusive, deeply devoted hidden chapter scenario dedicated entirely to your bond with the user."
+        title = "Exclusive Devoted Chapter"
+        
+    messages = [
+        {"role": "system", "content": f"You are roleplaying as the following character:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nYou have reached Intimacy Level {level}! Write {prompt_type} Speak directly in character. Be deeply engaging, visceral, and emotional."}
+    ]
+    messages.append({"role": "user", "content": f"Generate your level {level} intimacy milestone content."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=1000,
+        )
+        if response.choices and response.choices[0].message.content:
+            return {"title": title, "content": response.choices[0].message.content.strip()}
+        return {"title": title, "content": "Special content unlocked!"}
+    except Exception as e:
+        print(f"Error generating milestone content: {e}")
+        return {"title": title, "content": "Special content unlocked!"}
+
+async def generate_dramatic_twist(story_context: str, twist_type: str) -> str:
+    if twist_type == "passion":
+        twist_prompt = "Inject an unexpected passionate, romantic, or intense intimate encounter between the characters."
+    elif twist_type == "danger":
+        twist_prompt = "Inject an immediate life-or-death crisis, sudden ambush, or explosive cliffhanger threat."
+    elif twist_type == "secret":
+        twist_prompt = "Inject a shocking secret revelation or hidden motive unveiled right now."
+    else:
+        twist_prompt = "Inject a sudden dramatic betrayal or shocking plot twist by a trusted ally or rival."
+        
+    messages = [
+        {"role": "system", "content": f"You are a master fiction author. Write a high-voltage dramatic scene extension based on the story context provided below.\n\nSTORY CONTEXT:\n{story_context}\n\nINSTRUCTION: {twist_prompt}\nWrite 300-500 words of intense, visceral narrative text directly continuing the story."}
+    ]
+    messages.append({"role": "user", "content": "Inject the dramatic plot twist now!"})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.85,
+            max_tokens=800,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "\n\n[Suddenly, an unexpected twist threw everything into chaos...]\n"
+    except Exception as e:
+        print(f"Error generating twist: {e}")
+        return "\n\n[Suddenly, an unexpected twist threw everything into chaos...]\n"
+

@@ -726,4 +726,63 @@ class ApiService {
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to like story');
   }
+
+  static Future<List<dynamic>> getCharacterUnlocks(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/characters/$characterId/unlocks'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load character unlocks');
+  }
+
+  static Future<Map<String, dynamic>> claimCharacterUnlock(String characterId, int milestoneLevel) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/unlocks/claim'),
+      headers: headers,
+      body: jsonEncode({'milestone_level': milestoneLevel}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) return jsonDecode(response.body);
+    throw Exception('Failed to claim character unlock');
+  }
+
+  static Future<Map<String, dynamic>> generateTwist(String twistType, {String? storyId, String? context}) async {
+    final headers = await _getHeaders();
+    final bodyData = {
+      'twist_type': twistType,
+      if (storyId != null) 'story_id': storyId,
+      if (context != null) 'context': context,
+    };
+    final response = await http.post(
+      Uri.parse('$baseUrl/generate/twist'),
+      headers: headers,
+      body: jsonEncode(bodyData),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate dramatic twist');
+  }
+
+  static Future<List<dynamic>> getWorldLocations(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/locations'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load world locations');
+  }
+
+  static Future<Map<String, dynamic>> createWorldLocation(String storyId, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/locations'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) return jsonDecode(response.body);
+    throw Exception('Failed to create world location');
+  }
+
+  static Future<void> deleteWorldLocation(String storyId, String locationId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(Uri.parse('$baseUrl/stories/$storyId/locations/$locationId'), headers: headers);
+    if (response.statusCode != 200) throw Exception('Failed to delete world location');
+  }
 }
+

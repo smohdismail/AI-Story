@@ -444,6 +444,207 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  Future<void> _showIntimacyMilestones() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Loading intimacy milestones...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final unlocksList = await ApiService.getCharacterUnlocks(widget.characterId);
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      final Map<int, dynamic> claimed = {};
+      for (var u in unlocksList) {
+        if (u['milestone_level'] != null) {
+          claimed[u['milestone_level'] as int] = u;
+        }
+      }
+
+      final milestones = [
+        {'level': 25, 'title': 'Level 25: Secret Backstory Note 🟢', 'type': 'Friendly'},
+        {'level': 50, 'title': 'Level 50: Private Diary Entry 🟣', 'type': 'Close Ally'},
+        {'level': 75, 'title': 'Level 75: Intimate Side-Quest Scenario 🔴', 'type': 'Romantic'},
+        {'level': 100, 'title': 'Level 100: Exclusive Hidden Chapter 👑', 'type': 'Devoted'},
+      ];
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF1E1E2C),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.stars, color: Colors.amber, size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${widget.characterName}\'s Intimacy Unlocks',
+                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white70),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(
+                      value: (_intimacyScore >= 100) ? 1.0 : (_intimacyScore / 100.0),
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.pinkAccent),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Current Intimacy: $_intimacyScore / 100',
+                      style: const TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: milestones.length,
+                        itemBuilder: (context, idx) {
+                          final m = milestones[idx];
+                          final lvl = m['level'] as int;
+                          final isUnlocked = _intimacyScore >= lvl;
+                          final isClaimed = claimed.containsKey(lvl);
+
+                          return Card(
+                            color: Colors.white.withOpacity(0.05),
+                            margin: const EdgeInsets.symmetric(vertical: 6),
+                            child: ListTile(
+                              leading: Icon(
+                                isClaimed
+                                    ? Icons.mark_email_read
+                                    : isUnlocked
+                                        ? Icons.lock_open
+                                        : Icons.lock,
+                                color: isClaimed
+                                    ? Colors.greenAccent
+                                    : isUnlocked
+                                        ? Colors.amber
+                                        : Colors.grey,
+                              ),
+                              title: Text(
+                                m['title'] as String,
+                                style: TextStyle(
+                                  color: isUnlocked ? Colors.white : Colors.white54,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                isClaimed
+                                    ? 'Unlocked: ${claimed[lvl]['title']}'
+                                    : isUnlocked
+                                        ? 'Available to unlock!'
+                                        : 'Reach Intimacy Level $lvl to unlock',
+                                style: TextStyle(color: isUnlocked ? Colors.white70 : Colors.white38),
+                              ),
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isClaimed
+                                      ? Colors.deepPurple
+                                      : isUnlocked
+                                          ? Colors.pinkAccent
+                                          : Colors.grey.shade800,
+                                ),
+                                onPressed: isUnlocked
+                                    ? () async {
+                                        if (isClaimed) {
+                                          _showSecretDialog(claimed[lvl]['title'], claimed[lvl]['unlocked_content']);
+                                        } else {
+                                          try {
+                                            final unlockData = await ApiService.claimCharacterUnlock(widget.characterId, lvl);
+                                            claimed[lvl] = unlockData;
+                                            setSheetState(() {});
+                                            if (mounted) {
+                                              _showSecretDialog(unlockData['title'], unlockData['unlocked_content']);
+                                            }
+                                          } catch (e) {
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error claiming unlock: $e')));
+                                            }
+                                          }
+                                        }
+                                      }
+                                    : null,
+                                child: Text(
+                                  isClaimed ? 'Read' : isUnlocked ? 'Unlock' : 'Locked',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading milestones: $e')));
+      }
+    }
+  }
+
+  void _showSecretDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2C),
+        title: Text(title, style: const TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: MarkdownBody(
+            data: content,
+            styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+              p: const TextStyle(color: Colors.white90, fontSize: 15, height: 1.4),
+            ),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.copy, color: Colors.white70),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: content));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied secret to clipboard!')));
+            },
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(color: Colors.pinkAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -518,16 +719,19 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
           ),
         ),
         actions: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.favorite, color: Colors.pink, size: 20),
-                  const SizedBox(width: 4),
-                  Text('$_intimacyScore', style: const TextStyle(fontSize: 16)),
-                ],
+          GestureDetector(
+            onTap: _showIntimacyMilestones,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.favorite, color: Colors.pink, size: 20),
+                    const SizedBox(width: 4),
+                    Text('$_intimacyScore', style: const TextStyle(fontSize: 16, color: Colors.white)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -535,7 +739,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             icon: const Icon(Icons.more_vert, color: Colors.white),
             tooltip: 'More options',
             onSelected: (String choice) {
-              if (choice == 'Toggle Audio') {
+              if (choice == 'Intimacy Unlocks') {
+                _showIntimacyMilestones();
+              } else if (choice == 'Toggle Audio') {
                 _toggleAudio();
               } else if (choice == 'Toggle Background') {
                 setState(() => _showBackgroundImage = !_showBackgroundImage);
@@ -549,6 +755,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             },
             itemBuilder: (BuildContext context) {
               return [
+                const PopupMenuItem(value: 'Intimacy Unlocks', child: Row(children: [Icon(Icons.stars, color: Colors.pinkAccent), SizedBox(width: 8), Text('Intimacy Unlocks')])),
                 PopupMenuItem(value: 'Toggle Audio', child: Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')),
                 PopupMenuItem(value: 'Toggle Background', child: Text(_showBackgroundImage ? 'Hide Background' : 'Show Background')),
                 if (widget.backgroundImage != null) const PopupMenuItem(value: 'Download Image', child: Text('Download Image')),

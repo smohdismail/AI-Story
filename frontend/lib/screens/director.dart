@@ -123,6 +123,92 @@ class _DirectorScreenState extends State<DirectorScreen> {
     }
   }
 
+  Future<void> _spurTheDrama() async {
+    final twistTypes = [
+      {'label': 'Sudden Betrayal / Secret Revealed', 'type': 'betrayal', 'icon': Icons.flash_on, 'color': Colors.orangeAccent},
+      {'label': 'Passionate / Intimate Encounter', 'type': 'passionate_encounter', 'icon': Icons.favorite, 'color': Colors.pinkAccent},
+      {'label': 'Immediate Danger / Cliffhanger', 'type': 'cliffhanger', 'icon': Icons.warning_amber, 'color': Colors.redAccent},
+      {'label': 'Hidden Past / Shocking Truth', 'type': 'shocking_truth', 'icon': Icons.psychology, 'color': Colors.purpleAccent},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E2C),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.bolt, color: Colors.amber, size: 28),
+                  SizedBox(width: 8),
+                  Text('Spur the Drama: Inject Plot Twist', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text('Select a high-tension trope to immediately inject into your story prompt:', style: TextStyle(color: Colors.white70)),
+              const SizedBox(height: 16),
+              ...twistTypes.map((t) => Card(
+                color: Colors.white.withOpacity(0.05),
+                child: ListTile(
+                  leading: Icon(t['icon'] as IconData, color: t['color'] as Color),
+                  title: Text(t['label'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => const AlertDialog(
+                        content: Row(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(width: 20),
+                            Text('Crafting dramatic twist...'),
+                          ],
+                        ),
+                      ),
+                    );
+
+                    try {
+                      final res = await ApiService.generateTwist(
+                        t['type'] as String,
+                        storyId: widget.storyId,
+                        context: _editorController.text,
+                      );
+                      if (mounted) {
+                        Navigator.pop(context); // Close loading dialog
+                        final twist = res['twist'] ?? '';
+                        setState(() {
+                          if (_promptController.text.isNotEmpty) {
+                            _promptController.text += '\n\n[DRAMATIC TWIST: $twist]';
+                          } else {
+                            _promptController.text = '[DRAMATIC TWIST: $twist]';
+                          }
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Dramatic twist injected into story prompt! 🔥')),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating twist: $e')));
+                      }
+                    }
+                  },
+                ),
+              )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -132,6 +218,13 @@ class _DirectorScreenState extends State<DirectorScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text('Director: Chapter ${widget.currentChapterCount + 1}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bolt, color: Colors.amber),
+            tooltip: 'Spur the Drama (Inject Twist)',
+            onPressed: _spurTheDrama,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -159,7 +252,21 @@ class _DirectorScreenState extends State<DirectorScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Branching Choice / Next Chapter Focus:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Branching Choice / Next Chapter Focus:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    OutlinedButton.icon(
+                      onPressed: _spurTheDrama,
+                      icon: const Icon(Icons.bolt, color: Colors.amber, size: 18),
+                      label: const Text('Spur Drama ⚡', style: TextStyle(color: Colors.amber)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.amber),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _promptController,
@@ -197,4 +304,5 @@ class _DirectorScreenState extends State<DirectorScreen> {
       ),
     );
   }
+
 }

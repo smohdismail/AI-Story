@@ -24,9 +24,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   Map<String, dynamic>? story;
   List<dynamic> characters = [];
   List<dynamic> worldItems = [];
+  List<dynamic> locations = [];
   List<dynamic> illustrations = [];
   String charSearchQuery = '';
   String loreSearchQuery = '';
+  String locationSearchQuery = '';
   bool isLoading = true;
 
   @override
@@ -63,6 +65,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     } catch (e) {
       debugPrint('Error loading world items: $e');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading world items: $e. Did you restart the backend?')));
+    }
+
+    try {
+      final locsData = await ApiService.getWorldLocations(widget.storyId);
+      setState(() => locations = locsData);
+    } catch (e) {
+      debugPrint('Error loading world locations: $e');
     }
 
     try {
@@ -519,7 +528,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -533,6 +542,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               Tab(icon: Icon(Icons.menu_book), text: 'Chapters'),
               Tab(icon: Icon(Icons.people), text: 'Characters'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
+              Tab(icon: Icon(Icons.map), text: 'World Map'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
               Tab(icon: Icon(Icons.palette), text: 'Art Gallery'),
             ],
@@ -2297,5 +2307,271 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ),
       ),
     );
+  Widget _buildWorldMapTab() {
+    final filteredLocs = locations.where((l) {
+      final name = (l['name'] ?? '').toString().toLowerCase();
+      final region = (l['region'] ?? '').toString().toLowerCase();
+      final desc = (l['description'] ?? '').toString().toLowerCase();
+      final q = locationSearchQuery.toLowerCase();
+      return name.contains(q) || region.contains(q) || desc.contains(q);
+    }).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Search locations...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => setState(() => locationSearchQuery = val),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _showAddLocationDialog,
+                icon: const Icon(Icons.add_location_alt),
+                label: const Text('Add Location'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (filteredLocs.isEmpty)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.map_outlined, size: 64, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No world locations added yet.',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: _showAddLocationDialog,
+                      child: const Text('Pin Your First Location'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 400,
+                  childAspectRatio: 1.2,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: filteredLocs.length,
+                itemBuilder: (context, index) {
+                  final loc = filteredLocs[index];
+                  final name = loc['name'] ?? 'Unnamed Location';
+                  final region = loc['region'] ?? 'Unknown Region';
+                  final desc = loc['description'] ?? '';
+                  final tags = (loc['character_tags'] as List<dynamic>?)?.join(', ') ?? '';
+
+                  return Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.deepPurpleAccent),
+                                ),
+                                child: Text(
+                                  region,
+                                  style: const TextStyle(fontSize: 12, color: Colors.deepPurpleAccent, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: Text(
+                              desc,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                          if (tags.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(Icons.people_outline, size: 14, color: Colors.amberAccent),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'Tags: $tags',
+                                    style: const TextStyle(fontSize: 12, color: Colors.amberAccent),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const Divider(),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                tooltip: 'Delete Location',
+                                onPressed: () => _deleteWorldLocation(loc['id'].toString()),
+                              ),
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.bolt, size: 16),
+                                label: const Text('Start Scene Here'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.pinkAccent,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () async {
+                                  final promptText = 'Starting scene at location: "$name" ($region).\nSetting: $desc\nKey characters present: ${tags.isNotEmpty ? tags : "Main cast"}';
+                                  await context.push('/story/${widget.storyId}/director', extra: {
+                                    'chapterCount': chapters.length,
+                                    'initialPrompt': promptText,
+                                  });
+                                  _loadData();
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddLocationDialog() async {
+    final nameCtrl = TextEditingController();
+    final regionCtrl = TextEditingController(text: 'Kingdom / City');
+    final descCtrl = TextEditingController();
+    final tagsCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add World Location'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Location Name', hintText: 'e.g. Castle Ravenhold'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: regionCtrl,
+                decoration: const InputDecoration(labelText: 'Region / Category', hintText: 'e.g. Northern Reaches, Tavern, Dungeon'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: descCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Description & Atmosphere', hintText: 'Atmospheric details, history, sensory descriptions...'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: tagsCtrl,
+                decoration: const InputDecoration(labelText: 'Associated Characters (Comma separated)', hintText: 'e.g. Lord Malakor, Lyra'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save Location'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && nameCtrl.text.trim().isNotEmpty) {
+      try {
+        final tagsList = tagsCtrl.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        final newLoc = await ApiService.createWorldLocation(widget.storyId, {
+          'name': nameCtrl.text.trim(),
+          'region': regionCtrl.text.trim(),
+          'description': descCtrl.text.trim(),
+          'character_tags': tagsList,
+        });
+        setState(() {
+          locations.insert(0, newLoc);
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location pinned to map!')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding location: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteWorldLocation(String locationId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Location'),
+        content: const Text('Are you sure you want to remove this location from the map?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ApiService.deleteWorldLocation(widget.storyId, locationId);
+        setState(() {
+          locations.removeWhere((l) => l['id'].toString() == locationId);
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location deleted.')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting location: $e')));
+      }
+    }
   }
 }
+

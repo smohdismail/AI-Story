@@ -1461,3 +1461,78 @@ async def like_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         
     await db.commit()
     return {"status": "success", "liked": liked, "likes_count": story.likes_count}
+
+@app.get("/api/v1/characters/{character_id}/unlocks", response_model=list[schemas.CharacterUnlockResponse])
+async def get_character_unlocks(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.CharacterUnlock).where(models.CharacterUnlock.character_id == character_id).order_by(models.CharacterUnlock.milestone_level.asc()))
+    return result.scalars().all()
+
+class ClaimUnlockRequest(BaseModel):
+    milestone_level: int
+
+@app.post("/api/v1/characters/{character_id}/unlocks/claim", response_model=schemas.CharacterUnlockResponse)
+async def claim_character_unlock(character_id: uuid.UUID, req: ClaimUnlockRequest, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    existing_res = await db.execute(
+        select(models.CharacterUnlock).where(
+            models.CharacterUnlock.character_id == character_id,
+            models.CharacterUnlock.milestone_level == req.milestone_level
+        )
+    )
+    existing = existing_res.scalars().first()
+    if existing:
+        return existing
+        
+    story_res = await db.execute(select(models.Story).where(models.Story.id == char.story_id))
+    story = story_res.scalars().first()
+    
+    char_info = f"Name: {char.name}\nRole: {char.role}\nPersonality: {char.personality}"
+    generated = await llm_service.generate_milestone_content(char_info, story.synopsis if story else "", req.milestone_level)
+    
+    unlock = models.CharacterUnlock(
+        character_id=character_id,
+        milestone_level=req.milestone_level,
+        title=generated.get("title", f"Milestone Level {req.milestone_level}"),
+        unlocked_content=generated.get("content", "Special content unlocked!")
+    )
+    db.add(unlock)
+    await db.commit()
+    await db.refresh(unlock)
+    return unlock
+
+@app.post("/api/v1/generate/twist")
+async def generate_twist(req: schemas.TwistRequest, db: AsyncSession = Depends(get_db)):
+    context_str = req.context or ""
+    if req.story_id:
+        story = await db.get(models.Story, req.story_id)
+        if story:
+            context_str += f"\nGenre: {story.genre}, Title: {story.title}, Synopsis: {story.synopsis}"
+            
+    twist_text = await llm_service.generate_dramatic_twist(context_str, req.twist_type)
+    return {"twist": twist_text}
+
+@app.get("/api/v1/stories/{story_id}/locations", response_model=list[schemas.WorldLocationResponse])
+async def get_world_locations(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.WorldLocation).where(models.WorldLocation.story_id == story_id).order_by(models.WorldLocation.created_at.desc()))
+    return result.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/locations", response_model=schemas.WorldLocationResponse)
+async def create_world_location(story_id: uuid.UUID, loc: schemas.WorldLocationCreate, db: AsyncSession = Depends(get_db)):
+    db_loc = models.WorldLocation(**loc.model_dump(), story_id=story_id)
+    db.add(db_loc)
+    await db.commit()
+    await db.refresh(db_loc)
+    return db_loc
+
+@app.delete("/api/v1/stories/{story_id}/locations/{location_id}")
+async def delete_world_location(story_id: uuid.UUID, location_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.WorldLocation).where(models.WorldLocation.id == location_id, models.WorldLocation.story_id == story_id))
+    loc = result.scalars().first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    await db.delete(loc)
+    await db.commit()
+    return {"status": "success"}

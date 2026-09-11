@@ -180,3 +180,23 @@ class PublicStoryLike(Base):
     story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
     user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterUnlock(Base):
+    __tablename__ = "character_unlocks"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    milestone_level = Column(Integer) # 25, 50, 75, 100
+    title = Column(String)
+    unlocked_content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class WorldLocation(Base):
+    __tablename__ = "world_locations"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    name = Column(String)
+    category = Column(String) # e.g. Tavern, Citadel, Forest, Bedroom
+    description = Column(Text)
+    icon = Column(String, default="location_on")
+    assigned_characters_json = Column(Text, nullable=True) # JSON list of character names
+    created_at = Column(DateTime, default=datetime.utcnow)

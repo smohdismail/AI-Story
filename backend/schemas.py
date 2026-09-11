@@ -249,3 +249,35 @@ class SceneIllustrationResponse(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+class CharacterUnlockResponse(BaseModel):
+    id: UUID4
+    character_id: UUID4
+    milestone_level: int
+    title: str
+    unlocked_content: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class WorldLocationBase(BaseModel):
+    name: str
+    category: Optional[str] = "General"
+    description: Optional[str] = None
+    icon: Optional[str] = "location_on"
+    assigned_characters_json: Optional[str] = None
+
+class WorldLocationCreate(WorldLocationBase):
+    pass
+
+class WorldLocationResponse(WorldLocationBase):
+    id: UUID4
+    story_id: UUID4
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TwistRequest(BaseModel):
+    story_id: Optional[UUID4] = None
+    twist_type: str = "betrayal"
+    context: Optional[str] = ""
