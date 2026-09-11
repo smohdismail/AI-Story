@@ -664,6 +664,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildChaptersTab(),
             _buildCharactersTab(),
             _buildWorldTab(),
+            _buildWorldMapTab(),
             _buildUserPersonaTab(),
             _buildArtGalleryTab(),
           ],
@@ -2307,6 +2308,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ),
       ),
     );
+  }
+
   Widget _buildWorldMapTab() {
     final filteredLocs = locations.where((l) {
       final name = (l['name'] ?? '').toString().toLowerCase();
