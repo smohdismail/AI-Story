@@ -10,3 +10,4 @@ backend/__pycache__/
 backend/.env
 
 # Flutter / Frontend is handled by its own .gitignore in frontend/
+*.apk
