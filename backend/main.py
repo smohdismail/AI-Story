@@ -149,10 +149,14 @@ async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db))
 
 @app.post("/api/v1/auth/login", response_model=schemas.Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(models.User).where(models.User.username == form_data.username))
+    result = await db.execute(select(models.User).where(or_(models.User.username == form_data.username, models.User.email == form_data.username)))
     user = result.scalars().first()
-    if not user or not auth.verify_password(form_data.password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    if not user:
+        raise HTTPException(status_code=400, detail="User account not found.")
+    if not user.password_hash:
+        raise HTTPException(status_code=400, detail="This account was created with Google. Please tap 'Sign in with Google'.")
+    if not auth.verify_password(form_data.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect password.")
     
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
