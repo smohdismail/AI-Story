@@ -19,9 +19,11 @@ import 'screens/auth.dart';
 import 'theme_provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'api.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiService.initApiConfig();
   final prefs = await SharedPreferences.getInstance();
   final hasToken = prefs.getString('token') != null;
 

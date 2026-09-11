@@ -15,6 +15,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> stories = [];
   bool isLoading = true;
+  String? errorMessage;
 
   String? selectedGenre;
   String? selectedSubgenre;
@@ -28,24 +29,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadData() async {
     final info = await StreakService.getStreakInfo();
-    setState(() {
-      streakInfo = info;
-    });
+    if (mounted) {
+      setState(() {
+        streakInfo = info;
+      });
+    }
     _loadStories();
   }
 
   Future<void> _loadStories() async {
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+    }
     try {
       final data = await ApiService.getStories();
-      setState(() {
-        stories = data;
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          stories = data;
+          isLoading = false;
+          errorMessage = null;
+        });
+      }
+    } on UnauthenticatedException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please log in again.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        context.go('/auth');
+      }
     } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-      print('Error loading stories: $e');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     }
   }
 
@@ -114,17 +138,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (streakInfo != null) _buildStreakBanner(),
-          Expanded(
-            child: isLoading 
-              ? const Center(child: CircularProgressIndicator())
-              : stories.isEmpty 
-                ? const Center(child: Text("No stories yet. Click + to create one."))
-                : _buildBodyContent(),
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _loadStories,
+        child: Column(
+          children: [
+            if (streakInfo != null) _buildStreakBanner(),
+            Expanded(
+              child: isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : errorMessage != null && stories.isEmpty
+                  ? _buildErrorView()
+                  : stories.isEmpty 
+                    ? const Center(child: Text("No stories yet. Click + to create one."))
+                    : _buildBodyContent(),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
@@ -330,7 +359,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         );
-      },
+  Widget _buildErrorView() {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.cloud_off, size: 64, color: Colors.orangeAccent),
+            const SizedBox(height: 16),
+            const Text(
+              'Failed to Load Stories',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage ?? 'Unable to connect to backend server.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _loadStories();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.login),
+                  label: const Text('Re-login'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () async {
+                await context.push('/settings');
+                _loadStories();
+              },
+              icon: const Icon(Icons.settings),
+              label: const Text('Check Server Settings'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

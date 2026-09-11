@@ -2,9 +2,42 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+class UnauthenticatedException implements Exception {
+  final String message;
+  UnauthenticatedException([this.message = 'Session expired or unauthorized']);
+  @override
+  String toString() => message;
+}
+
 class ApiService {
-  // Use the cloud backend URL
-  static const String baseUrl = 'https://ai-story-mo52.onrender.com/api/v1';
+  static const String defaultCloudUrl = 'https://ai-story-mo52.onrender.com/api/v1';
+  static const String defaultLocalUrl = 'http://127.0.0.1:8000/api/v1';
+
+  static String baseUrl = defaultLocalUrl;
+
+  static Future<void> initApiConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final customUrl = prefs.getString('custom_api_url');
+    if (customUrl != null && customUrl.trim().isNotEmpty) {
+      baseUrl = customUrl.trim();
+    } else {
+      baseUrl = defaultLocalUrl;
+    }
+  }
+
+  static Future<void> setBaseUrl(String url) async {
+    baseUrl = url.trim();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('custom_api_url', url.trim());
+  }
+
+  static Future<void> _checkStatus(http.Response response) async {
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token');
+      throw UnauthenticatedException('Session expired. Please log in again.');
+    }
+  }
 
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -113,11 +146,12 @@ class ApiService {
 
   static Future<List<dynamic>> getStories() async {
     final headers = await _getHeaders();
-    final response = await http.get(Uri.parse('$baseUrl/stories'), headers: headers);
+    final response = await http.get(Uri.parse('$baseUrl/stories'), headers: headers).timeout(const Duration(seconds: 15));
+    await _checkStatus(response);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to load stories');
+      throw Exception('Failed to load stories (${response.statusCode})');
     }
   }
 
