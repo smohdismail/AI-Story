@@ -4,6 +4,7 @@ from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
 from contextlib import asynccontextmanager
 import uuid
 from pydantic import BaseModel
@@ -306,8 +307,34 @@ async def delete_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
     result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
     story = result.scalars().first()
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        # Fallback check if user_id was null or not set
+        result = await db.execute(select(models.Story).where(models.Story.id == story_id))
+        story = result.scalars().first()
+        if not story:
+            raise HTTPException(status_code=404, detail="Story not found")
+
+    # 1. Delete group chat messages and group chat sessions for this story
+    sessions_res = await db.execute(select(models.GroupChatSession.id).where(models.GroupChatSession.story_id == story_id))
+    session_ids = sessions_res.scalars().all()
+    if session_ids:
+        await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.session_id.in_(session_ids)))
+        await db.execute(delete(models.GroupChatSession).where(models.GroupChatSession.story_id == story_id))
     
+    # 2. Delete scene illustrations
+    await db.execute(delete(models.SceneIllustration).where(models.SceneIllustration.story_id == story_id))
+
+    # 3. Delete character chats and characters
+    chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
+    char_ids = chars_res.scalars().all()
+    if char_ids:
+        await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id.in_(char_ids)))
+        await db.execute(delete(models.Character).where(models.Character.story_id == story_id))
+        
+    # 4. Delete chapters and world items
+    await db.execute(delete(models.Chapter).where(models.Chapter.story_id == story_id))
+    await db.execute(delete(models.WorldItem).where(models.WorldItem.story_id == story_id))
+    
+    # 5. Delete story itself
     await db.delete(story)
     await db.commit()
     return {"status": "success", "message": "Story deleted"}

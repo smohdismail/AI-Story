@@ -63,6 +63,7 @@ class Story(Base):
     chapters = relationship("Chapter", back_populates="story", cascade="all, delete-orphan")
     world_items = relationship("WorldItem", back_populates="story", cascade="all, delete-orphan")
     illustrations = relationship("SceneIllustration", back_populates="story", cascade="all, delete-orphan")
+    group_chats = relationship("GroupChatSession", back_populates="story", cascade="all, delete-orphan")
 
 class Character(Base):
     __tablename__ = "characters"
@@ -127,7 +128,7 @@ class GroupChatSession(Base):
     story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    story = relationship("Story")
+    story = relationship("Story", back_populates="group_chats")
     messages = relationship("GroupChatMessage", back_populates="session", cascade="all, delete-orphan")
 
 class GroupChatMessage(Base):
