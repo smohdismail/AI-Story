@@ -207,6 +207,7 @@ class ChatRequest(BaseModel):
 
 class ImageGenRequest(BaseModel):
     prompt: str
+    style: Optional[str] = "photorealistic"
 
 class ImageGenResponse(BaseModel):
     base64_image: str
@@ -248,6 +249,7 @@ class GroupChatMessageResponse(GroupChatMessageBase):
 class IllustrateSceneRequest(BaseModel):
     chapter_id: Optional[UUID4] = None
     custom_prompt: Optional[str] = None
+    style: Optional[str] = "photorealistic"
 
 class SceneIllustrationResponse(BaseModel):
     id: UUID4

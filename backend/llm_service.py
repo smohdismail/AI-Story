@@ -225,6 +225,42 @@ async def continue_chat(character_info: str, story_summary: str, world_info: str
         print(f"Error continuing chat: {e}")
         return "*could not continue*"
 
+async def generate_chapter_choices(chapter_content: str) -> list[str]:
+    messages = [
+        {"role": "system", "content": "You are a master interactive story architect. Read the provided chapter content and generate exactly 3 distinct, compelling, high-stakes narrative choices for what the reader/protagonist can choose to do next. Each choice must be 1 short sentence starting with a clear action (e.g. 'Choice A: Accompany her to the grand banquet', 'Choice B: Secretly investigate the locked basement', 'Choice C: Confront the mysterious stranger'). Return strictly a JSON array of 3 strings."}
+    ]
+    messages.append({"role": "user", "content": f"CHAPTER CONTENT:\n{chapter_content[-3000:]}\n\nGenerate 3 narrative choices for the next chapter."})
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=250,
+        )
+        import json
+        if response.choices and response.choices[0].message.content:
+            text = response.choices[0].message.content.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
+            if text.endswith('```'): text = text[:-3]
+            text = text.strip()
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed[:3]]
+        return [
+            "Choice A: Continue down the main path",
+            "Choice B: Investigate the unexpected sound",
+            "Choice C: Speak directly to your companion"
+        ]
+    except Exception as e:
+        print(f"Error generating choices: {e}")
+        return [
+            "Choice A: Continue down the main path",
+            "Choice B: Investigate the unexpected sound",
+            "Choice C: Speak directly to your companion"
+        ]
+
 async def generate_chat_suggestions(character_info: str, chat_history: str) -> list[str]:
     messages = [
         {"role": "system", "content": "You are an AI assistant helping a user roleplay. Based on the character they are talking to and the chat history, provide exactly 3 short, distinct suggestions for what the USER (the person talking to the character) could say next. The suggestions MUST be written from the USER's perspective. For example, if the character asks a question, the suggestions should be possible answers the user could give. Use asterisks for user actions like *I smile at you*. Format your response strictly as a JSON array of 3 strings."}

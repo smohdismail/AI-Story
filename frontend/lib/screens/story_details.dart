@@ -695,6 +695,83 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     }
   }
 
+  void _illustrateChapterScene(Map<String, dynamic> chapter) async {
+    String selectedStyle = 'photorealistic';
+    final customPromptController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.palette, color: Colors.purpleAccent),
+              SizedBox(width: 8),
+              Text('Multi-Style Art Studio'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Chapter: ${chapter['title'] ?? 'Chapter ' + chapter['chapter_number'].toString()}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              const Text('Select Visual Art Style:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: selectedStyle,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: 'photorealistic', child: Text('📸 Photorealistic')),
+                  DropdownMenuItem(value: 'anime', child: Text('🎨 Anime / Manga')),
+                  DropdownMenuItem(value: 'dark_fantasy', child: Text('🏰 Dark Fantasy')),
+                  DropdownMenuItem(value: 'cyberpunk', child: Text('🏙️ Cyberpunk')),
+                  DropdownMenuItem(value: 'oil_painting', child: Text('🖼️ Classic Oil Painting')),
+                  DropdownMenuItem(value: '3d_render', child: Text('🎬 3D Render (Unreal 5)')),
+                  DropdownMenuItem(value: 'comic_book', child: Text('💥 Comic Book Style')),
+                ],
+                onChanged: (val) => setDialogState(() => selectedStyle = val ?? 'photorealistic'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: customPromptController,
+                decoration: const InputDecoration(
+                  labelText: 'Custom Prompt (Optional)',
+                  hintText: 'Describe specific scene actions or mood...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Generate Scene Illustration'),
+              onPressed: () => Navigator.pop(context, true),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Generating scene illustration...')));
+      try {
+        await ApiService.illustrateScene(
+          widget.storyId,
+          chapterId: chapter['id'],
+          customPrompt: customPromptController.text,
+          style: selectedStyle,
+        );
+        _loadData();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Illustration generated successfully!')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -2413,65 +2490,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     }
   }
 
-  Future<void> _illustrateChapterScene(Map<String, dynamic> chapter) async {
-    final customPromptCtrl = TextEditingController();
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(chapter['chapter_number'] != null ? 'Illustrate Chapter ${chapter['chapter_number']}' : 'Illustrate Story Scene'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Generate AI visual novel artwork for a scene in this story.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: customPromptCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Custom Art Prompt (Optional)',
-                hintText: 'Leave empty for AI auto-scene generation',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.auto_awesome),
-            label: const Text('Paint Scene'),
-          ),
-        ],
-      ),
-    );
 
-    if (confirm == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Painting scene artwork with AI... Please wait')),
-        );
-      }
-      try {
-        await ApiService.illustrateScene(
-          widget.storyId,
-          chapterId: chapter['id'],
-          customPrompt: customPromptCtrl.text.trim(),
-        );
-        _loadData();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Scene illustrated! Added to Art Gallery tab.')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error illustrating scene: $e')),
-          );
-        }
-      }
-    }
-  }
 
   Widget _buildArtGalleryTab() {
     if (illustrations.isEmpty) {

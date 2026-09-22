@@ -289,7 +289,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> illustrateScene(String storyId, {String? chapterId, String? customPrompt}) async {
+  static Future<Map<String, dynamic>> illustrateScene(String storyId, {String? chapterId, String? customPrompt, String style = "photorealistic"}) async {
     final headers = await _getHeaders();
     final response = await http.post(
       Uri.parse('$baseUrl/stories/$storyId/illustrate_scene'),
@@ -297,6 +297,7 @@ class ApiService {
       body: jsonEncode({
         if (chapterId != null) 'chapter_id': chapterId,
         if (customPrompt != null && customPrompt.isNotEmpty) 'custom_prompt': customPrompt,
+        'style': style,
       }),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -434,12 +435,12 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> generateImage(String prompt) async {
+  static Future<Map<String, dynamic>> generateImage(String prompt, {String style = "photorealistic"}) async {
     final headers = await _getHeaders();
     final response = await http.post(
       Uri.parse('$baseUrl/generate-image'),
       headers: headers,
-      body: jsonEncode({'prompt': prompt}),
+      body: jsonEncode({'prompt': prompt, 'style': style}),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);

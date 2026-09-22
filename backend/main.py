@@ -161,8 +161,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
+try:
+    from google.oauth2 import id_token
+    from google.auth.transport import requests as google_requests
+except ImportError:
+    id_token = None
+    google_requests = None
 
 @app.post("/api/v1/auth/google", response_model=schemas.Token)
 async def google_login(request: schemas.GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
@@ -367,18 +371,36 @@ async def illustrate_scene(story_id: uuid.UUID, request: schemas.IllustrateScene
         if chap:
             caption = f"Chapter {chap.chapter_number}: {chap.title}"
             if not prompt:
-                prompt = f"Digital artwork illustration of a climax scene in a story. Genre: {story.genre}, Tone: {story.tone}. Scene: {chap.summary or chap.content[:500]}"
+                prompt = f"Illustration of a scene in a story. Genre: {story.genre}, Tone: {story.tone}. Scene: {chap.summary or chap.content[:500]}"
     
     if not prompt:
-        prompt = f"Digital artwork illustration of a dramatic scene. Title: {story.title}, Genre: {story.genre}, Synopsis: {story.synopsis}"
+        prompt = f"Illustration of a scene. Title: {story.title}, Genre: {story.genre}, Synopsis: {story.synopsis}"
     
     if not caption:
         caption = story.title
-        
-    raw_b64 = image_service.generate_image_pollinations(prompt)
-    if not raw_b64:
-        raise HTTPException(status_code=500, detail="Failed to generate scene illustration")
-        
+
+    style_modifiers = {
+        "photorealistic": ", hyper realistic photograph, 100% real human, natural skin texture, masterpiece, 8k resolution.",
+        "anime": ", high quality anime artwork, manga illustration, vibrant colors, detailed line art, masterpiece.",
+        "dark_fantasy": ", dark fantasy oil painting, moody dramatic lighting, intricate details, gothic aesthetic.",
+        "cyberpunk": ", cyberpunk aesthetic, neon lighting, futuristic tech, rainy city night, vivid glowing neon colors.",
+        "oil_painting": ", classic oil painting on canvas, visible brushstrokes, rich textures, fine art masterpiece.",
+        "3d_render": ", 3D digital render, octane render, unreal engine 5, ray tracing, smooth cinematic lighting.",
+        "comic_book": ", classic american comic book art style, bold ink lines, vibrant comic colors."
+    }
+    requested_style = (request.style or "photorealistic").lower()
+    style_modifier = style_modifiers.get(requested_style, style_modifiers["photorealistic"])
+
+    prompt_encoded = urllib.parse.quote(prompt + style_modifier)
+    url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=768&height=1024&nologo=true&model=flux"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            image_data = response.read()
+            raw_b64 = base64.b64encode(image_data).decode('utf-8')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate scene illustration: {e}")
+
     img_url = upload_avatar_to_supabase(raw_b64)
     
     illustration = models.SceneIllustration(
@@ -809,7 +831,19 @@ import base64
 
 @app.post("/api/v1/generate-image", response_model=schemas.ImageGenResponse)
 async def generate_image(request: schemas.ImageGenRequest):
-    prompt_encoded = urllib.parse.quote(request.prompt + ", hyper realistic photograph, 100% real human, natural skin texture, masterpiece, full body shot from head to toe, wide angle, standing. NO plastic, NO doll skin, NO 3d render.")
+    style_modifiers = {
+        "photorealistic": ", hyper realistic photograph, 100% real human, natural skin texture, masterpiece, 8k resolution, professional photography.",
+        "anime": ", high quality anime artwork, manga illustration, vibrant colors, detailed line art, masterpiece, studio ghibli style.",
+        "dark_fantasy": ", dark fantasy oil painting, moody dramatic lighting, intricate details, gothic aesthetic, epic digital art masterpiece.",
+        "cyberpunk": ", cyberpunk aesthetic, neon lighting, futuristic tech, rainy city night, vivid glowing neon colors, highly detailed.",
+        "oil_painting": ", classic oil painting on canvas, visible brushstrokes, rich textures, fine art masterpiece, classical art style.",
+        "3d_render": ", 3D digital render, octane render, unreal engine 5, ray tracing, smooth cinematic lighting.",
+        "comic_book": ", classic american comic book art style, bold ink lines, vibrant comic colors, dynamic action framing."
+    }
+    requested_style = (request.style or "photorealistic").lower()
+    style_modifier = style_modifiers.get(requested_style, style_modifiers["photorealistic"])
+
+    prompt_encoded = urllib.parse.quote(request.prompt + style_modifier)
     url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=768&height=1024&nologo=true&model=flux"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
