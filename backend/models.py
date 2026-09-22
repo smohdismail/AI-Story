@@ -53,6 +53,7 @@ class Story(Base):
     is_published = Column(Boolean, default=False)
     likes_count = Column(Integer, default=0)
     nsfw_preferences = Column(Text, default="")
+    intimacy_level = Column(String, default="explicit")
     
     # Story-specific user persona
     user_persona_name = Column(String, nullable=True)

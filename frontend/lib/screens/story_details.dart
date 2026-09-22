@@ -1943,6 +1943,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     String romancePacing = 'Slow Burn';
     String dynamicRole = 'Balanced';
     String sensoryDetail = 'High Sensual Focus';
+    String intimacyLevel = story!['intimacy_level'] ?? 'explicit';
+
+    final intimacyLabels = {
+      'mild': '🌸 Mild Romance',
+      'passionate': '🔥 Passionate & Sensual',
+      'explicit': '🔞 Explicit Uncensored',
+    };
 
     showDialog(
       context: context,
@@ -1985,6 +1992,15 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       SizedBox(width: 6),
                       Text('🔞 NSFW & Erotic Trope Preferences', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: intimacyLevel,
+                    decoration: const InputDecoration(labelText: '🔥 Intimacy & Heat Intensity Slider / Setting'),
+                    dropdownColor: const Color(0xFF2C2C3E),
+                    items: intimacyLabels.entries
+                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                    onChanged: (val) => setDialogState(() => intimacyLevel = val!),
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
@@ -2040,6 +2056,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       'tone': selectedTone,
                       'custom_rules': customRulesController.text,
                       'nsfw_preferences': combinedNsfw,
+                      'intimacy_level': intimacyLevel,
                     });
                     if (mounted) Navigator.pop(context);
                     _loadData(); // Refresh UI

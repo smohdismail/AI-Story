@@ -74,6 +74,7 @@ class StoryBase(BaseModel):
     is_published: Optional[bool] = False
     likes_count: Optional[int] = 0
     nsfw_preferences: Optional[str] = None
+    intimacy_level: Optional[str] = "explicit"
 
 class StoryCreate(StoryBase):
     pass
@@ -97,6 +98,7 @@ class StoryUpdate(BaseModel):
     is_published: Optional[bool] = None
     likes_count: Optional[int] = None
     nsfw_preferences: Optional[str] = None
+    intimacy_level: Optional[str] = None
 
 class ParagraphRewriteRequest(BaseModel):
     text: str

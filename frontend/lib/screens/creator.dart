@@ -53,6 +53,14 @@ class _CreatorScreenState extends State<CreatorScreen> {
     'Dramatic & Angsty',
   ];
 
+  String _selectedIntimacy = 'explicit';
+
+  final _intimacyOptions = [
+    {'value': 'mild', 'label': '🌸 Mild Romance (Sweet & Flirty, No Explicit Scenes)'},
+    {'value': 'passionate', 'label': '🔥 Passionate & Sensual (Deep Heat, Intense Touch & Kisses)'},
+    {'value': 'explicit', 'label': '🔞 Explicit Uncensored (Raw Adult Passion, Vocalizations & Realism)'},
+  ];
+
   bool _isSaving = false;
 
   Future<void> _createStory() async {
@@ -64,6 +72,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
         'genre': _selectedGenre,
         'subgenre': _selectedSubgenre,
         'tone': _selectedTone,
+        'intimacy_level': _selectedIntimacy,
       };
       
       if (_personaNameController.text.trim().isNotEmpty) {
@@ -139,6 +148,14 @@ class _CreatorScreenState extends State<CreatorScreen> {
                   decoration: const InputDecoration(labelText: 'Tone / Emotional Intensity', border: OutlineInputBorder()),
                   items: _tones.map((g) => DropdownMenuItem(value: g, child: Text(g, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
                   onChanged: (v) => setState(() => _selectedTone = v!),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedIntimacy,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '🔥 Intimacy & Heat Intensity Level', border: OutlineInputBorder()),
+                  items: _intimacyOptions.map((opt) => DropdownMenuItem(value: opt['value']!, child: Text(opt['label']!, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
+                  onChanged: (v) => setState(() => _selectedIntimacy = v!),
                 ),
                 const SizedBox(height: 24),
                 Card(

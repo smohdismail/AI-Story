@@ -454,7 +454,8 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         user_persona_age=original_story.user_persona_age,
         user_persona_appearance=original_story.user_persona_appearance,
         user_persona_personality=original_story.user_persona_personality,
-        user_persona_backstory=original_story.user_persona_backstory
+        user_persona_backstory=original_story.user_persona_backstory,
+        intimacy_level=original_story.intimacy_level
     )
     db.add(new_story)
     await db.commit()
@@ -717,6 +718,16 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                 story_context += f"--- STORY-SPECIFIC RULES (Overrides Global) ---\n{story.custom_rules}\n-------------------------------------------------\n\n"
             if story.nsfw_preferences:
                 story_context += f"--- NSFW & EROTIC TROPES PREFERENCES ---\n{story.nsfw_preferences}\nYou MUST strictly incorporate these adult narrative dynamics into romantic and intimate interactions.\n----------------------------------------\n\n"
+            
+            intimacy_lvl = (story.intimacy_level or 'explicit').lower()
+            if intimacy_lvl == 'mild':
+                intimacy_guide = "INTIMACY LEVEL - MILD ROMANCE:\nFocus on sweet emotional warmth, subtle flirting, soft touching, and romantic tension. Keep physical intimacy tasteful, avoiding explicit sexual details."
+            elif intimacy_lvl == 'passionate':
+                intimacy_guide = "INTIMACY LEVEL - PASSIONATE & SENSUAL:\nWrite intense physical chemistry, passionate kissing, sensual touching, breathless embraces, and deep romantic heat with rich emotional and physical detail."
+            else:
+                intimacy_guide = "INTIMACY LEVEL - EXPLICIT UNCENSORED:\nCompletely uncensored, explicit adult intimacy. Include raw, unfiltered physical passion, realistic character vocalizations (moaning, gasping, groaning, screaming, laughing), detailed physical touch, and intense sensory realism."
+            story_context += f"--- INTIMACY & HEAT INTENSITY SETTING ---\n{intimacy_guide}\n------------------------------------------\n\n"
+
             if story.tone:
                 story_context += f"--- STORY THEME & NARRATIVE MOOD PRESET ---\nSelected Theme & Mood: {story.tone}\nYou MUST strictly write dialogue, pacing, action, and scene descriptions to honor this exact story theme and atmosphere.\n---------------------------------------------\n\n"
             story_context += f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
