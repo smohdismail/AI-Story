@@ -525,6 +525,176 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     );
   }
 
+  void _showAiSuiteBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, color: Colors.purpleAccent),
+                      const SizedBox(width: 10),
+                      Text('AI Story Tools', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.account_tree, color: Colors.cyanAccent),
+                  title: const Text('Interactive Story Tree'),
+                  subtitle: const Text('Visualize choices and chapter flowcharts'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showStoryTreeDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.hub, color: Colors.pinkAccent),
+                  title: const Text('Character Relationship Matrix'),
+                  subtitle: const Text('View dynamics & affection scores'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showRelationshipMatrixDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.analytics, color: Colors.purpleAccent),
+                  title: const Text('AI Plot & Pacing Analyzer'),
+                  subtitle: const Text('Scan plot holes & pacing consistency'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showPlotAnalyzerDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.phone_android, color: Colors.greenAccent),
+                  title: const Text('Character Social Feed'),
+                  subtitle: const Text('In-character status updates and posts'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showSocialFeedDialog();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showExportBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.ios_share, color: Colors.cyanAccent),
+                      const SizedBox(width: 10),
+                      Text('Export Story', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.book, color: Colors.amber),
+                  title: const Text('Export as EPUB'),
+                  subtitle: const Text('Download e-book format for e-readers'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Generating EPUB...')),
+                    );
+                    final bytes = await ApiService.downloadEpub(widget.storyId);
+                    if (bytes != null) {
+                      final dir = await getApplicationDocumentsDirectory();
+                      final file = File('${dir.path}/${story!['title']}.epub');
+                      await file.writeAsBytes(bytes);
+                      await Share.shareXFiles([XFile(file.path)]);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to generate EPUB')),
+                      );
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                  title: const Text('Export as PDF'),
+                  subtitle: const Text('Generate printable PDF document with illustrations'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Generating PDF...')),
+                    );
+                    try {
+                      await PdfExport.exportAndSharePdf(story!, characters, chapters);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error generating PDF: $e')),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openZenReader(Map<String, dynamic> chapter) {
+    String? bgImage;
+    if (characters.isNotEmpty) {
+      try {
+        bgImage = characters.firstWhere((c) => c['avatar_base64'] != null)['avatar_base64'];
+      } catch (_) {}
+    }
+    context.push('/zen_reader', extra: {
+      'title': chapter['title'] ?? 'Chapter ${chapter['chapter_number']}',
+      'content': chapter['content'] ?? '',
+      'backgroundImage': bgImage,
+      'storyId': widget.storyId,
+      'chapterId': chapter['id'],
+      'choicesJson': chapter['choices_json'],
+      'chapterCount': chapters.length,
+    });
+  }
+
+  Future<void> _editChapter(Map<String, dynamic> chapter) async {
+    final result = await context.push('/story/${widget.storyId}/edit_chapter', extra: {
+      'chapterNumber': chapter['chapter_number'],
+      'chapterData': chapter,
+    });
+    if (result == true) {
+      _loadData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -535,7 +705,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.pop(),
           ),
-          title: const Text('Story Details'),
+          title: Text(
+            story?['title'] ?? 'Story Details',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
@@ -548,122 +722,82 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             ],
           ),
           actions: [
-          if (story != null)
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              onPressed: _showStoryInfoDialog,
-            ),
-          if (story != null && chapters.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.book),
-              tooltip: 'Export to EPUB',
-              onPressed: () async {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Generating EPUB...')),
-                );
-                final bytes = await ApiService.downloadEpub(widget.storyId);
-                if (bytes != null) {
-                  final dir = await getApplicationDocumentsDirectory();
-                  final file = File('${dir.path}/${story!['title']}.epub');
-                  await file.writeAsBytes(bytes);
-                  await Share.shareXFiles([XFile(file.path)]);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Failed to generate EPUB')),
-                  );
+            if (story != null && chapters.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent),
+                tooltip: 'AI Story Tools',
+                onPressed: _showAiSuiteBottomSheet,
+              ),
+            if (story != null && chapters.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.ios_share, color: Colors.cyanAccent),
+                tooltip: 'Export Story',
+                onPressed: _showExportBottomSheet,
+              ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'info') {
+                  _showStoryInfoDialog();
+                } else if (value == 'refresh') {
+                  _loadData();
+                } else if (value == 'settings') {
+                  _showStorySettingsDialog();
+                } else if (value == 'publish') {
+                  _togglePublishStory();
+                } else if (value == 'fork') {
+                  _forkStory();
+                } else if (value == 'delete') {
+                  _deleteStoryBook();
                 }
               },
-            ),
-          if (story != null && chapters.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf),
-              onPressed: () async {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Generating PDF...')),
-                );
-                try {
-                  await PdfExport.exportAndSharePdf(story!, characters, chapters);
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error generating PDF: $e')),
-                  );
-                }
+              itemBuilder: (BuildContext context) {
+                final isPublished = story?['is_published'] == true;
+                return [
+                  const PopupMenuItem(
+                    value: 'info',
+                    child: Row(
+                      children: [Icon(Icons.info_outline), SizedBox(width: 8), Text('Story Info')],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'refresh',
+                    child: Row(
+                      children: [Icon(Icons.refresh), SizedBox(width: 8), Text('Refresh Data')],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'publish',
+                    child: Row(
+                      children: [
+                        Icon(isPublished ? Icons.public_off : Icons.public, color: isPublished ? Colors.amber : Colors.cyanAccent),
+                        const SizedBox(width: 8),
+                        Text(isPublished ? 'Unpublish Story' : 'Publish to Feed'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [Icon(Icons.settings), SizedBox(width: 8), Text('Story Settings')],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'fork',
+                    child: Row(
+                      children: [Icon(Icons.call_split), SizedBox(width: 8), Text('Fork Story')],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [Icon(Icons.delete, color: Colors.red), SizedBox(width: 8), Text('Delete Story', style: TextStyle(color: Colors.red))],
+                    ),
+                  ),
+                ];
               },
-            ),
-          if (story != null && chapters.isNotEmpty) ...[
-            IconButton(
-              icon: const Icon(Icons.account_tree, color: Colors.cyanAccent),
-              tooltip: 'Interactive Story Tree Flowchart',
-              onPressed: _showStoryTreeDialog,
-            ),
-            IconButton(
-              icon: const Icon(Icons.hub, color: Colors.pinkAccent),
-              tooltip: 'Character Relationship Matrix',
-              onPressed: _showRelationshipMatrixDialog,
-            ),
-            IconButton(
-              icon: const Icon(Icons.analytics, color: Colors.purpleAccent),
-              tooltip: 'AI Plot & Pacing Analyzer',
-              onPressed: _showPlotAnalyzerDialog,
-            ),
-            IconButton(
-              icon: const Icon(Icons.phone_android, color: Colors.greenAccent),
-              tooltip: 'Character Social Feed 📱',
-              onPressed: _showSocialFeedDialog,
             ),
           ],
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'settings') {
-                _showStorySettingsDialog();
-              } else if (value == 'publish') {
-                _togglePublishStory();
-              } else if (value == 'fork') {
-                _forkStory();
-              } else if (value == 'delete') {
-                _deleteStoryBook();
-              }
-            },
-            itemBuilder: (BuildContext context) {
-              final isPublished = story?['is_published'] == true;
-              return [
-                PopupMenuItem(
-                  value: 'publish',
-                  child: Row(
-                    children: [
-                      Icon(isPublished ? Icons.public_off : Icons.public, color: isPublished ? Colors.amber : Colors.cyanAccent),
-                      const SizedBox(width: 8),
-                      Text(isPublished ? 'Unpublish Story' : 'Publish to Community Feed'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'settings',
-                  child: Row(
-                    children: [Icon(Icons.settings), SizedBox(width: 8), Text('Story Settings')],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'fork',
-                  child: Row(
-                    children: [Icon(Icons.call_split), SizedBox(width: 8), Text('Fork Story')],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [Icon(Icons.delete, color: Colors.red), SizedBox(width: 8), Text('Delete Story', style: TextStyle(color: Colors.red))],
-                  ),
-                ),
-              ];
-            },
-          ),
-        ],
-      ),
+        ),
         body: TabBarView(
           children: [
             _buildChaptersTab(),
@@ -797,72 +931,110 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               final chapter = chapters[index];
               return Card(
                 key: ValueKey(chapter['id']),
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 child: ExpansionTile(
-                  title: Text(chapter['title'] ?? 'Chapter ${chapter['chapter_number']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Chapter ${chapter['chapter_number']}'),
+                  leading: ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                      child: Icon(Icons.drag_handle, color: Colors.grey),
+                    ),
+                  ),
+                  title: Text(
+                    chapter['title'] ?? 'Chapter ${chapter['chapter_number']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    'Chapter ${chapter['chapter_number']} • ${_getChapterWordCount(chapter)} words',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.auto_stories, color: Colors.cyanAccent),
-                        tooltip: 'Generate Manga Comic',
-                        onPressed: () => _showMangaComicDialog(chapter),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.palette, color: Colors.purpleAccent),
-                        tooltip: 'Illustrate Scene',
-                        onPressed: () => _illustrateChapterScene(chapter),
-                      ),
-                      IconButton(
                         icon: const Icon(Icons.menu_book, color: Colors.amber),
                         tooltip: 'Zen Reader Mode',
-                        onPressed: () {
-                          String? bgImage;
-                          if (characters.isNotEmpty) {
-                            try {
-                              bgImage = characters.firstWhere((c) => c['avatar_base64'] != null)['avatar_base64'];
-                            } catch (_) {} // firstWhere throws if no element found
-                          }
-                          
-                          context.push('/zen_reader', extra: {
-                            'title': chapter['title'] ?? 'Chapter ${chapter['chapter_number']}',
-                            'content': chapter['content'] ?? '',
-                            'backgroundImage': bgImage,
-                            'storyId': widget.storyId,
-                            'chapterId': chapter['id'],
-                            'choicesJson': chapter['choices_json'],
-                            'chapterCount': chapters.length,
-                          });
+                        onPressed: () => _openZenReader(chapter),
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        onSelected: (action) {
+                          if (action == 'read') _openZenReader(chapter);
+                          if (action == 'edit') _editChapter(chapter);
+                          if (action == 'manga') _showMangaComicDialog(chapter);
+                          if (action == 'illustrate') _illustrateChapterScene(chapter);
+                          if (action == 'translate') _showTranslateDialog(chapter['content'] ?? '');
+                          if (action == 'delete') _deleteChapter(chapter['chapter_number']);
                         },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'read',
+                            child: Row(children: [Icon(Icons.menu_book, color: Colors.amber, size: 20), SizedBox(width: 10), Text('Zen Reader Mode')]),
+                          ),
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(children: [Icon(Icons.edit, color: Colors.blue, size: 20), SizedBox(width: 10), Text('Edit Chapter')]),
+                          ),
+                          const PopupMenuItem(
+                            value: 'manga',
+                            child: Row(children: [Icon(Icons.auto_stories, color: Colors.cyanAccent, size: 20), SizedBox(width: 10), Text('Generate Manga Comic')]),
+                          ),
+                          const PopupMenuItem(
+                            value: 'illustrate',
+                            child: Row(children: [Icon(Icons.palette, color: Colors.purpleAccent, size: 20), SizedBox(width: 10), Text('Illustrate Scene')]),
+                          ),
+                          const PopupMenuItem(
+                            value: 'translate',
+                            child: Row(children: [Icon(Icons.translate, color: Colors.green, size: 20), SizedBox(width: 10), Text('Translate Chapter')]),
+                          ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(children: [Icon(Icons.delete_outline, color: Colors.red, size: 20), SizedBox(width: 10), Text('Delete Chapter', style: TextStyle(color: Colors.red))]),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.translate, color: Colors.green),
-                        tooltip: 'Translate Chapter',
-                        onPressed: () => _showTranslateDialog(chapter['content'] ?? ''),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () async {
-                          final result = await context.push('/story/${widget.storyId}/edit_chapter', extra: {
-                            'chapterNumber': chapter['chapter_number'],
-                            'chapterData': chapter,
-                          });
-                          if (result == true) {
-                            _loadData();
-                          }
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _deleteChapter(chapter['chapter_number']),
-                      ),
-                      const Icon(Icons.drag_handle, color: Colors.grey),
                     ],
                   ),
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          ActionChip(
+                            avatar: const Icon(Icons.menu_book, size: 16, color: Colors.amber),
+                            label: const Text('Read'),
+                            onPressed: () => _openZenReader(chapter),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                            label: const Text('Edit'),
+                            onPressed: () => _editChapter(chapter),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.auto_stories, size: 16, color: Colors.cyanAccent),
+                            label: const Text('Manga'),
+                            onPressed: () => _showMangaComicDialog(chapter),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.palette, size: 16, color: Colors.purpleAccent),
+                            label: const Text('Illustrate'),
+                            onPressed: () => _illustrateChapterScene(chapter),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.translate, size: 16, color: Colors.green),
+                            label: const Text('Translate'),
+                            onPressed: () => _showTranslateDialog(chapter['content'] ?? ''),
+                          ),
+                        ],
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(_getPlainText(chapter['content'] ?? ''), style: const TextStyle(height: 1.5)),
@@ -875,6 +1047,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ),
       ],
     );
+  }
+
+  int _getChapterWordCount(Map<String, dynamic> chapter) {
+    String text = _getPlainText(chapter['content'] ?? '');
+    return text.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
   }
 
   String _getPlainText(String content) {
