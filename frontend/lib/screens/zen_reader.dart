@@ -68,6 +68,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   int? _selectedChoiceIndex;
   final TextEditingController _customChoiceController = TextEditingController();
 
+  // After-Hours Heat Switch & Cinematic Teaser
+  bool _isAfterHours = false;
+  String? _cachedStandardContent;
+  String? _cachedAfterHoursContent;
+  bool _isLoadingAfterHours = false;
+  Map<String, dynamic>? _chapterTeaser;
+  bool _loadingTeaser = false;
+
   @override
   void initState() {
     super.initState();
@@ -424,6 +432,189 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     }
   }
 
+  Future<void> _toggleAfterHours() async {
+    if (_isAfterHours) {
+      setState(() {
+        _isAfterHours = false;
+        if (_cachedStandardContent != null) {
+          _currentContent = _cachedStandardContent!;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Switched to Standard Story Cut')),
+      );
+      return;
+    }
+
+    _cachedStandardContent = _currentContent;
+    if (_cachedAfterHoursContent != null) {
+      setState(() {
+        _isAfterHours = true;
+        _currentContent = _cachedAfterHoursContent!;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🔥 Switched to Uncensored After-Hours Heat Cut!'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
+    if (_currentChapterId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Active chapter required for After-Hours cut.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoadingAfterHours = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🔥 Generating Uncensored After-Hours Heat Cut...')),
+    );
+
+    try {
+      final res = await ApiService.generateAfterHoursCut(_currentChapterId!);
+      final afterHoursText = res['after_hours_content'] ?? _currentContent;
+      if (mounted) {
+        setState(() {
+          _isAfterHours = true;
+          _isLoadingAfterHours = false;
+          _cachedAfterHoursContent = afterHoursText;
+          _currentContent = afterHoursText;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🔥 After-Hours Explicit Cut Active!'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingAfterHours = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _fetchChapterTeaser() async {
+    if (_currentChapterId == null) return;
+    setState(() => _loadingTeaser = true);
+    try {
+      final teaser = await ApiService.getChapterTeaser(_currentChapterId!);
+      if (mounted) {
+        setState(() {
+          _chapterTeaser = teaser;
+          _loadingTeaser = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingTeaser = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating teaser: $e')));
+      }
+    }
+  }
+
+  Widget _buildTeaserCard() {
+    final textColor = _getTextColor();
+    final cardColor = _getCardColor();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24, bottom: 12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35), width: 1.2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.movie_filter, color: Colors.redAccent, size: 22),
+                    SizedBox(width: 8),
+                    Text(
+                      'Next On... Cinematic Teaser',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.redAccent),
+                    ),
+                  ],
+                ),
+                if (_chapterTeaser == null)
+                  ElevatedButton.icon(
+                    onPressed: _loadingTeaser ? null : _fetchChapterTeaser,
+                    icon: _loadingTeaser
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.auto_awesome, size: 14),
+                    label: Text(_loadingTeaser ? 'Drafting...' : 'Reveal Teaser 🎬', style: const TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade800,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    ),
+                  ),
+              ],
+            ),
+            if (_chapterTeaser != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black38,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _chapterTeaser!['dramatic_quote'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.amberAccent,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _chapterTeaser!['stakes_summary'] ?? '',
+                      style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.8), height: 1.4),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _chapterTeaser!['cliffhanger_level'] ?? '🔥 High Tension',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: _fetchChapterTeaser,
+                          icon: const Icon(Icons.refresh, size: 14),
+                          label: const Text('Re-roll Teaser', style: TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAppearanceSettings() {
     showModalBottomSheet(
       context: context,
@@ -613,6 +804,10 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       _choices = [];
       _selectedChoiceIndex = null;
       _isPlaying = false;
+      _isAfterHours = false;
+      _cachedStandardContent = null;
+      _cachedAfterHoursContent = null;
+      _chapterTeaser = null;
     });
 
     if (ch['choices_json'] != null) {
@@ -885,6 +1080,20 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
               title: Text(_currentTitle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
               actions: [
                 IconButton(
+                  icon: _isLoadingAfterHours
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.deepOrangeAccent),
+                        )
+                      : Icon(
+                          _isAfterHours ? Icons.local_fire_department : Icons.local_fire_department_outlined,
+                          color: _isAfterHours ? Colors.deepOrangeAccent : Colors.pinkAccent,
+                        ),
+                  tooltip: _isAfterHours ? '🔥 After-Hours Active (Tap for Standard)' : '🔥 Switch to After-Hours Cut',
+                  onPressed: _isLoadingAfterHours ? null : _toggleAfterHours,
+                ),
+                IconButton(
                   icon: const Icon(Icons.record_voice_over, color: Colors.pinkAccent),
                   tooltip: '💬 Mid-Scene Dialogue Whisper',
                   onPressed: _showWhisperDialog,
@@ -968,6 +1177,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                     _buildNovelBody(),
                     // Previous / Next Chapter Buttons
                     _buildChapterNavigation(),
+                    // Cinematic Chapter Teasers & Cliffhangers
+                    _buildTeaserCard(),
                     // Interactive Next Chapter Choices
                     _buildChoicesWidget(),
                   ],

@@ -934,6 +934,67 @@ class ApiService {
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to generate book cover');
   }
+
+  static Future<Map<String, dynamic>> generateAfterHoursCut(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/chapters/$chapterId/after-hours'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate after-hours cut');
+  }
+
+  static Future<Map<String, dynamic>> dateEncounterStep(String characterId, {required String setting, required String chatHistory, required String userInput}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/date-encounter'),
+      headers: headers,
+      body: jsonEncode({
+        'setting': setting,
+        'chat_history': chatHistory,
+        'user_input': userInput,
+      }),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate date encounter step');
+  }
+
+  static Future<List<dynamic>> getStoryKeepsakes(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/keepsakes'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['keepsakes'] ?? [];
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> getChapterTeaser(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/chapters/$chapterId/teaser'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate chapter teaser');
+  }
+
+  static Future<Map<String, dynamic>> getChemistryCurve(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/chemistry-curve'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'curve': data};
+    }
+    return {};
+  }
+
+  static Future<Map<String, dynamic>> generateMidnightVoicemail(String characterId, {String? mood}) async {
+    final headers = await _getHeaders();
+    final body = mood != null ? jsonEncode({'mood': mood}) : null;
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/midnight-voicemail'),
+      headers: headers,
+      body: body,
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate midnight voicemail');
+  }
 }
 
 

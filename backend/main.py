@@ -1901,6 +1901,127 @@ async def generate_cover_endpoint(story_id: uuid.UUID, req: dict = None, db: Asy
     await db.refresh(story)
     return {"status": "success", "cover_image_url": cover_url, "style": style}
 
+@app.post("/api/v1/chapters/{chapter_id}/after-hours")
+async def generate_after_hours_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_context = f"Title: {story.title if story else ''}, Genre: {story.genre if story else ''}, Tone: {story.tone if story else ''}"
+    
+    after_hours_text = await llm_service.generate_after_hours_cut(
+        chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter.content or "",
+        story_context
+    )
+    return {"status": "success", "after_hours_content": after_hours_text}
+
+@app.post("/api/v1/characters/{character_id}/date-encounter")
+async def date_encounter_endpoint(character_id: uuid.UUID, req: dict, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    reply = await llm_service.generate_date_encounter_step(
+        char.name,
+        char.personality or "Mysterious & Charismatic",
+        req.get("setting", "Midnight Rooftop with Wine"),
+        req.get("chat_history", ""),
+        req.get("user_input", "")
+    )
+    return {"reply": reply, "character_name": char.name}
+
+@app.get("/api/v1/stories/{story_id}/keepsakes")
+async def get_story_keepsakes_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()).limit(4))
+    chapters = chaps_res.scalars().all()
+    chapters_text = "\n\n".join([f"{c.title}: {c.content[:400]}" for c in chapters])
+    
+    keepsakes = await llm_service.generate_story_keepsakes(
+        story.title or "Novel",
+        chars_str,
+        chapters_text
+    )
+    return {"status": "success", "keepsakes": keepsakes}
+
+@app.post("/api/v1/chapters/{chapter_id}/teaser")
+async def get_chapter_teaser_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_title = story.title if story else "Novel"
+    
+    teaser = await llm_service.generate_chapter_teaser(
+        chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter.content or "",
+        story_title
+    )
+    return teaser
+
+@app.get("/api/v1/stories/{story_id}/chemistry-curve")
+async def get_chemistry_curve_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()))
+    chapters = chaps_res.scalars().all()
+    chaps_list = [{"chapter_number": c.chapter_number, "title": c.title, "content": c.content} for c in chapters]
+    
+    curve = await llm_service.analyze_novel_heat_curve(chaps_list)
+    highest_ch = 1
+    max_h = 0
+    for item in curve:
+        if item.get("heat_score", 0) > max_h:
+            max_h = item.get("heat_score", 0)
+            highest_ch = item.get("chapter_number", 1)
+            
+    pacing_health = "Intense Emotional Slow-Burn" if max_h < 60 else "Passionate Climax Reached"
+    recommendation = "The current tension is electric. Maintain unresolved romantic friction before the next confession." if max_h < 60 else "The physical and emotional chemistry has reached a fever pitch. A vulnerable aftermath or heart-to-heart dialogue will ground the characters."
+    
+    return {
+        "status": "success",
+        "curve": curve,
+        "chapters_analysis": curve,
+        "pacing_health": pacing_health,
+        "highest_heat_chapter": highest_ch,
+        "editor_recommendation": recommendation
+    }
+
+@app.post("/api/v1/characters/{character_id}/midnight-voicemail")
+async def generate_midnight_voicemail_endpoint(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == char.story_id).order_by(models.Chapter.chapter_number.desc()).limit(1))
+    latest_chap = chaps_res.scalars().first()
+    context = latest_chap.content[:600] if latest_chap else "A romantic connection between them."
+    
+    voicemail = await llm_service.generate_midnight_voicemail(
+        char.name,
+        char.personality or "Romantic lead",
+        context
+    )
+    transcript = voicemail.get("transcript") or voicemail.get("whisper_script") or ""
+    time_stamp = voicemail.get("time_left") or voicemail.get("timestamp") or "2:14 AM"
+    mood = voicemail.get("mood") or voicemail.get("emotional_state") or "Whispered & Vulnerable"
+    return {
+        "character_name": char.name,
+        "transcript": transcript,
+        "whisper_script": transcript,
+        "timestamp": time_stamp,
+        "time_left": time_stamp,
+        "mood": mood,
+        "emotional_state": mood,
+    }
+
+
 
 
 

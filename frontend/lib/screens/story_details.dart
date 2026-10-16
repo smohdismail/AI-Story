@@ -36,6 +36,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   bool isLoadingOutline = false;
   String selectedCoverStyle = 'Anime/Manga';
   bool isGeneratingCoverStyle = false;
+  List<dynamic>? storyKeepsakes;
+  bool isLoadingKeepsakes = false;
+  Map<String, dynamic>? chemistryCurveData;
+  bool isLoadingChemistryCurve = false;
 
   @override
   void initState() {
@@ -784,7 +788,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 8,
+      length: 10,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -804,6 +808,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               Tab(icon: Icon(Icons.people), text: 'Characters'),
               Tab(icon: Icon(Icons.forum), text: 'Conversations & Chats'),
               Tab(icon: Icon(Icons.palette), text: 'Visual & Manga Studio'),
+              Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Keepsake Box'),
+              Tab(icon: Icon(Icons.show_chart), text: 'Chemistry Curve'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
               Tab(icon: Icon(Icons.map), text: 'World Map'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
@@ -893,6 +899,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildCharactersTab(),
             _buildConversationsTab(),
             _buildVisualStudioTab(),
+            _buildKeepsakeBoxTab(),
+            _buildChemistryCurveTab(),
             _buildWorldTab(),
             _buildWorldMapTab(),
             _buildUserPersonaTab(),
@@ -4147,6 +4155,611 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       ),
     );
   }
+
+  // ==========================================
+  // FEATURE 3: THE KEEPSAKE BOX
+  // ==========================================
+
+  Future<void> _fetchStoryKeepsakes() async {
+    setState(() => isLoadingKeepsakes = true);
+    try {
+      final res = await ApiService.getStoryKeepsakes(widget.storyId);
+      if (mounted) {
+        setState(() {
+          storyKeepsakes = res;
+          isLoadingKeepsakes = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingKeepsakes = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load keepsakes: $e')));
+      }
+    }
+  }
+
+  void _showKeepsakeDetailDialog(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF1E1424),
+        title: Row(
+          children: [
+            Text(item['icon']?.toString() ?? '🕯️', style: const TextStyle(fontSize: 26)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item['name']?.toString() ?? 'Story Keepsake',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.people, size: 14, color: Colors.pinkAccent),
+                    label: Text(item['characters_involved']?.toString() ?? 'The Leads', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                  Chip(
+                    avatar: const Icon(Icons.auto_stories, size: 14, color: Colors.amber),
+                    label: Text(item['chapter_context']?.toString() ?? 'Chapter Context', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                  Chip(
+                    avatar: const Icon(Icons.favorite, size: 14, color: Colors.redAccent),
+                    label: Text(item['emotional_weight']?.toString() ?? 'High Weight', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text('The Moment It Was Exchanged:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber)),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  '“${item['moment_exchanged']?.toString() ?? ''}”',
+                  style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 13, height: 1.4, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Secret Internal Reflection:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.pinkAccent)),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.pink.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  item['character_reflection']?.toString() ?? '',
+                  style: const TextStyle(fontSize: 13, height: 1.45, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close Box', style: TextStyle(color: Colors.pinkAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKeepsakeBoxTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Keepsake Box Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.amber.shade900.withValues(alpha: 0.4), Colors.pink.shade900.withValues(alpha: 0.4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('🕯️', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'The Keepsake Box',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.amber),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Emotional physical tokens exchanged between the leads throughout the novel.',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isLoadingKeepsakes ? null : _fetchStoryKeepsakes,
+                  icon: isLoadingKeepsakes
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.inventory_2, size: 16),
+                  label: Text(storyKeepsakes == null ? 'Open Box' : 'Scan', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (isLoadingKeepsakes) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(color: Colors.amber),
+                    SizedBox(height: 12),
+                    Text('Unlocking keepsakes and memories from your chapters...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyKeepsakes == null) ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 64, color: Colors.amber.withValues(alpha: 0.3)),
+                    const SizedBox(height: 12),
+                    const Text('The Keepsake Box is closed.', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    const Text('Tap "Open Box" above to collect tokens, gifts, and letters exchanged across the novel.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyKeepsakes!.isEmpty) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Text('No emotional keepsakes discovered yet in your chapters.', style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ] else ...[
+            Text('Discovered Mementos (${storyKeepsakes!.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 8),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: storyKeepsakes!.length,
+              itemBuilder: (ctx, i) {
+                final item = storyKeepsakes![i] as Map<String, dynamic>;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(color: Colors.amber.withValues(alpha: 0.25)),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => _showKeepsakeDetailDialog(item),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Colors.amber.shade900.withValues(alpha: 0.4),
+                                child: Text(item['icon']?.toString() ?? '💍', style: const TextStyle(fontSize: 20)),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['name']?.toString() ?? 'Memento',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amber),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item['characters_involved']?.toString() ?? '',
+                                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  item['chapter_context']?.toString() ?? '',
+                                  style: const TextStyle(fontSize: 10, color: Colors.pinkAccent, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '“${item['moment_exchanged']?.toString() ?? ''}”',
+                            style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.white70),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () => _showKeepsakeDetailDialog(item),
+                                icon: const Icon(Icons.auto_stories, size: 14, color: Colors.pinkAccent),
+                                label: const Text('Read Secret Reflection', style: TextStyle(fontSize: 11, color: Colors.pinkAccent)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // FEATURE 5: ROMANTIC HEAT & TENSION CURVE
+  // ==========================================
+
+  Future<void> _fetchChemistryCurve() async {
+    setState(() => isLoadingChemistryCurve = true);
+    try {
+      final res = await ApiService.getChemistryCurve(widget.storyId);
+      if (mounted) {
+        setState(() {
+          chemistryCurveData = res;
+          isLoadingChemistryCurve = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingChemistryCurve = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load chemistry curve: $e')));
+      }
+    }
+  }
+
+  Widget _buildChemistryCurveTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Studio Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade900.withValues(alpha: 0.4), Colors.deepOrange.shade900.withValues(alpha: 0.4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.deepOrangeAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.deepOrange.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('📈', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Novel Chemistry & Heat Curve',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.deepOrangeAccent),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Visual emotional waveform tracking tension, angst, and romantic intimacy across every chapter.',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isLoadingChemistryCurve ? null : _fetchChemistryCurve,
+                  icon: isLoadingChemistryCurve
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.show_chart, size: 16),
+                  label: Text(chemistryCurveData == null ? 'Analyze' : 'Refresh', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (isLoadingChemistryCurve) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(color: Colors.deepOrangeAccent),
+                    SizedBox(height: 12),
+                    Text('Analyzing novel emotional waveform & heat peaks...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (chemistryCurveData == null) ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.show_chart, size: 64, color: Colors.deepOrange.withValues(alpha: 0.3)),
+                    const SizedBox(height: 12),
+                    const Text('Chemistry Curve not generated yet.', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    const Text('Tap "Analyze" above to map the slow-burn tension and heat levels for every chapter.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            // Pacing Insights Card
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(14.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.speed, color: Colors.amber, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Pacing Health: ${chemistryCurveData!['pacing_health'] ?? 'Balanced'}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.deepOrange.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '🔥 Peak Heat: Ch ${chemistryCurveData!['highest_heat_chapter'] ?? '1'}',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrangeAccent),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (chemistryCurveData!['editor_recommendation'] != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '💡 Editor Guidance: "${chemistryCurveData!['editor_recommendation']}"',
+                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.white70),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.purpleAccent, borderRadius: BorderRadius.circular(3))),
+                    const SizedBox(width: 6),
+                    const Text('⚡ Tension & Friction', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                Row(
+                  children: [
+                    Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.deepOrangeAccent, borderRadius: BorderRadius.circular(3))),
+                    const SizedBox(width: 6),
+                    const Text('🔥 Intimacy & Heat', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Chapter Waveform Cards
+            Builder(
+              builder: (ctx) {
+                final chaptersList = (chemistryCurveData!['chapters_analysis'] as List<dynamic>? ?? []);
+                if (chaptersList.isEmpty) {
+                  return const Center(child: Text('No chapter analyses returned.', style: TextStyle(color: Colors.grey)));
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: chaptersList.length,
+                  itemBuilder: (ctx, i) {
+                    final item = chaptersList[i] as Map<String, dynamic>;
+                    final chNum = item['chapter_number'] ?? (i + 1);
+                    final title = item['title'] ?? 'Chapter $chNum';
+                    final pov = item['pov_character'] ?? '';
+                    final tension = ((item['tension_score'] ?? 5) as num).clamp(0, 10).toDouble();
+                    final heat = ((item['heat_score'] ?? 2) as num).clamp(0, 10).toDouble();
+                    final event = item['romantic_event']?.toString() ?? '';
+                    final verdict = item['chemistry_verdict']?.toString() ?? '';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Ch $chNum: $title',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                const Spacer(),
+                                if (pov.toString().isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white10,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'POV: $pov',
+                                      style: const TextStyle(fontSize: 10, color: Colors.cyanAccent),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // Tension Metric Bar
+                            Row(
+                              children: [
+                                const Text('⚡ Tension:', style: TextStyle(fontSize: 11, color: Colors.purpleAccent)),
+                                const Spacer(),
+                                Text('${tension.toInt()}/10', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: tension / 10.0,
+                                backgroundColor: Colors.white10,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.purpleAccent),
+                                minHeight: 6,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            // Heat Metric Bar
+                            Row(
+                              children: [
+                                const Text('🔥 Heat:', style: TextStyle(fontSize: 11, color: Colors.deepOrangeAccent)),
+                                const Spacer(),
+                                Text('${heat.toInt()}/10', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrangeAccent)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: heat / 10.0,
+                                backgroundColor: Colors.white10,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.deepOrangeAccent),
+                                minHeight: 6,
+                              ),
+                            ),
+                            if (event.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                event,
+                                style: const TextStyle(fontSize: 12, color: Colors.white70),
+                              ),
+                            ],
+                            if (verdict.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Verdict: $verdict',
+                                  style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.pinkAccent),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
+
 
 

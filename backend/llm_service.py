@@ -907,6 +907,252 @@ def generate_book_cover_url(title: str, synopsis: str, genre: str, style: str = 
     seed = int(time.time() * 1000) % 1000000
     return f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=1024&model=flux&nologo=true&seed={seed}"
 
+async def generate_after_hours_cut(chapter_title: str, chapter_content: str, story_context: str) -> str:
+    prompt = f"""You are an elite bestselling erotic romance author specializing in explicit, uncensored adult novels.
+Rewrite the following chapter into the "After-Hours Heat Cut".
+
+Story Context:
+{story_context}
+
+Original Chapter Title: {chapter_title}
+Original Content:
+{chapter_content[:3500]}
+
+INSTRUCTIONS FOR THE AFTER-HOURS CUT:
+1. Elevate all romantic, intimate, and physical encounters to raw, explicit, uncensored adult realism.
+2. Include authentic sensory details: trembling breath, flushed skin, moaning, groans, gasped confessions, and visceral physical chemistry.
+3. Retain the core plot, dialogue flow, and character voices while making the intimacy intense, steamy, and deeply emotional.
+4. Output ONLY the rewritten chapter text. No intros or meta-notes."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=2200,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error generating after-hours cut: {e}")
+    return chapter_content
+
+async def generate_date_encounter_step(char_name: str, char_personality: str, setting: str, chat_history: str, user_input: str) -> str:
+    prompt = f"""You are a master romantic novelist writing an intimate, immersive date encounter between {char_name} and the user/protagonist.
+
+Character: {char_name}
+Personality & Chemistry: {char_personality}
+Setting / Scenario: {setting}
+
+Previous Scene Narrative:
+{chat_history[-1200:] if chat_history else "The date is just beginning."}
+
+User's Latest Action / Dialogue:
+"{user_input}"
+
+INSTRUCTIONS:
+- Write 2 to 3 rich, atmospheric novel paragraphs continuing this date scene.
+- Seamlessly blend dialogue, body language (lingering gazes, subtle touch, shifting proximity), and emotional tension.
+- Stay true to {char_name}'s personality and romantic dynamic.
+- Output ONLY the novel narrative prose."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error in date encounter step: {e}")
+    return f"{char_name} looked at you with deep, unreadable warmth, stepping closer into the quiet space between you."
+
+async def generate_story_keepsakes(story_title: str, characters_info: str, chapters_text: str) -> list:
+    prompt = f"""Analyze this romance novel and identify 3 to 4 emotional physical tokens/keepsakes exchanged between the characters.
+Novel: "{story_title}"
+Characters: {characters_info}
+Story Excerpts:
+{chapters_text[:3000]}
+
+Return a JSON array of keepsakes:
+[
+  {{
+    "name": "Silver Ring with Scratched Inscription",
+    "item_type": "Jewelry",
+    "icon": "ring",
+    "giver": "Character Name",
+    "moment_exchanged": "Slipped into their palm in Chapter 2 before the train departed.",
+    "secret_reflection": "First-person emotional thought from the giver about why this token matters so much to them."
+  }}
+]
+Return ONLY raw JSON array."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1000,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                res = json.loads(raw.strip())
+                if isinstance(res, list): return res
+            except Exception:
+                m = re.search(r'\[.*\]', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating keepsakes: {e}")
+
+    return [
+        {
+            "name": "Silver Crest Ring",
+            "item_type": "Jewelry",
+            "icon": "diamond",
+            "giver": "Lead",
+            "moment_exchanged": "Given during a quiet moment in the rain.",
+            "secret_reflection": "I wanted you to have a piece of me that you could never truly throw away."
+        },
+        {
+            "name": "Folded Letter on Heavy Parchment",
+            "item_type": "Letter",
+            "icon": "mail",
+            "giver": "Lead",
+            "moment_exchanged": "Tucked into your coat pocket when you weren't looking.",
+            "secret_reflection": "There are words I could never say to your face without kissing you instead."
+        }
+    ]
+
+async def generate_chapter_teaser(chapter_title: str, chapter_content: str, story_title: str) -> dict:
+    prompt = f"""You are a television drama producer and serialized novel editor.
+Write an electrifying 'NEXT TIME ON {story_title.upper()}' teaser for the next chapter based on:
+
+Current Chapter: {chapter_title}
+Excerpt:
+{chapter_content[-1500:]}
+
+Return a valid JSON object:
+{{
+  "teaser_title": "Next On Chapter ...",
+  "dramatic_quote": "A single unforgettable, high-tension romantic quote from the upcoming scene",
+  "stakes_summary": "2 sentences describing the cliffhanger and rising romantic danger.",
+  "cliffhanger_level": "🔥 Explosive Cliffhanger"
+}}
+Return ONLY JSON."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating chapter teaser: {e}")
+
+    return {
+        "teaser_title": "Next on the Novel...",
+        "dramatic_quote": "\"Say you don't feel this, and I swear I'll let you walk out that door.\"",
+        "stakes_summary": "With secrets unraveling and rivalry mounting, the next encounter leaves no room for denial.",
+        "cliffhanger_level": "🔥 High Tension Cliffhanger"
+    }
+
+async def analyze_novel_heat_curve(chapters_list: list) -> list:
+    out = []
+    for ch in chapters_list:
+        c_num = ch.get("chapter_number", 1)
+        text = (ch.get("content") or "").lower()
+        title = ch.get("title") or f"Chapter {c_num}"
+        
+        # Calculate dynamic heat and tension heuristics based on romantic vocabulary density
+        heat_words = ["kiss", "lips", "touch", "body", "bed", "skin", "breath", "whisper", "chest", "desire", "naked", "gasp", "moan", "passion", "hands"]
+        tension_words = ["jealous", "anger", "rival", "stare", "glance", "secret", "betray", "danger", "hesitate", "guard", "fight", "cold", "distance"]
+        
+        heat_count = sum(text.count(w) for w in heat_words)
+        tension_count = sum(text.count(w) for w in tension_words)
+        
+        heat_score = min(100, max(15, heat_count * 5 + (c_num * 6)))
+        tension_score = min(100, max(25, tension_count * 6 + ((10 - c_num) * 3)))
+        
+        pacing = "Slow-Burn Buildup"
+        if heat_score > 70: pacing = "Passionate Climax"
+        elif tension_score > 65: pacing = "High Emotional Tension"
+        elif heat_score > 45: pacing = "Simmering Attraction"
+        
+        out.append({
+            "chapter_number": c_num,
+            "title": title,
+            "heat_score": heat_score,
+            "tension_score": tension_score,
+            "pacing_type": pacing
+        })
+    return out
+
+async def generate_midnight_voicemail(char_name: str, char_personality: str, recent_context: str) -> dict:
+    prompt = f"""You are {char_name}, calling the user late at night (2:30 AM) to leave an intimate, whispered voicemail.
+Personality: {char_personality}
+Recent Story Context: {recent_context[:1000]}
+
+INSTRUCTIONS:
+1. Speak directly to the listener in 1st person ('I', 'you').
+2. Tone: low, intimate, quiet, slightly breathless, vulnerable, like you're whispering into the phone in a dark bedroom because you couldn't sleep thinking about them.
+3. Include natural pause indicators like '...' for pauses and quiet sighs.
+4. Keep it between 80 to 140 words.
+
+Return JSON:
+{{
+  "time_left": "2:34 AM",
+  "mood": "Whispered & Vulnerable",
+  "transcript": "Voicemail transcript text..."
+}}
+Return ONLY JSON."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=600,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating midnight voicemail: {e}")
+
+    return {
+        "time_left": "2:17 AM",
+        "mood": "Quiet & Vulnerable",
+        "transcript": "Hey... I know it's late. I know you're probably asleep. But I couldn't stop thinking about what you said today... how you looked at me. Don't listen to this in the morning and act like nothing happened... because I can't do this pretending anymore. Goodnight."
+    }
+
+
 
 
 
