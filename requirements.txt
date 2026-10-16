@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+greenlet
+asyncpg
+pydantic
+qdrant-client
+python-dotenv
+openai
+bcrypt
+python-jose[cryptography]
+python-multipart
+EbookLib==0.20
+supabase
+Pillow
+google-auth
+requests
