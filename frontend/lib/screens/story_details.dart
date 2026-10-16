@@ -674,6 +674,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         bgImage = characters.firstWhere((c) => c['avatar_base64'] != null)['avatar_base64'];
       } catch (_) {}
     }
+    final int idx = chapters.indexOf(chapter);
     context.push('/zen_reader', extra: {
       'title': chapter['title'] ?? 'Chapter ${chapter['chapter_number']}',
       'content': chapter['content'] ?? '',
@@ -682,6 +683,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       'chapterId': chapter['id'],
       'choicesJson': chapter['choices_json'],
       'chapterCount': chapters.length,
+      'allChapters': chapters,
+      'currentIndex': idx >= 0 ? idx : 0,
     });
   }
 
@@ -3158,23 +3161,32 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       showDialog(
         context: context,
         builder: (ctx) => Dialog(
-          backgroundColor: const Color(0xFF12121A),
+          backgroundColor: const Color(0xFF101018),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 700),
-            padding: const EdgeInsets.all(20),
+            constraints: const BoxConstraints(maxWidth: 650, maxHeight: 750),
+            padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.auto_stories, color: Colors.amber, size: 28),
-                        const SizedBox(width: 8),
-                        Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                      ],
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.auto_stories, color: Colors.amber, size: 26),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white70),
@@ -3182,82 +3194,113 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const Divider(color: Colors.white24, height: 16),
                 if (panels.isEmpty)
-                  const Text('No panels generated.', style: TextStyle(color: Colors.grey))
+                  const Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text('No panels generated.', style: TextStyle(color: Colors.grey)),
+                  )
                 else
                   Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 1.1,
-                            ),
-                            itemCount: panels.length,
-                            itemBuilder: (context, idx) {
-                              final p = panels[idx];
-                              final pNum = p['panel_number'] ?? (idx + 1);
-                              final speaker = p['speaker_name'] ?? 'Narration';
-                              final dialogue = p['dialogue'] ?? '';
-                              final visual = p['visual_description'] ?? '';
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: panels.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 16),
+                      itemBuilder: (context, idx) {
+                        final p = panels[idx];
+                        final pNum = p['panel_number'] ?? (idx + 1);
+                        final speaker = p['speaker_name'] ?? 'Narration';
+                        final dialogue = p['dialogue'] ?? '';
+                        final visual = p['visual_description'] ?? '';
+                        final imageUrl = p['image_url'] as String?;
 
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.white38, width: 2),
+                        return Card(
+                          color: const Color(0xFF181824),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: const BorderSide(color: Colors.white24, width: 1.5),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Panel Top Tag & Speaker
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                color: const Color(0xFF222234),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(4)),
+                                      child: Text('PANEL $pNum', style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                    Text(speaker, style: const TextStyle(color: Colors.cyanAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
                                 ),
-                                padding: const EdgeInsets.all(10),
+                              ),
+                              // Manga Art Image
+                              if (imageUrl != null && imageUrl.isNotEmpty)
+                                AspectRatio(
+                                  aspectRatio: 16 / 10,
+                                  child: Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, progress) {
+                                      if (progress == null) return child;
+                                      return Container(
+                                        color: Colors.black54,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: Colors.black45,
+                                      alignment: Alignment.center,
+                                      padding: const EdgeInsets.all(12),
+                                      child: Text(
+                                        visual,
+                                        style: const TextStyle(color: Colors.white60, fontSize: 11, fontStyle: FontStyle.italic),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              // Dialogue & Action Description
+                              Padding(
+                                padding: const EdgeInsets.all(12),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(4)),
-                                          child: Text('PANEL $pNum', style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
-                                        ),
-                                        Text(speaker, style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Expanded(
-                                      child: Text(
+                                    if (visual.isNotEmpty) ...[
+                                      Text(
                                         visual,
-                                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontStyle: FontStyle.italic),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 3,
+                                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontStyle: FontStyle.italic),
                                       ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(8),
+                                      const SizedBox(height: 8),
+                                    ],
+                                    if (dialogue.isNotEmpty)
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '"$dialogue"',
+                                          style: const TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold),
+                                        ),
                                       ),
-                                      child: Text(
-                                        '"$dialogue"',
-                                        style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
                                   ],
                                 ),
-                              );
-                            },
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
               ],

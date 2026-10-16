@@ -323,13 +323,14 @@ class CharacterPostResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class MangaPanelSchema(BaseModel):
-    panel_number: int
-    speaker_name: str
-    dialogue: str
-    visual_description: str
+    panel_number: int = 1
+    speaker_name: str = "Narrator"
+    dialogue: str = ""
+    visual_description: str = ""
     image_prompt: Optional[str] = None
+    image_url: Optional[str] = None
 
 class MangaComicResponse(BaseModel):
     chapter_title: str
-    panels: List[MangaPanelSchema]
+    panels: List[MangaPanelSchema] = []
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 class VisualNovelReaderScreen extends StatefulWidget {
   final String title;
@@ -76,11 +77,17 @@ class _VisualNovelReaderScreenState extends State<VisualNovelReaderScreen> {
         children: [
           Positioned.fill(
             child: widget.backgroundImage != null && widget.backgroundImage!.isNotEmpty
-              ? Image.network(
-                  widget.backgroundImage!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1E1E2E)),
-                )
+              ? (widget.backgroundImage!.startsWith('http')
+                  ? Image.network(
+                      widget.backgroundImage!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1E1E2E)),
+                    )
+                  : Image.memory(
+                      base64Decode(widget.backgroundImage!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1E1E2E)),
+                    ))
               : Container(color: const Color(0xFF1E1E2E)),
           ),
           Positioned.fill(

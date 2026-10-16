@@ -98,11 +98,17 @@ void main() async {
     GoRoute(
       path: '/zen_reader',
       builder: (BuildContext context, GoRouterState state) {
-        final extra = state.extra as Map<String, dynamic>;
+        final extra = (state.extra as Map<String, dynamic>?) ?? {};
         return ZenReaderScreen(
-          title: extra['title'] as String,
-          content: extra['content'] as String,
-          backgroundImage: extra['backgroundImage'] as String?,
+          title: extra['title']?.toString() ?? 'Chapter',
+          content: extra['content']?.toString() ?? '',
+          backgroundImage: extra['backgroundImage']?.toString(),
+          storyId: extra['storyId']?.toString(),
+          chapterId: extra['chapterId']?.toString(),
+          choicesJson: extra['choicesJson']?.toString(),
+          chapterCount: extra['chapterCount'] as int?,
+          allChapters: (extra['allChapters'] as List<dynamic>?)?.cast<Map<String, dynamic>>(),
+          currentIndex: extra['currentIndex'] as int?,
         );
       },
     ),

@@ -570,38 +570,111 @@ async def generate_character_social_posts(character_name: str, personality: str,
         return {"content": "Reflecting on recent events...", "image_prompt": f"Portrait of {character_name}"}
 
 async def generate_manga_comic_panels(chapter_title: str, chapter_content: str) -> list:
+    import json
+    import re
+    
+    clean_content = chapter_content.replace('\r', ' ').strip()
+    excerpt = clean_content[:2500] if clean_content else "An intriguing novel chapter."
+
     messages = [
         {
             "role": "system",
             "content": (
-                "You are a Manga Artist & Layout Director. Break down the provided chapter into 4 distinct visual comic panels. "
-                "Return a JSON object with key \"panels\" containing a list of 4 objects. Each object must have: "
-                "\"panel_number\" (int 1-4), "
-                "\"speaker_name\" (str), "
-                "\"dialogue\" (1 short punchy line of dialogue or monologue for the speech bubble), "
-                "\"visual_description\" (1-2 sentence description of action and character pose), "
-                "\"image_prompt\" (detailed digital art / manga panel prompt)."
+                "You are an expert Manga Artist & Comic Storyboard Director. "
+                "Break down the provided novel chapter into exactly 4 sequential, visually dramatic comic panels.\n"
+                "You MUST return ONLY a valid JSON object without markdown or extra commentary.\n"
+                "JSON format:\n"
+                "{\n"
+                '  "panels": [\n'
+                '    {\n'
+                '      "panel_number": 1,\n'
+                '      "speaker_name": "Character Name or Narrator",\n'
+                '      "dialogue": "Short, punchy line of dialogue for the speech bubble",\n'
+                '      "visual_description": "Vivid action and character pose description",\n'
+                '      "image_prompt": "high quality anime manga comic panel, expressive character, detailed line art, dynamic angle"\n'
+                '    }\n'
+                '  ]\n'
+                "}"
             )
         },
         {
             "role": "user",
-            "content": f"Chapter Title: {chapter_title}\nChapter Excerpt:\n{chapter_content[:3000]}"
+            "content": f"Chapter Title: {chapter_title}\n\nChapter Content:\n{excerpt}\n\nGenerate the 4 manga comic panels now in JSON:"
         }
     ]
+
+    def _get_fallback_panels():
+        # Fallback 4 manga panels based on chapter excerpt
+        lines = [line.strip() for line in clean_content.split('\n') if line.strip()]
+        first_line = lines[0] if lines else chapter_title
+        dialogue_candidate = next((line for line in lines if '"' in line or '“' in line), "The story unfolds before our eyes...")
+        clean_diag = dialogue_candidate.replace('"', '').replace('“', '').replace('”', '')[:80]
+        
+        return [
+            {
+                "panel_number": 1,
+                "speaker_name": "Narrator",
+                "dialogue": f"The story begins in {chapter_title}...",
+                "visual_description": f"Establishing cinematic manga shot depicting the setting of {chapter_title}.",
+                "image_prompt": f"monochrome manga comic panel, establishing shot of {chapter_title}, dramatic lighting, screen tones, anime art style"
+            },
+            {
+                "panel_number": 2,
+                "speaker_name": "Protagonist",
+                "dialogue": clean_diag or "We can't turn back now.",
+                "visual_description": "Close-up of the protagonist showing intense emotional determination.",
+                "image_prompt": "intense close-up anime manga face, sharp expressive eyes, dramatic shadow, detailed manga illustration"
+            },
+            {
+                "panel_number": 3,
+                "speaker_name": "Character",
+                "dialogue": "Look closely... something is happening right here!",
+                "visual_description": "Medium action shot of characters interacting closely with dynamic tension.",
+                "image_prompt": "dynamic manga action panel, two characters interacting with emotional intensity, cinematic angle, manga screentone"
+            },
+            {
+                "panel_number": 4,
+                "speaker_name": "Narrator",
+                "dialogue": "And the climax leaves us breathless for what comes next...",
+                "visual_description": "Dramatic cliffhanger wide panel teasing the next chapter.",
+                "image_prompt": "dramatic manga cliffhanger panel, high contrast ink lines, emotional tension, masterpiece comic art"
+            }
+        ]
+
     try:
         response = await llm_client.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0.8,
+            temperature=0.7,
+            max_tokens=1000,
         )
         if response.choices and response.choices[0].message.content:
-            data = json.loads(response.choices[0].message.content)
-            return data.get("panels", [])
-        return []
+            raw_text = response.choices[0].message.content.strip()
+            # Clean markdown code blocks
+            if raw_text.startswith('```json'): raw_text = raw_text[7:]
+            if raw_text.startswith('```'): raw_text = raw_text[3:]
+            if raw_text.endswith('```'): raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+
+            # Attempt direct json load
+            try:
+                data = json.loads(raw_text)
+                if isinstance(data, dict) and "panels" in data and isinstance(data["panels"], list) and len(data["panels"]) > 0:
+                    return data["panels"]
+                elif isinstance(data, list) and len(data) > 0:
+                    return data
+            except Exception:
+                # Regex search for JSON object with panels
+                match = re.search(r'\{.*"panels"\s*:\s*\[.*\]\s*\}', raw_text, re.DOTALL)
+                if match:
+                    data = json.loads(match.group(0))
+                    if "panels" in data and len(data["panels"]) > 0:
+                        return data["panels"]
+
+        return _get_fallback_panels()
     except Exception as e:
         print(f"Error generating manga panels: {e}")
-        return []
+        return _get_fallback_panels()
 
 
 

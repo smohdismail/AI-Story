@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:convert';
-import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_tts/flutter_tts.dart';
 import '../api.dart';
+
+enum ReaderTheme {
+  amoled,
+  dark,
+  sepia,
+  light,
+}
 
 class ZenReaderScreen extends StatefulWidget {
   final String title;
@@ -13,6 +19,8 @@ class ZenReaderScreen extends StatefulWidget {
   final String? chapterId;
   final String? choicesJson;
   final int? chapterCount;
+  final List<Map<String, dynamic>>? allChapters;
+  final int? currentIndex;
 
   const ZenReaderScreen({
     super.key,
@@ -23,6 +31,8 @@ class ZenReaderScreen extends StatefulWidget {
     this.chapterId,
     this.choicesJson,
     this.chapterCount,
+    this.allChapters,
+    this.currentIndex,
   });
 
   @override
@@ -30,45 +40,72 @@ class ZenReaderScreen extends StatefulWidget {
 }
 
 class _ZenReaderScreenState extends State<ZenReaderScreen> {
-  double _fontSize = 20.0;
+  // Reading Typography & Appearance
+  double _fontSize = 18.0;
+  double _lineHeight = 1.7;
   String _fontFamily = 'Serif';
-  late quill.QuillController _quillController;
-  
+  ReaderTheme _readerTheme = ReaderTheme.dark;
+  bool _fullscreen = false;
+
+  // Chapter State
+  late String _currentTitle;
+  late String _currentContent;
+  String? _currentChapterId;
+  String? _currentStoryId;
+  int _currentChapterCount = 0;
+  int _currentIndex = 0;
+  List<Map<String, dynamic>> _chapters = [];
+
+  // Audio / TTS
   final FlutterTts flutterTts = FlutterTts();
   bool _isPlaying = false;
   double _ttsSpeed = 0.5;
   double _ttsPitch = 1.0;
 
+  // Interactive Story Choices
   List<String> _choices = [];
   bool _loadingChoices = false;
   int? _selectedChoiceIndex;
   final TextEditingController _customChoiceController = TextEditingController();
-  
+
   @override
   void initState() {
     super.initState();
-    if (widget.content.startsWith('[{') && widget.content.endsWith('}]')) {
-      try {
-        final doc = quill.Document.fromJson(jsonDecode(widget.content));
-        _quillController = quill.QuillController(document: doc, selection: const TextSelection.collapsed(offset: 0));
-      } catch (e) {
-        final doc = quill.Document()..insert(0, widget.content);
-        _quillController = quill.QuillController(document: doc, selection: const TextSelection.collapsed(offset: 0));
-      }
-    } else {
-      final doc = quill.Document()..insert(0, widget.content);
-      _quillController = quill.QuillController(document: doc, selection: const TextSelection.collapsed(offset: 0));
-    }
-    
+    _currentTitle = widget.title;
+    _currentContent = _extractPlainText(widget.content);
+    _currentChapterId = widget.chapterId;
+    _currentStoryId = widget.storyId;
+    _currentChapterCount = widget.chapterCount ?? 0;
+    _chapters = widget.allChapters ?? [];
+    _currentIndex = widget.currentIndex ?? 0;
+
     _initTts();
     _loadChoices();
+  }
+
+  String _extractPlainText(String raw) {
+    if (raw.trim().isEmpty) return "No content in this chapter yet.";
+    if (raw.startsWith('[{') && raw.endsWith('}]')) {
+      try {
+        final List<dynamic> delta = jsonDecode(raw);
+        final buffer = StringBuffer();
+        for (var op in delta) {
+          if (op is Map && op['insert'] is String) {
+            buffer.write(op['insert']);
+          }
+        }
+        final res = buffer.toString().trim();
+        if (res.isNotEmpty) return res;
+      } catch (_) {}
+    }
+    return raw;
   }
 
   void _loadChoices() async {
     if (widget.choicesJson != null && widget.choicesJson!.isNotEmpty) {
       try {
         final decoded = jsonDecode(widget.choicesJson!);
-        if (decoded is List) {
+        if (decoded is List && decoded.isNotEmpty) {
           setState(() {
             _choices = List<String>.from(decoded);
           });
@@ -77,7 +114,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       } catch (_) {}
     }
 
-    if (widget.storyId != null && widget.chapterId != null) {
+    if (_currentStoryId != null && _currentChapterId != null) {
       _fetchChoices();
     }
   }
@@ -85,7 +122,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   Future<void> _fetchChoices() async {
     setState(() => _loadingChoices = true);
     try {
-      final choices = await ApiService.generateChapterChoices(widget.storyId!, widget.chapterId!);
+      final choices = await ApiService.generateChapterChoices(_currentStoryId!, _currentChapterId!);
       if (mounted) {
         setState(() {
           _choices = choices;
@@ -98,28 +135,26 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       }
     }
   }
-  
+
   void _initTts() {
     flutterTts.setCompletionHandler(() {
-      setState(() {
-        _isPlaying = false;
-      });
+      if (mounted) setState(() => _isPlaying = false);
+    });
+    flutterTts.setErrorHandler((msg) {
+      if (mounted) setState(() => _isPlaying = false);
     });
   }
 
   Future<void> _togglePlayback() async {
     if (_isPlaying) {
       await flutterTts.stop();
-      setState(() {
-        _isPlaying = false;
-      });
+      if (mounted) setState(() => _isPlaying = false);
     } else {
-      String plainText = _quillController.document.toPlainText();
-      if (plainText.trim().isNotEmpty) {
-        setState(() {
-          _isPlaying = true;
-        });
-        await flutterTts.speak(plainText);
+      if (_currentContent.trim().isNotEmpty) {
+        if (mounted) setState(() => _isPlaying = true);
+        await flutterTts.setSpeechRate(_ttsSpeed);
+        await flutterTts.setPitch(_ttsPitch);
+        await flutterTts.speak(_currentContent);
       }
     }
   }
@@ -127,26 +162,40 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   void _showTtsSettings() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: _getCardColor(),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final textColor = _getTextColor();
             return Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Audiobook Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Audiobook Voice Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                      IconButton(
+                        icon: Icon(Icons.close, color: textColor.withValues(alpha: 0.6)),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
-                      const Icon(Icons.speed),
-                      const SizedBox(width: 16),
-                      const Text('Speed'),
+                      Icon(Icons.speed, color: textColor),
+                      const SizedBox(width: 12),
+                      Text('Speed: ${_ttsSpeed.toStringAsFixed(1)}x', style: TextStyle(color: textColor)),
                       Expanded(
                         child: Slider(
                           value: _ttsSpeed,
-                          min: 0.1,
-                          max: 2.0,
+                          min: 0.2,
+                          max: 1.5,
+                          activeColor: Colors.amber,
                           onChanged: (val) {
                             setSheetState(() => _ttsSpeed = val);
                             setState(() => _ttsSpeed = val);
@@ -158,20 +207,121 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   ),
                   Row(
                     children: [
-                      const Icon(Icons.record_voice_over),
-                      const SizedBox(width: 16),
-                      const Text('Pitch'),
+                      Icon(Icons.record_voice_over, color: textColor),
+                      const SizedBox(width: 12),
+                      Text('Pitch: ${_ttsPitch.toStringAsFixed(1)}x', style: TextStyle(color: textColor)),
                       Expanded(
                         child: Slider(
                           value: _ttsPitch,
                           min: 0.5,
-                          max: 2.0,
+                          max: 1.5,
+                          activeColor: Colors.amber,
                           onChanged: (val) {
                             setSheetState(() => _ttsPitch = val);
                             setState(() => _ttsPitch = val);
                             flutterTts.setPitch(val);
                           },
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _togglePlayback();
+                      },
+                      icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
+                      label: Text(_isPlaying ? 'Stop Reading' : 'Start Reading Aloud'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAppearanceSettings() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _getCardColor(),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final textColor = _getTextColor();
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Reading Appearance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                  const SizedBox(height: 16),
+                  // Themes row
+                  Text('Background Theme', style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.7))),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildThemeChip('AMOLED', ReaderTheme.amoled, Colors.black, Colors.white, setSheetState),
+                      _buildThemeChip('Dark', ReaderTheme.dark, const Color(0xFF1E1E2E), Colors.white, setSheetState),
+                      _buildThemeChip('Sepia', ReaderTheme.sepia, const Color(0xFFF7EFE2), const Color(0xFF4A3728), setSheetState),
+                      _buildThemeChip('Light', ReaderTheme.light, const Color(0xFFFAFAFA), const Color(0xFF222222), setSheetState),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Font Size
+                  Row(
+                    children: [
+                      Text('Font Size: ${_fontSize.toInt()}pt', style: TextStyle(color: textColor)),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.remove_circle_outline, color: textColor),
+                        onPressed: () {
+                          if (_fontSize > 12) {
+                            setSheetState(() => _fontSize -= 1);
+                            setState(() => _fontSize -= 1);
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.add_circle_outline, color: textColor),
+                        onPressed: () {
+                          if (_fontSize < 34) {
+                            setSheetState(() => _fontSize += 1);
+                            setState(() => _fontSize += 1);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  // Font Family
+                  Row(
+                    children: [
+                      Text('Font Family', style: TextStyle(color: textColor)),
+                      const Spacer(),
+                      DropdownButton<String>(
+                        value: _fontFamily,
+                        dropdownColor: _getCardColor(),
+                        style: TextStyle(color: textColor),
+                        items: ['Serif', 'Sans', 'Monospace'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setSheetState(() => _fontFamily = val);
+                            setState(() => _fontFamily = val);
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -182,6 +332,130 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         );
       },
     );
+  }
+
+  Widget _buildThemeChip(String label, ReaderTheme theme, Color bg, Color text, StateSetter setSheetState) {
+    final isSelected = _readerTheme == theme;
+    return GestureDetector(
+      onTap: () {
+        setSheetState(() => _readerTheme = theme);
+        setState(() => _readerTheme = theme);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? Colors.amber : Colors.grey.withValues(alpha: 0.3),
+            width: isSelected ? 2.5 : 1,
+          ),
+        ),
+        child: Text(label, style: TextStyle(color: text, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+      ),
+    );
+  }
+
+  Color _getBackgroundColor() {
+    switch (_readerTheme) {
+      case ReaderTheme.amoled:
+        return Colors.black;
+      case ReaderTheme.dark:
+        return const Color(0xFF16161F);
+      case ReaderTheme.sepia:
+        return const Color(0xFFF7EFE2);
+      case ReaderTheme.light:
+        return const Color(0xFFFAFAFA);
+    }
+  }
+
+  Color _getCardColor() {
+    switch (_readerTheme) {
+      case ReaderTheme.amoled:
+        return const Color(0xFF1E1E1E);
+      case ReaderTheme.dark:
+        return const Color(0xFF222233);
+      case ReaderTheme.sepia:
+        return const Color(0xFFEFE2CE);
+      case ReaderTheme.light:
+        return const Color(0xFFEEEEEE);
+    }
+  }
+
+  Color _getTextColor() {
+    switch (_readerTheme) {
+      case ReaderTheme.amoled:
+      case ReaderTheme.dark:
+        return const Color(0xFFE8E8E8);
+      case ReaderTheme.sepia:
+        return const Color(0xFF382918);
+      case ReaderTheme.light:
+        return const Color(0xFF1A1A1A);
+    }
+  }
+
+  Color _getDialogueColor() {
+    switch (_readerTheme) {
+      case ReaderTheme.amoled:
+      case ReaderTheme.dark:
+        return const Color(0xFFFFD54F);
+      case ReaderTheme.sepia:
+        return const Color(0xFF8B4513);
+      case ReaderTheme.light:
+        return const Color(0xFF1565C0);
+    }
+  }
+
+  TextStyle _getTextStyle() {
+    TextStyle base;
+    switch (_fontFamily) {
+      case 'Monospace':
+        base = const TextStyle(fontFamily: 'monospace');
+        break;
+      case 'Sans':
+        base = const TextStyle(fontFamily: 'sans-serif');
+        break;
+      case 'Serif':
+      default:
+        base = const TextStyle(fontFamily: 'serif');
+        break;
+    }
+    return base.copyWith(
+      fontSize: _fontSize,
+      height: _lineHeight,
+      color: _getTextColor(),
+      letterSpacing: 0.3,
+    );
+  }
+
+  void _goToChapter(int index) {
+    if (index < 0 || index >= _chapters.length) return;
+    flutterTts.stop();
+    final ch = _chapters[index];
+    setState(() {
+      _currentIndex = index;
+      _currentTitle = ch['title'] ?? 'Chapter ${ch['chapter_number']}';
+      _currentContent = _extractPlainText(ch['content'] ?? '');
+      _currentChapterId = ch['id']?.toString();
+      _choices = [];
+      _selectedChoiceIndex = null;
+      _isPlaying = false;
+    });
+
+    if (ch['choices_json'] != null) {
+      try {
+        final decoded = jsonDecode(ch['choices_json']);
+        if (decoded is List && decoded.isNotEmpty) {
+          setState(() {
+            _choices = List<String>.from(decoded);
+          });
+          return;
+        }
+      } catch (_) {}
+    }
+    if (_currentStoryId != null && _currentChapterId != null) {
+      _fetchChoices();
+    }
   }
 
   void _submitChoice() {
@@ -199,9 +473,9 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       return;
     }
 
-    if (widget.storyId != null) {
-      context.push('/story/${widget.storyId}/director', extra: {
-        'chapterCount': widget.chapterCount ?? 0,
+    if (_currentStoryId != null) {
+      context.push('/story/$_currentStoryId/director', extra: {
+        'chapterCount': _currentChapterCount,
         'initialPrompt': 'Continue the story based on this choice: $choiceText',
         'selectedChoice': choiceText,
       });
@@ -211,46 +485,73 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   @override
   void dispose() {
     flutterTts.stop();
-    _quillController.dispose();
     _customChoiceController.dispose();
     super.dispose();
   }
 
+  Widget _buildNovelBody() {
+    final paragraphs = _currentContent.split(RegExp(r'\n\s*\n|\r\n\s*\r\n'));
+    final textStyle = _getTextStyle();
+    final dialogueColor = _getDialogueColor();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: paragraphs.map((para) {
+        final trimmed = para.trim();
+        if (trimmed.isEmpty) return const SizedBox.shrink();
+
+        // Check if paragraph is dialogue (starts with quotation mark)
+        final isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
+
+        return Container(
+          margin: EdgeInsets.only(bottom: _fontSize * 0.9),
+          child: SelectableText(
+            trimmed,
+            style: textStyle.copyWith(
+              color: isDialogue ? dialogueColor : textStyle.color,
+              fontStyle: isDialogue ? FontStyle.normal : FontStyle.normal,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildChoicesWidget() {
-    if (widget.storyId == null) return const SizedBox.shrink();
+    if (_currentStoryId == null) return const SizedBox.shrink();
+
+    final textColor = _getTextColor();
+    final cardColor = _getCardColor();
 
     return Container(
-      margin: const EdgeInsets.only(top: 32, bottom: 48),
+      margin: const EdgeInsets.only(top: 36, bottom: 48),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.4), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.alt_route, color: Colors.amber, size: 28),
-              const SizedBox(width: 10),
+              Icon(Icons.alt_route, color: Colors.amber, size: 26),
+              SizedBox(width: 10),
               Text(
                 'What happens next?',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: Colors.amber,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            'Choose your story path or write your own custom decision:',
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            'Choose the narrative path or write your own custom decision for the next chapter:',
+            style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.8)),
           ),
           const SizedBox(height: 16),
           if (_loadingChoices)
@@ -259,9 +560,9 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                 padding: EdgeInsets.all(24.0),
                 child: Column(
                   children: [
-                    CircularProgressIndicator(),
+                    CircularProgressIndicator(color: Colors.amber),
                     SizedBox(height: 12),
-                    Text('AI generating story choices...'),
+                    Text('AI dreaming up next story choices...', style: TextStyle(color: Colors.grey)),
                   ],
                 ),
               ),
@@ -282,14 +583,10 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context).colorScheme.surface,
+                      color: isSelected ? Colors.amber.withValues(alpha: 0.2) : _getBackgroundColor(),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.grey.withOpacity(0.3),
+                        color: isSelected ? Colors.amber : Colors.grey.withValues(alpha: 0.3),
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -297,18 +594,17 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                       children: [
                         Icon(
                           isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey,
+                          color: isSelected ? Colors.amber : Colors.grey,
+                          size: 20,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             _choices[index],
                             style: TextStyle(
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                  : Theme.of(context).colorScheme.onSurface,
+                              color: textColor,
                             ),
                           ),
                         ),
@@ -323,29 +619,29 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
               controller: _customChoiceController,
               onChanged: (text) {
                 if (text.isNotEmpty && _selectedChoiceIndex != null) {
-                  setState(() {
-                    _selectedChoiceIndex = null;
-                  });
+                  setState(() => _selectedChoiceIndex = null);
                 }
               },
+              style: TextStyle(color: textColor),
               decoration: InputDecoration(
-                hintText: 'Or write your own custom choice...',
-                prefixIcon: const Icon(Icons.edit_note),
+                hintText: 'Or write your own custom path...',
+                hintStyle: TextStyle(color: textColor.withValues(alpha: 0.4)),
+                prefixIcon: const Icon(Icons.edit_note, color: Colors.amber),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surface,
+                fillColor: _getBackgroundColor(),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 48,
               child: ElevatedButton.icon(
                 onPressed: _submitChoice,
                 icon: const Icon(Icons.auto_awesome),
-                label: const Text('Continue Story with Choice', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                label: const Text('Continue Story with Choice', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber.shade700,
+                  backgroundColor: Colors.amber,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -357,101 +653,147 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        actions: [
-          IconButton(
-            icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
-            tooltip: 'Audiobook Mode',
-            onPressed: _togglePlayback,
+  Widget _buildChapterNavigation() {
+    if (_chapters.isEmpty) return const SizedBox.shrink();
+
+    final hasPrev = _currentIndex > 0;
+    final hasNext = _currentIndex < _chapters.length - 1;
+    final textColor = _getTextColor();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ElevatedButton.icon(
+            onPressed: hasPrev ? () => _goToChapter(_currentIndex - 1) : null,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Previous Chapter'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _getCardColor(),
+              foregroundColor: textColor,
+              disabledForegroundColor: Colors.grey,
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_voice),
-            tooltip: 'Voice Settings',
-            onPressed: _showTtsSettings,
+          Text(
+            '${_currentIndex + 1} / ${_chapters.length}',
+            style: TextStyle(color: textColor.withValues(alpha: 0.7), fontWeight: FontWeight.bold),
           ),
-          IconButton(
-            icon: const Icon(Icons.theater_comedy, color: Colors.purpleAccent),
-            tooltip: 'Visual Novel Mode',
-            onPressed: () {
-              context.push('/visual_novel', extra: {
-                'title': widget.title,
-                'content': _quillController.document.toPlainText(),
-                'backgroundImage': widget.backgroundImage,
-              });
-            },
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.font_download),
-            onSelected: (value) {
-              setState(() {
-                _fontFamily = value;
-              });
-            },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem(value: 'Serif', child: Text('Serif')),
-              const PopupMenuItem(value: 'Sans', child: Text('Sans-Serif')),
-              const PopupMenuItem(value: 'Monospace', child: Text('Monospace')),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_decrease),
-            onPressed: () {
-              setState(() {
-                if (_fontSize > 12) _fontSize -= 2;
-              });
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_increase),
-            onPressed: () {
-              setState(() {
-                if (_fontSize < 36) _fontSize += 2;
-              });
-            },
+          ElevatedButton.icon(
+            onPressed: hasNext ? () => _goToChapter(_currentIndex + 1) : null,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text('Next Chapter'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+              disabledForegroundColor: Colors.grey,
+            ),
           ),
         ],
       ),
-      body: Container(
-        decoration: widget.backgroundImage != null
-            ? BoxDecoration(
-                image: DecorationImage(
-                  image: widget.backgroundImage!.startsWith('http')
-                      ? NetworkImage(widget.backgroundImage!)
-                      : MemoryImage(base64Decode(widget.backgroundImage!)) as ImageProvider,
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.85),
-                    BlendMode.darken,
-                  ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = _getBackgroundColor();
+    final textColor = _getTextColor();
+    final wordCount = _currentContent.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
+    final readTimeMinutes = (wordCount / 220).ceil();
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: _fullscreen
+          ? null
+          : AppBar(
+              backgroundColor: bgColor,
+              foregroundColor: textColor,
+              elevation: 0,
+              title: Text(_currentTitle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+              actions: [
+                IconButton(
+                  icon: Icon(_isPlaying ? Icons.stop_circle : Icons.headphones, color: _isPlaying ? Colors.redAccent : textColor),
+                  tooltip: 'Audiobook Reader',
+                  onPressed: _togglePlayback,
                 ),
-              )
-            : null,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 800),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Column(
-                children: [
-                  DefaultTextStyle(
-                    style: TextStyle(
-                      fontSize: _fontSize,
-                      fontFamily: _fontFamily,
-                      height: 1.8,
-                    ),
-                    child: quill.QuillEditor.basic(
-                      controller: _quillController,
-                      config: const quill.QuillEditorConfig(
-                        padding: EdgeInsets.zero,
+                IconButton(
+                  icon: Icon(Icons.tune, color: textColor),
+                  tooltip: 'Voice Settings',
+                  onPressed: _showTtsSettings,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.theater_comedy, color: Colors.purpleAccent),
+                  tooltip: 'Visual Novel Mode',
+                  onPressed: () {
+                    context.push('/visual_novel', extra: {
+                      'title': _currentTitle,
+                      'content': _currentContent,
+                      'backgroundImage': widget.backgroundImage,
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: Icon(Icons.format_size, color: textColor),
+                  tooltip: 'Text & Theme Appearance',
+                  onPressed: _showAppearanceSettings,
+                ),
+                IconButton(
+                  icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: textColor),
+                  tooltip: 'Toggle Fullscreen',
+                  onPressed: () => setState(() => _fullscreen = !_fullscreen),
+                ),
+              ],
+            ),
+      body: GestureDetector(
+        onDoubleTap: () => setState(() => _fullscreen = !_fullscreen),
+        child: Container(
+          color: bgColor,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Chapter Title Header
+                    Text(
+                      _currentTitle,
+                      style: TextStyle(
+                        fontSize: _fontSize * 1.5,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: _fontFamily,
+                        color: textColor,
                       ),
                     ),
-                  ),
-                  _buildChoicesWidget(),
-                ],
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: textColor.withValues(alpha: 0.5)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '~ $readTimeMinutes min read • $wordCount words',
+                          style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5)),
+                        ),
+                        if (_fullscreen) ...[
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: () => setState(() => _fullscreen = false),
+                            icon: const Icon(Icons.fullscreen_exit, size: 14),
+                            label: const Text('Exit Fullscreen', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const Divider(height: 32),
+                    // Story Content Body
+                    _buildNovelBody(),
+                    // Previous / Next Chapter Buttons
+                    _buildChapterNavigation(),
+                    // Interactive Next Chapter Choices
+                    _buildChoicesWidget(),
+                  ],
+                ),
               ),
             ),
           ),

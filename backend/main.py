@@ -1690,9 +1690,29 @@ async def generate_manga_comic(chapter_id: uuid.UUID, db: AsyncSession = Depends
         
     panels = await llm_service.generate_manga_comic_panels(chapter.title or f"Chapter {chapter.chapter_number}", chapter.content or "")
     
+    formatted_panels = []
+    for i, p in enumerate(panels):
+        p_dict = p if isinstance(p, dict) else {}
+        p_num = p_dict.get("panel_number", i + 1)
+        speaker = p_dict.get("speaker_name", "Narrator")
+        diag = p_dict.get("dialogue", "")
+        visual = p_dict.get("visual_description", "")
+        img_prompt = p_dict.get("image_prompt") or f"manga comic panel, {visual}, dramatic angle, anime art, screentones"
+        safe_prompt = urllib.parse.quote(f"{img_prompt}, high contrast manga ink drawing, expressive anime face, comic panel, masterpiece")
+        image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=512&height=512&nologo=true&model=flux"
+
+        formatted_panels.append({
+            "panel_number": p_num,
+            "speaker_name": speaker,
+            "dialogue": diag,
+            "visual_description": visual,
+            "image_prompt": img_prompt,
+            "image_url": image_url,
+        })
+
     return {
         "chapter_title": chapter.title or f"Chapter {chapter.chapter_number}",
-        "panels": panels
+        "panels": formatted_panels
     }
 
 
