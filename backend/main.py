@@ -455,7 +455,9 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         user_persona_appearance=original_story.user_persona_appearance,
         user_persona_personality=original_story.user_persona_personality,
         user_persona_backstory=original_story.user_persona_backstory,
-        intimacy_level=original_story.intimacy_level
+        intimacy_level=original_story.intimacy_level,
+        jealousy_trigger=original_story.jealousy_trigger,
+        pov_mode=original_story.pov_mode
     )
     db.add(new_story)
     await db.commit()
@@ -469,7 +471,9 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
             name=char.name, age=char.age, role=char.role, gender=char.gender,
             personality=char.personality, appearance=char.appearance, goals=char.goals,
             weaknesses=char.weaknesses, relationship_status=char.relationship_status,
-            dialogue_style=char.dialogue_style, avatar_base64=char.avatar_base64
+            dialogue_style=char.dialogue_style, avatar_base64=char.avatar_base64,
+            passion_level=char.passion_level, vulnerability_level=char.vulnerability_level,
+            romantic_status=char.romantic_status
         )
         db.add(new_char)
         
@@ -700,6 +704,7 @@ class GenerateRequest(BaseModel):
     story_id: uuid.UUID | None = None
     global_custom_rules: str = ""
     selected_choice: str | None = None
+    pov_character: str | None = None
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
@@ -727,6 +732,23 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
             else:
                 intimacy_guide = "INTIMACY LEVEL - EXPLICIT UNCENSORED:\nCompletely uncensored, explicit adult intimacy. Include raw, unfiltered physical passion, realistic character vocalizations (moaning, gasping, groaning, screaming, laughing), detailed physical touch, and intense sensory realism."
             story_context += f"--- INTIMACY & HEAT INTENSITY SETTING ---\n{intimacy_guide}\n------------------------------------------\n\n"
+
+            if story.jealousy_trigger:
+                story_context += (
+                    "--- ⚡ DYNAMIC JEALOUSY & POSSESSIVE TENSION (ACTIVE) ---\n"
+                    "You MUST organically introduce romantic jealousy, an intriguing rival suitor, or possessive tension into this chapter.\n"
+                    "Characters must display protective banter, simmering territorial glances, and emotional confrontations that test and heighten their mutual desire.\n"
+                    "-----------------------------------------------------------\n\n"
+                )
+
+            active_pov = request.pov_character or (story.pov_mode if story.pov_mode and story.pov_mode != "Standard" else None)
+            if active_pov:
+                story_context += (
+                    f"--- 🎭 DUAL-POV CHAPTER PERSPECTIVE: {active_pov.upper()} ---\n"
+                    f"You MUST write this chapter primarily through the intimate, first-person or close third-person lens of: {active_pov}.\n"
+                    f"Reveal their private physical cravings, inner doubts, secret vulnerability, and raw attraction toward their lover.\n"
+                    f"--------------------------------------------------------------------\n\n"
+                )
 
             if story.tone:
                 story_context += f"--- STORY THEME & NARRATIVE MOOD PRESET ---\nSelected Theme & Mood: {story.tone}\nYou MUST strictly write dialogue, pacing, action, and scene descriptions to honor this exact story theme and atmosphere.\n---------------------------------------------\n\n"
@@ -1714,5 +1736,91 @@ async def generate_manga_comic(chapter_id: uuid.UUID, db: AsyncSession = Depends
         "chapter_title": chapter.title or f"Chapter {chapter.chapter_number}",
         "panels": formatted_panels
     }
+
+@app.post("/api/v1/chapters/{chapter_id}/pillow-talk", response_model=schemas.PillowTalkResponse)
+async def generate_chapter_pillow_talk(chapter_id: uuid.UUID, req: schemas.PillowTalkRequest = None, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    story = await db.get(models.Story, chapter.story_id)
+    story_context = f"Title: {story.title if story else ''}, Genre: {story.genre if story else ''}, Tone: {story.tone if story else ''}"
+    
+    epilogue_text = await llm_service.generate_pillow_talk_epilogue(
+        chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter.content or "",
+        story_context
+    )
+    
+    return {
+        "chapter_title": chapter.title or f"Chapter {chapter.chapter_number}",
+        "epilogue_title": "🥀 Pillow Talk & Afterglow",
+        "content": epilogue_text
+    }
+
+@app.post("/api/v1/chapters/{chapter_id}/whisper-branch", response_model=schemas.DialogueWhisperResponse)
+async def generate_dialogue_whisper(chapter_id: uuid.UUID, req: schemas.DialogueWhisperRequest, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+        
+    result = await llm_service.generate_dialogue_whisper_branch(
+        chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter.content or "",
+        req.whisper_text,
+        req.action_type or "whisper"
+    )
+    
+    return {
+        "whisper_prompt": req.whisper_text,
+        "character_reaction": result.get("reaction", "A sudden shiver of desire rippled through them."),
+        "extended_scene": result.get("continuation", "")
+    }
+
+@app.post("/api/v1/stories/{story_id}/characters/chemistry-update")
+async def update_story_character_chemistry(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    characters = chars_res.scalars().all()
+    if not characters:
+        return {"status": "success", "updated": 0, "characters": []}
+        
+    chapters_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.desc()))
+    latest_chapters = chapters_res.scalars().all()
+    recent_text = "\n\n".join([c.content or "" for c in latest_chapters[:2]])
+    if not recent_text:
+        recent_text = story.synopsis or "A deep romance between the leads."
+        
+    char_dicts = [{"name": c.name} for c in characters]
+    evaluations = await llm_service.analyze_character_chemistry(char_dicts, recent_text)
+    
+    updated_list = []
+    eval_map = {e.get("name", "").strip().lower(): e for e in evaluations if isinstance(e, dict)}
+    
+    for c in characters:
+        c_eval = eval_map.get(c.name.strip().lower())
+        if c_eval:
+            c.passion_level = max(0, min(100, int(c_eval.get("passion_level", c.passion_level or 50))))
+            c.vulnerability_level = max(0, min(100, int(c_eval.get("vulnerability_level", c.vulnerability_level or 30))))
+            c.romantic_status = str(c_eval.get("romantic_status", c.romantic_status or "Guarded"))[:50]
+        else:
+            c.passion_level = min(100, (c.passion_level or 50) + 5)
+            c.vulnerability_level = min(100, (c.vulnerability_level or 30) + 4)
+            c.romantic_status = "Simmering Attraction" if (c.passion_level or 50) > 60 else "Guarded"
+            
+        updated_list.append({
+            "id": str(c.id),
+            "name": c.name,
+            "passion_level": c.passion_level,
+            "vulnerability_level": c.vulnerability_level,
+            "romantic_status": c.romantic_status
+        })
+        
+    await db.commit()
+    return {"status": "success", "updated": len(updated_list), "characters": updated_list}
+
 
 

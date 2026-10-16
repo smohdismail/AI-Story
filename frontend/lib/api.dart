@@ -380,7 +380,7 @@ class ApiService {
     }
   }
 
-  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = '', String? selectedChoice}) async* {
+  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = '', String? selectedChoice, String? povCharacter}) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
     request.headers.addAll(headers);
@@ -390,6 +390,7 @@ class ApiService {
       'story_id': storyId,
       'global_custom_rules': globalCustomRules,
       if (selectedChoice != null && selectedChoice.isNotEmpty) 'selected_choice': selectedChoice,
+      if (povCharacter != null && povCharacter.isNotEmpty) 'pov_character': povCharacter,
     });
 
     final client = http.Client();
@@ -882,6 +883,31 @@ class ApiService {
     final response = await http.post(Uri.parse('$baseUrl/chapters/$chapterId/generate-manga'), headers: headers);
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to generate manga comic');
+  }
+
+  static Future<Map<String, dynamic>> generatePillowTalk(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/chapters/$chapterId/pillow-talk'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate pillow talk epilogue');
+  }
+
+  static Future<Map<String, dynamic>> submitDialogueWhisper(String chapterId, String whisperText, {String actionType = 'whisper'}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/chapters/$chapterId/whisper-branch'),
+      headers: headers,
+      body: jsonEncode({'whisper_text': whisperText, 'action_type': actionType}),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to submit dialogue whisper');
+  }
+
+  static Future<Map<String, dynamic>> updateCharacterChemistry(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/characters/chemistry-update'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to update character chemistry');
   }
 }
 

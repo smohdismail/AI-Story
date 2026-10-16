@@ -676,5 +676,136 @@ async def generate_manga_comic_panels(chapter_title: str, chapter_content: str) 
         print(f"Error generating manga panels: {e}")
         return _get_fallback_panels()
 
+async def generate_pillow_talk_epilogue(chapter_title: str, chapter_content: str, story_context: str = "") -> str:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an acclaimed romance author specializing in intimate aftermaths, tender pillow talk, and sweet afterglow epilogues.\n"
+                "Write an intimate 'Pillow Talk & Afterglow' scene that takes place immediately following this chapter.\n"
+                "MANDATORY GUIDELINES:\n"
+                "1. Atmospheric intimacy: Focus on characters winding down together in bed or in a quiet, secluded moment.\n"
+                "2. Whispered confessions & vulnerability: Have them cuddle, trace each other's skin, whisper unspoken fears, mutual desires, and sweet banter.\n"
+                "3. Dialogue heavy: Include at least 60% realistic spoken dialogue with soft vocalizations (*whispers*, *chuckles softly*, *sighs against their neck*).\n"
+                "4. Length: 250 - 450 words. Do not rush."
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Story Background:\n{story_context}\n\nChapter: {chapter_title}\nEnding Scene:\n{chapter_content[-2000:]}\n\nWrite the Pillow Talk & Aftermath epilogue:"
+        }
+    ]
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=800,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return "The two lovers lay in quiet embrace, the warmth of the sheets wrapping around them as gentle whispers broke the midnight silence..."
+    except Exception as e:
+        print(f"Error generating pillow talk: {e}")
+        return "They rested together under the quiet glow of moonlight, whispering words meant only for each other in the soft darkness."
+
+async def generate_dialogue_whisper_branch(chapter_title: str, chapter_content: str, whisper_text: str, action_type: str = "whisper") -> dict:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert novelist directing a dramatic, romantic scene in real time.\n"
+                "The reader just triggered a mid-scene romantic intervention / whisper!\n"
+                "You must write:\n"
+                "1. The character's immediate emotional/physical reaction to this whisper (gasps, shivers, dilated eyes, racing heartbeat).\n"
+                "2. A passionate 250-word scene continuation where the characters act on this whisper directly with dialogue and touch.\n\n"
+                "Return a JSON object with keys:\n"
+                "- 'reaction': Short 1-2 sentence visceral reaction description\n"
+                "- 'continuation': Rich narrative continuation extending the scene with direct dialogue and chemistry"
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Chapter: {chapter_title}\nRecent Chapter Excerpt:\n{chapter_content[-1500:]}\n\nReader Intervention ({action_type}): \"{whisper_text}\"\n\nWrite the reaction and scene continuation now in JSON:"
+        }
+    ]
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=600,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                data = json.loads(raw.strip())
+                if isinstance(data, dict) and "reaction" in data:
+                    return data
+            except Exception:
+                match = re.search(r'\{.*"reaction"\s*:.*\}', raw, re.DOTALL)
+                if match:
+                    return json.loads(match.group(0))
+        return {
+            "reaction": "A breathless shiver traced down their spine as the words echoed between them.",
+            "continuation": f"\"{whisper_text},\" the confession lingered in the charged air. Moving closer until there was no space left between them, their hands tangled together as the moment caught fire."
+        }
+    except Exception as e:
+        print(f"Error in dialogue whisper: {e}")
+        return {
+            "reaction": "Their breath caught in their throat, stunned by the sudden intimacy.",
+            "continuation": f"The whisper hung in the quiet room. \"Did you really mean that?\" they murmured, leaning closer with eyes darkened by desire."
+        }
+
+async def analyze_character_chemistry(characters_data: list, chapter_content: str) -> list:
+    char_list = ", ".join([c.get("name", "Character") for c in characters_data])
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert relationship psychologist and romance novel analyst.\n"
+                "Analyze the latest chapter events and determine the romantic metrics for each character:\n"
+                "- 'passion_level': integer 0 to 100 (level of physical attraction, romantic heat, desire)\n"
+                "- 'vulnerability_level': integer 0 to 100 (level of emotional openness, letting down walls)\n"
+                "- 'romantic_status': short evocative status (e.g., 'Guarded & Hesitant', 'Simmering Attraction', 'Fiercely Possessive', 'Breathless Desire', 'Deeply Devoted')\n\n"
+                "Return a JSON array of objects, one per character, matching their name:\n"
+                "[{\"name\": \"...\", \"passion_level\": 75, \"vulnerability_level\": 60, \"romantic_status\": \"...\"}]"
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Characters to evaluate: {char_list}\n\nChapter Events:\n{chapter_content[-3000:]}\n\nReturn JSON array of character metrics:"
+        }
+    ]
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.6,
+            max_tokens=500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                res = json.loads(raw.strip())
+                if isinstance(res, list): return res
+                if isinstance(res, dict) and "characters" in res: return res["characters"]
+            except Exception:
+                match = re.search(r'\[.*\]', raw, re.DOTALL)
+                if match:
+                    return json.loads(match.group(0))
+        return []
+    except Exception as e:
+        print(f"Error analyzing character chemistry: {e}")
+        return []
+
 
 

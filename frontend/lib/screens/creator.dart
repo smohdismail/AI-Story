@@ -54,11 +54,20 @@ class _CreatorScreenState extends State<CreatorScreen> {
   ];
 
   String _selectedIntimacy = 'explicit';
+  String _selectedPov = 'Standard';
+  bool _jealousyTrigger = false;
 
   final _intimacyOptions = [
     {'value': 'mild', 'label': '🌸 Mild Romance (Sweet & Flirty, No Explicit Scenes)'},
     {'value': 'passionate', 'label': '🔥 Passionate & Sensual (Deep Heat, Intense Touch & Kisses)'},
     {'value': 'explicit', 'label': '🔞 Explicit Uncensored (Raw Adult Passion, Vocalizations & Realism)'},
+  ];
+
+  final _povOptions = [
+    'Standard',
+    'Dual-POV Alternating (His & Her)',
+    'First Person (Male Lead)',
+    'First Person (Female Lead)',
   ];
 
   bool _isSaving = false;
@@ -73,6 +82,8 @@ class _CreatorScreenState extends State<CreatorScreen> {
         'subgenre': _selectedSubgenre,
         'tone': _selectedTone,
         'intimacy_level': _selectedIntimacy,
+        'pov_mode': _selectedPov,
+        'jealousy_trigger': _jealousyTrigger,
       };
       
       if (_personaNameController.text.trim().isNotEmpty) {
@@ -156,6 +167,31 @@ class _CreatorScreenState extends State<CreatorScreen> {
                   decoration: const InputDecoration(labelText: '🔥 Intimacy & Heat Intensity Level', border: OutlineInputBorder()),
                   items: _intimacyOptions.map((opt) => DropdownMenuItem(value: opt['value']!, child: Text(opt['label']!, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
                   onChanged: (v) => setState(() => _selectedIntimacy = v!),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedPov,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '🎭 Narrative Perspective (POV Mode)', border: OutlineInputBorder()),
+                  items: _povOptions.map((p) => DropdownMenuItem(value: p, child: Text(p, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
+                  onChanged: (v) => setState(() => _selectedPov = v!),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: _jealousyTrigger ? Theme.of(context).colorScheme.primary : Colors.grey.withAlpha(50),
+                    ),
+                  ),
+                  child: SwitchListTile(
+                    title: const Text('⚡ Dynamic Jealousy & Possessiveness Trigger', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    subtitle: const Text('Sparks rival suitors, protective banter, territory tension, and emotional friction between leads.', style: TextStyle(fontSize: 12)),
+                    value: _jealousyTrigger,
+                    onChanged: (v) => setState(() => _jealousyTrigger = v),
+                    secondary: Icon(Icons.flash_on, color: _jealousyTrigger ? Colors.amber : Colors.grey),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Card(

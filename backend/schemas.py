@@ -75,6 +75,8 @@ class StoryBase(BaseModel):
     likes_count: Optional[int] = 0
     nsfw_preferences: Optional[str] = None
     intimacy_level: Optional[str] = "explicit"
+    jealousy_trigger: Optional[bool] = False
+    pov_mode: Optional[str] = "Standard"
 
 class StoryCreate(StoryBase):
     pass
@@ -99,6 +101,8 @@ class StoryUpdate(BaseModel):
     likes_count: Optional[int] = None
     nsfw_preferences: Optional[str] = None
     intimacy_level: Optional[str] = None
+    jealousy_trigger: Optional[bool] = None
+    pov_mode: Optional[str] = None
 
 class ParagraphRewriteRequest(BaseModel):
     text: str
@@ -128,6 +132,9 @@ class CharacterBase(BaseModel):
     dialogue_style: Optional[str] = None
     avatar_base64: Optional[str] = None
     intimacy_score: Optional[int] = 0
+    passion_level: Optional[int] = 50
+    vulnerability_level: Optional[int] = 30
+    romantic_status: Optional[str] = "Guarded"
 
 class CharacterCreate(CharacterBase):
     pass
@@ -145,12 +152,32 @@ class CharacterUpdate(BaseModel):
     dialogue_style: Optional[str] = None
     avatar_base64: Optional[str] = None
     intimacy_score: Optional[int] = None
+    passion_level: Optional[int] = None
+    vulnerability_level: Optional[int] = None
+    romantic_status: Optional[str] = None
 
 class CharacterResponse(CharacterBase):
     id: UUID4
     story_id: UUID4
 
     model_config = ConfigDict(from_attributes=True)
+
+class PillowTalkRequest(BaseModel):
+    context: Optional[str] = None
+
+class PillowTalkResponse(BaseModel):
+    chapter_title: str
+    epilogue_title: str = "🥀 Pillow Talk & Afterglow"
+    content: str
+
+class DialogueWhisperRequest(BaseModel):
+    whisper_text: str
+    action_type: Optional[str] = "whisper"
+
+class DialogueWhisperResponse(BaseModel):
+    whisper_prompt: str
+    character_reaction: str
+    extended_scene: str
 
 class ChapterBase(BaseModel):
     chapter_number: int

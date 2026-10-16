@@ -54,6 +54,8 @@ class Story(Base):
     likes_count = Column(Integer, default=0)
     nsfw_preferences = Column(Text, default="")
     intimacy_level = Column(String, default="explicit")
+    jealousy_trigger = Column(Boolean, default=False)
+    pov_mode = Column(String, default="Standard")
     
     # Story-specific user persona
     user_persona_name = Column(String, nullable=True)
@@ -85,6 +87,9 @@ class Character(Base):
     dialogue_style = Column(Text, nullable=True)
     avatar_base64 = Column(Text, nullable=True)
     intimacy_score = Column(Integer, default=0)
+    passion_level = Column(Integer, default=50)
+    vulnerability_level = Column(Integer, default=30)
+    romantic_status = Column(String, default="Guarded")
 
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")

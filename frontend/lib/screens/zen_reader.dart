@@ -251,6 +251,179 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     );
   }
 
+  void _showWhisperDialog() {
+    if (_currentChapterId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Whisper requires an active saved chapter.')),
+      );
+      return;
+    }
+
+    final quickWhispers = [
+      'Pull them close and whisper a teasing challenge: "You think I\'m letting you get away with that?"',
+      'Lean in, brushing lips against their ear: "Look at me... say my name."',
+      'A soft, vulnerable confession: "Stop running. I can\'t pretend I don\'t want you anymore."',
+      'A possessive touch: lace fingers together firmly and pull them against your chest.',
+      'A breathless murmur: "Tell me to stop, and I will. But don\'t lie to me."',
+    ];
+
+    final customCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _getCardColor(),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        final textColor = _getTextColor();
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.record_voice_over, color: Colors.pinkAccent),
+                        SizedBox(width: 8),
+                        Text(
+                          '💬 Dialogue Whisper',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.pinkAccent),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: textColor.withValues(alpha: 0.6)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                Text(
+                  'Intervene mid-scene! Direct a whispered line or intimate physical gesture to steer character chemistry immediately.',
+                  style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.8)),
+                ),
+                const SizedBox(height: 16),
+                const Text('Quick Romantic Whispers & Gestures:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 8),
+                ...quickWhispers.map((whisper) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _executeWhisper(whisper);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: textColor,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      side: BorderSide(color: Colors.pinkAccent.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(whisper, style: const TextStyle(fontSize: 13, height: 1.3)),
+                  ),
+                )),
+                const SizedBox(height: 10),
+                const Text('Or Custom Whisper / Action:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: customCtrl,
+                        style: TextStyle(color: textColor),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. Whisper "You look gorgeous when you blush."',
+                          hintStyle: TextStyle(color: textColor.withValues(alpha: 0.4)),
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (customCtrl.text.trim().isNotEmpty) {
+                          Navigator.pop(ctx);
+                          _executeWhisper(customCtrl.text.trim());
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.pinkAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      child: const Icon(Icons.send, size: 18),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _executeWhisper(String whisperPrompt) async {
+    if (_currentChapterId == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Colors.pinkAccent),
+            SizedBox(width: 20),
+            Expanded(child: Text('AI Director branching scene with your whisper...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final res = await ApiService.submitDialogueWhisper(
+        _currentChapterId!,
+        whisperPrompt,
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // close loading
+        final reaction = res['character_reaction'] ?? '';
+        final extended = res['extended_scene'] ?? '';
+        final branch = [reaction, extended].where((s) => s.toString().trim().isNotEmpty).join('\n\n');
+
+        if (branch.isNotEmpty) {
+          setState(() {
+            _currentContent += '\n\n— 💬 Directed Whisper: "$whisperPrompt" —\n\n$branch';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Whisper inserted! The characters reacted to your direction.'),
+              backgroundColor: Colors.pinkAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to insert whisper: $e')),
+        );
+      }
+    }
+  }
+
   void _showAppearanceSettings() {
     showModalBottomSheet(
       context: context,
@@ -712,6 +885,11 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
               title: Text(_currentTitle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.record_voice_over, color: Colors.pinkAccent),
+                  tooltip: '💬 Mid-Scene Dialogue Whisper',
+                  onPressed: _showWhisperDialog,
+                ),
+                IconButton(
                   icon: Icon(_isPlaying ? Icons.stop_circle : Icons.headphones, color: _isPlaying ? Colors.redAccent : textColor),
                   tooltip: 'Audiobook Reader',
                   onPressed: _togglePlayback,
@@ -798,6 +976,12 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
             ),
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showWhisperDialog,
+        icon: const Icon(Icons.record_voice_over, color: Colors.white, size: 20),
+        label: const Text('💬 Whisper', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.pink.shade700,
       ),
     );
   }

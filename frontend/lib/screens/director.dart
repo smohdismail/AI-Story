@@ -28,6 +28,8 @@ class _DirectorScreenState extends State<DirectorScreen> {
   bool _isGenerating = false;
   bool _isSaving = false;
   bool _stopRequested = false;
+  List<dynamic> _characters = [];
+  String? _selectedPovCharacter;
 
   @override
   void initState() {
@@ -35,6 +37,18 @@ class _DirectorScreenState extends State<DirectorScreen> {
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _promptController.text = widget.initialPrompt!;
     }
+    _loadCharacters();
+  }
+
+  Future<void> _loadCharacters() async {
+    try {
+      final chars = await ApiService.getCharacters(widget.storyId);
+      if (mounted) {
+        setState(() {
+          _characters = chars;
+        });
+      }
+    } catch (_) {}
   }
 
   void _generateText() async {
@@ -61,6 +75,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
           contextText, 
           globalCustomRules: globalCustomRules,
           selectedChoice: widget.selectedChoice,
+          povCharacter: _selectedPovCharacter,
       )) {
         if (!mounted || _stopRequested) break;
         setState(() {
@@ -468,6 +483,42 @@ class _DirectorScreenState extends State<DirectorScreen> {
                     ),
                   ],
                 ),
+                if (_characters.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        const Text('POV: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ChoiceChip(
+                          label: const Text('Default POV'),
+                          selected: _selectedPovCharacter == null,
+                          onSelected: (selected) {
+                            if (selected) setState(() => _selectedPovCharacter = null);
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ..._characters.map((c) {
+                          final name = c['name'] ?? 'Character';
+                          final isSelected = _selectedPovCharacter == name;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text('🎭 $name POV'),
+                              selected: isSelected,
+                              selectedColor: Colors.purple.shade700,
+                              onSelected: (selected) {
+                                setState(() {
+                                  _selectedPovCharacter = selected ? name : null;
+                                });
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 TextField(
                   controller: _promptController,

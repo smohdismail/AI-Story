@@ -1047,6 +1047,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                           if (action == 'edit') _editChapter(chapter);
                           if (action == 'manga') _showMangaComicDialog(chapter);
                           if (action == 'illustrate') _illustrateChapterScene(chapter);
+                          if (action == 'pillow_talk') _showPillowTalkDialog(chapter);
                           if (action == 'translate') _showTranslateDialog(chapter['content'] ?? '');
                           if (action == 'delete') _deleteChapter(chapter['chapter_number']);
                         },
@@ -1066,6 +1067,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                           const PopupMenuItem(
                             value: 'illustrate',
                             child: Row(children: [Icon(Icons.palette, color: Colors.purpleAccent, size: 20), SizedBox(width: 10), Text('Illustrate Scene')]),
+                          ),
+                          const PopupMenuItem(
+                            value: 'pillow_talk',
+                            child: Row(children: [Icon(Icons.bed, color: Colors.pinkAccent, size: 20), SizedBox(width: 10), Text('Pillow Talk Epilogue')]),
                           ),
                           const PopupMenuItem(
                             value: 'translate',
@@ -1091,6 +1096,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                             avatar: const Icon(Icons.menu_book, size: 16, color: Colors.amber),
                             label: const Text('Read'),
                             onPressed: () => _openZenReader(chapter),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.bed, size: 16, color: Colors.pinkAccent),
+                            label: const Text('Pillow Talk'),
+                            onPressed: () => _showPillowTalkDialog(chapter),
                           ),
                           ActionChip(
                             avatar: const Icon(Icons.edit, size: 16, color: Colors.blue),
@@ -1206,7 +1216,19 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+          child: OutlinedButton.icon(
+            onPressed: _updateAllCharacterChemistry,
+            icon: const Icon(Icons.favorite, color: Colors.pinkAccent),
+            label: const Text('❤️‍🔥 Dynamic Chemistry & Passion Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              side: const BorderSide(color: Colors.pinkAccent, width: 1.5),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
           child: TextField(
             decoration: const InputDecoration(
               hintText: 'Search characters...',
@@ -1317,8 +1339,77 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                             const SizedBox(height: 8),
                             if (char['relationship_status'] != null && char['relationship_status'].toString().isNotEmpty) ...[
                               Text('Relationship: ${char['relationship_status']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                             ],
+                            // Dynamic Character Passion & Vulnerability Gauge
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1B1B28),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.favorite, color: Colors.pinkAccent, size: 16),
+                                          SizedBox(width: 6),
+                                          Text('Chemistry Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        ],
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(6)),
+                                        child: Text(char['romantic_status'] ?? 'Guarded', style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Text('🔥 Passion', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                      const Spacer(),
+                                      Text('${char['passion_level'] ?? 50}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: ((char['passion_level'] ?? 50) as int) / 100.0,
+                                      backgroundColor: Colors.white12,
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Text('🥀 Vulnerability', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                      const Spacer(),
+                                      Text('${char['vulnerability_level'] ?? 30}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: ((char['vulnerability_level'] ?? 30) as int) / 100.0,
+                                      backgroundColor: Colors.white12,
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.pinkAccent),
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
                             const Text('Personality', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
                             const SizedBox(height: 4),
                             Text(char['personality'] ?? 'N/A', textAlign: TextAlign.justify, style: const TextStyle(height: 1.4, fontSize: 15)),
@@ -1947,12 +2038,21 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     String dynamicRole = 'Balanced';
     String sensoryDetail = 'High Sensual Focus';
     String intimacyLevel = story!['intimacy_level'] ?? 'explicit';
+    bool jealousyTrigger = story!['jealousy_trigger'] ?? false;
+    String povMode = story!['pov_mode'] ?? 'Standard';
 
     final intimacyLabels = {
       'mild': '🌸 Mild Romance',
       'passionate': '🔥 Passionate & Sensual',
       'explicit': '🔞 Explicit Uncensored',
     };
+
+    final povOptions = [
+      'Standard',
+      'Dual-POV Alternating (His & Her)',
+      'First Person (Male Lead)',
+      'First Person (Female Lead)',
+    ];
 
     showDialog(
       context: context,
@@ -1985,6 +2085,23 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     dropdownColor: const Color(0xFF2C2C3E),
                     items: tonesList.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))).toList(),
                     onChanged: (val) => setDialogState(() => selectedTone = val!),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: povOptions.contains(povMode) ? povMode : 'Standard',
+                    decoration: const InputDecoration(labelText: '🎭 Point of View (POV) Style'),
+                    dropdownColor: const Color(0xFF2C2C3E),
+                    items: povOptions.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setDialogState(() => povMode = val!),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: Colors.pinkAccent,
+                    title: const Text('⚡ Dynamic Jealousy & Rivalry', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Introduce protective jealousy, rival suitors, and possessive tension', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    value: jealousyTrigger,
+                    onChanged: (val) => setDialogState(() => jealousyTrigger = val),
                   ),
                   const SizedBox(height: 8),
                   TextField(controller: customRulesController, decoration: const InputDecoration(labelText: 'Custom AI Story Rules'), maxLines: 2),
@@ -2060,6 +2177,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       'custom_rules': customRulesController.text,
                       'nsfw_preferences': combinedNsfw,
                       'intimacy_level': intimacyLevel,
+                      'jealousy_trigger': jealousyTrigger,
+                      'pov_mode': povMode,
                     });
                     if (mounted) Navigator.pop(context);
                     _loadData(); // Refresh UI
@@ -3312,6 +3431,115 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating manga comic: $e')));
+      }
+    }
+  }
+
+  Future<void> _showPillowTalkDialog(Map<String, dynamic> chapter) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Colors.pinkAccent),
+            SizedBox(width: 20),
+            Text('Writing Pillow Talk epilogue...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final res = await ApiService.generatePillowTalk(chapter['id'].toString());
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      final epilogueTitle = res['epilogue_title'] ?? '🥀 Pillow Talk & Afterglow';
+      final content = res['content'] ?? '';
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF161622),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) => DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.bed, color: Colors.pinkAccent, size: 26),
+                          const SizedBox(width: 8),
+                          Text(epilogueTitle, style: const TextStyle(color: Colors.pinkAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24, height: 20),
+                  SelectableText(
+                    content,
+                    style: const TextStyle(fontSize: 16, height: 1.8, color: Color(0xFFE8E8E8), fontFamily: 'serif'),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Append to Chapter Content', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () async {
+                      final updated = '${chapter['content'] ?? ''}\n\n---\n### 🥀 Pillow Talk & Afterglow Epilogue\n\n$content';
+                      await ApiService.updateChapter(widget.storyId, chapter['chapter_number'], {'content': updated});
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pillow Talk epilogue appended to chapter!')));
+                        _loadData();
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating pillow talk: $e')));
+      }
+    }
+  }
+
+  Future<void> _updateAllCharacterChemistry() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Analyzing character chemistry & romantic vulnerability with AI...')),
+    );
+    try {
+      final res = await ApiService.updateCharacterChemistry(widget.storyId);
+      if (mounted) {
+        final count = res['updated'] ?? 0;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Successfully updated romantic chemistry for $count characters!')),
+        );
+        _loadData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating chemistry: $e')));
       }
     }
   }
