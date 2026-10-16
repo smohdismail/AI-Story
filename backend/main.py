@@ -2021,7 +2021,7 @@ async def generate_midnight_voicemail_endpoint(character_id: uuid.UUID, db: Asyn
         "emotional_state": mood,
     }
 
-
-
-
-
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
