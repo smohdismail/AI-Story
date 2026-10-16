@@ -942,15 +942,24 @@ class ApiService {
     throw Exception('Failed to generate after-hours cut');
   }
 
-  static Future<Map<String, dynamic>> dateEncounterStep(String characterId, {required String setting, required String chatHistory, required String userInput}) async {
+  static Future<Map<String, dynamic>> dateEncounterStep(
+    String characterId, {
+    required String setting,
+    String? chatHistory,
+    String? userInput,
+    String? userAction,
+    List<dynamic>? history,
+  }) async {
     final headers = await _getHeaders();
+    final actualInput = userInput ?? userAction ?? '';
+    final actualHistory = chatHistory ?? (history != null ? jsonEncode(history) : '');
     final response = await http.post(
       Uri.parse('$baseUrl/characters/$characterId/date-encounter'),
       headers: headers,
       body: jsonEncode({
         'setting': setting,
-        'chat_history': chatHistory,
-        'user_input': userInput,
+        'chat_history': actualHistory,
+        'user_input': actualInput,
       }),
     );
     if (response.statusCode == 200) return jsonDecode(response.body);
