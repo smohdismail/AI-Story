@@ -1822,5 +1822,85 @@ async def update_story_character_chemistry(story_id: uuid.UUID, db: AsyncSession
     await db.commit()
     return {"status": "success", "updated": len(updated_list), "characters": updated_list}
 
+@app.get("/api/v1/users/me/all-characters")
+async def get_all_user_characters(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    stories_res = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
+    stories = stories_res.scalars().all()
+    if not stories:
+        # Fallback to all stories if user has not tied them
+        stories_res = await db.execute(select(models.Story).limit(50))
+        stories = stories_res.scalars().all()
+        if not stories:
+            return []
+            
+    story_ids = [s.id for s in stories]
+    story_title_map = {str(s.id): s.title for s in stories}
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id.in_(story_ids)))
+    chars = chars_res.scalars().all()
+    out = []
+    for c in chars:
+        out.append({
+            "id": str(c.id),
+            "name": c.name,
+            "role": c.role or "Lead Character",
+            "personality": c.personality or "",
+            "appearance": c.appearance or "",
+            "avatar_url": c.avatar_url,
+            "passion_level": c.passion_level or 50,
+            "vulnerability_level": c.vulnerability_level or 30,
+            "romantic_status": c.romantic_status or "Guarded",
+            "story_id": str(c.story_id),
+            "story_title": story_title_map.get(str(c.story_id), "Novel")
+        })
+    return out
+
+@app.post("/api/v1/stories/{story_id}/outline-plan")
+async def generate_outline_plan_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chap_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()))
+    chapters = chap_res.scalars().all()
+    
+    def get_plain(text):
+        if not text: return ""
+        if text.startswith('[{') and text.endswith('}]'):
+            import json
+            try:
+                ops = json.loads(text)
+                return "".join([op.get("insert", "") for op in ops if isinstance(op, dict)])
+            except: pass
+        return text
+
+    chapters_summary = "\n".join([f"Chapter {c.chapter_number}: '{c.title}' - Summary: {c.summary or get_plain(c.content)[:180]}" for c in chapters])
+    
+    plan = await llm_service.generate_story_outline_plan(
+        story.title or "Untitled Romance",
+        f"{story.genre or 'Romance'} / {story.subgenre or 'Romantic Suspense'}",
+        story.synopsis or "",
+        chapters_summary
+    )
+    return plan
+
+@app.post("/api/v1/stories/{story_id}/generate-cover")
+async def generate_cover_endpoint(story_id: uuid.UUID, req: dict = None, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    style = (req or {}).get("style", "Anime/Manga")
+    cover_url = llm_service.generate_book_cover_url(
+        story.title or "Romantic Novel",
+        story.synopsis or "",
+        story.genre or "Romance",
+        style=style
+    )
+    story.cover_image_url = cover_url
+    await db.commit()
+    await db.refresh(story)
+    return {"status": "success", "cover_image_url": cover_url, "style": style}
+
+
 
 

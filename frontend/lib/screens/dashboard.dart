@@ -215,9 +215,134 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildContinueReadingCard(Map<String, dynamic> story) {
+    final title = story['title'] ?? 'Untitled Novel';
+    final genre = story['genre'] ?? 'Romance';
+    final subgenre = story['subgenre'] ?? 'Fiction';
+    final coverBase64 = story['cover_base64'];
+    final coverUrl = story['cover_image_url'];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF2E1A47),
+            Theme.of(context).colorScheme.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            await context.push('/story/${story['id']}');
+            _loadStories();
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                // Cover preview
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 58,
+                    height: 80,
+                    color: Colors.black38,
+                    child: coverBase64 != null
+                        ? Image.memory(
+                            base64Decode(coverBase64),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.book, color: Colors.amber),
+                          )
+                        : (coverUrl != null && coverUrl.isNotEmpty)
+                            ? Image.network(
+                                coverUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.book, color: Colors.amber),
+                              )
+                            : const Icon(Icons.book, color: Colors.amber, size: 30),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Story Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.play_circle_fill, size: 14, color: Colors.amber),
+                          const SizedBox(width: 5),
+                          Text(
+                            'CONTINUE READING',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: Colors.amber.shade300,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$genre • $subgenre',
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            'Resume Chapter ➔',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBodyContent() {
     if (!isFolderView) {
-      return _buildStoriesGrid(stories);
+      final latestStory = stories.isNotEmpty ? stories.first : null;
+      return Column(
+        children: [
+          if (latestStory != null) _buildContinueReadingCard(latestStory),
+          Expanded(child: _buildStoriesGrid(stories)),
+        ],
+      );
     }
 
     if (selectedGenre == null) {

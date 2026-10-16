@@ -10,6 +10,8 @@ import '../api.dart';
 import '../pdf_export.dart';
 import '../utils/name_generator.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
+import '../services/audiobook_service.dart';
+import 'audiobook_player_screen.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -30,6 +32,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   String loreSearchQuery = '';
   String locationSearchQuery = '';
   bool isLoading = true;
+  Map<String, dynamic>? outlinePlan;
+  bool isLoadingOutline = false;
+  String selectedCoverStyle = 'Anime/Manga';
+  bool isGeneratingCoverStyle = false;
 
   @override
   void initState() {
@@ -778,7 +784,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6,
+      length: 8,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -794,11 +800,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             isScrollable: true,
             tabs: [
               Tab(icon: Icon(Icons.menu_book), text: 'Chapters'),
+              Tab(icon: Icon(Icons.route), text: 'Outline & Arc'),
               Tab(icon: Icon(Icons.people), text: 'Characters'),
+              Tab(icon: Icon(Icons.forum), text: 'Conversations & Chats'),
+              Tab(icon: Icon(Icons.palette), text: 'Visual & Manga Studio'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
               Tab(icon: Icon(Icons.map), text: 'World Map'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
-              Tab(icon: Icon(Icons.palette), text: 'Art Gallery'),
             ],
           ),
           actions: [
@@ -881,11 +889,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         body: TabBarView(
           children: [
             _buildChaptersTab(),
+            _buildOutlineTab(),
             _buildCharactersTab(),
+            _buildConversationsTab(),
+            _buildVisualStudioTab(),
             _buildWorldTab(),
             _buildWorldMapTab(),
             _buildUserPersonaTab(),
-            _buildArtGalleryTab(),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -977,6 +987,22 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     avatar: const Icon(Icons.timer, size: 16),
                     label: Text('~ $readTimeMinutes min read'),
                   ),
+                  if (chapters.isNotEmpty)
+                    ActionChip(
+                      avatar: const Icon(Icons.headphones, size: 16, color: Colors.amber),
+                      label: const Text('Play Audio 🎧', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.amber.withValues(alpha: 0.15),
+                      side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                      onPressed: () {
+                        AudiobookService.instance.startPlaylist(
+                          chapters.cast<Map<String, dynamic>>(),
+                          0,
+                          storyTitle: story?['title'],
+                          coverUrl: story?['cover_image_url'],
+                        );
+                        AudiobookPlayerScreen.show(context);
+                      },
+                    ),
                 ],
               ),
             ],
@@ -3542,6 +3568,584 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating chemistry: $e')));
       }
     }
+  }
+
+  Future<void> _fetchOutlinePlan() async {
+    setState(() => isLoadingOutline = true);
+    try {
+      final plan = await ApiService.getStoryOutlinePlan(widget.storyId);
+      if (mounted) {
+        setState(() {
+          outlinePlan = plan;
+          isLoadingOutline = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingOutline = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating outline: $e')));
+      }
+    }
+  }
+
+  Widget _buildOutlineTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Card with Arc Progress
+          Card(
+            elevation: 3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.route, color: Colors.purpleAccent, size: 24),
+                          SizedBox(width: 8),
+                          Text('4-Act Novel Arc', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: isLoadingOutline ? null : _fetchOutlinePlan,
+                        icon: isLoadingOutline 
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.auto_awesome, size: 14),
+                        label: Text(outlinePlan == null ? 'Analyze Arc' : 'Refresh Arc', style: const TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Current Phase: ${outlinePlan?['current_act'] ?? 'Act I: Inciting Chemistry & The First Spark'}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber, fontSize: 14),
+                  ),
+                  if (outlinePlan?['editor_advice'] != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '💡 Editor Insight: "${outlinePlan!['editor_advice']}"',
+                      style: const TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4 Acts Breakdown
+          if (outlinePlan != null && outlinePlan!['acts'] != null) ...[
+            const Text('Narrative Progression Stages:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 8),
+            ...(outlinePlan!['acts'] as List<dynamic>).map((act) {
+              final status = (act['status'] ?? 'upcoming').toString().toLowerCase();
+              final isCompleted = status.contains('complete');
+              final isActive = status.contains('active');
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: isActive ? Colors.amber : isCompleted ? Colors.green.shade400 : Colors.white12,
+                    width: isActive ? 1.5 : 1,
+                  ),
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    isCompleted ? Icons.check_circle : isActive ? Icons.radio_button_checked : Icons.circle_outlined,
+                    color: isCompleted ? Colors.green : isActive ? Colors.amber : Colors.grey,
+                  ),
+                  title: Text(
+                    act['act_name'] ?? 'Act',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isActive ? Colors.amber : Colors.white,
+                    ),
+                  ),
+                  subtitle: Text(act['description'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+
+          // Chapter Synopsis Cards
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Chapter Synopses (${chapters.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text('Word count / summaries', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.5))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (chapters.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('No chapters written yet. Start by creating Chapter 1!'),
+              ),
+            )
+          else
+            ...chapters.map((ch) {
+              final rawContent = ch['content']?.toString() ?? '';
+              final words = rawContent.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
+              final summary = ch['summary']?.toString() ?? (rawContent.length > 150 ? '${rawContent.substring(0, 150)}...' : rawContent);
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Ch. ${ch['chapter_number']}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purpleAccent),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              ch['title'] ?? 'Chapter',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text('$words words', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        summary.isNotEmpty ? summary : 'No summary recorded.',
+                        style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.3),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          const SizedBox(height: 16),
+
+          // Future Chapter Planner
+          const Row(
+            children: [
+              Icon(Icons.wb_twilight, color: Colors.orangeAccent, size: 20),
+              SizedBox(width: 6),
+              Text('Future Chapter Planner & Suggestions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (outlinePlan != null && outlinePlan!['upcoming_chapters'] != null) ...[
+            ...(outlinePlan!['upcoming_chapters'] as List<dynamic>).map((futureCh) {
+              final title = futureCh['suggested_title'] ?? 'Upcoming Chapter';
+              final hook = futureCh['hook'] ?? '';
+              final syn = futureCh['synopsis'] ?? '';
+              final tension = futureCh['tension_rating'] ?? '🔥 High Tension';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                color: const Color(0xFF1B1B26),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: Colors.orangeAccent.withValues(alpha: 0.4)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.orangeAccent),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(tension, style: const TextStyle(fontSize: 11, color: Colors.orange)),
+                          ),
+                        ],
+                      ),
+                      if (hook.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text('"$hook"', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.white)),
+                      ],
+                      const SizedBox(height: 6),
+                      Text(syn, style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.3)),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final prompt = 'Write next chapter ($title): $syn. Key hook: $hook';
+                            await context.push('/story/${widget.storyId}/director', extra: {
+                              'chapterCount': chapters.length,
+                              'initialPrompt': prompt,
+                            });
+                            _loadData();
+                          },
+                          icon: const Icon(Icons.edit, size: 14),
+                          label: const Text('Write in Director ➔', style: TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange.shade800,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ] else ...[
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    const Text('Tap below to have the AI plan your next 2-3 chapter outlines, hooks, and romantic conflicts.'),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _fetchOutlinePlan,
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Draft Next Chapter Outlines with AI'),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade700, foregroundColor: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversationsTab() {
+    final scenarios = [
+      {'title': '🍷 Late-Night Dinner & Wine', 'desc': 'Uninhibited conversation, heavy eye contact, guards down.'},
+      {'title': '⛈️ Trapped in a Rainstorm', 'desc': 'Soaked through in close quarters, shared body heat.'},
+      {'title': '⚡ A Jealous Confrontation', 'desc': 'Territorial friction, unspoken feelings forced to the surface.'},
+      {'title': '☕ The Morning After', 'desc': 'Tender whispers, teasing breakfast banter, lingering aftermath.'},
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1-on-1 Chats Section
+          const Row(
+            children: [
+              Icon(Icons.chat_bubble, color: Colors.pinkAccent, size: 20),
+              SizedBox(width: 8),
+              Text('Direct Character Chats', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text('Private 1-on-1 chat threads with characters in this story world.', style: TextStyle(fontSize: 12, color: Colors.white60)),
+          const SizedBox(height: 12),
+          if (characters.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('Create characters in this story to begin chatting.'),
+              ),
+            )
+          else
+            ...characters.map((char) {
+              final name = char['name'] ?? 'Character';
+              final role = char['role'] ?? 'Lead';
+              final status = char['romantic_status'] ?? 'Guarded';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.pink.shade900,
+                    child: Text(name.isNotEmpty ? name[0] : '?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('$role • $status', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                  trailing: ElevatedButton.icon(
+                    onPressed: () {
+                      context.push('/character_chat', extra: {
+                        'characterId': char['id'],
+                        'characterName': name,
+                        'backgroundImage': char['avatar_url'],
+                      });
+                    },
+                    icon: const Icon(Icons.chat, size: 14),
+                    label: const Text('Chat', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.pink.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          const SizedBox(height: 20),
+
+          // Group Chat Scenarios
+          const Row(
+            children: [
+              Icon(Icons.groups, color: Colors.amber, size: 22),
+              SizedBox(width: 8),
+              Text('Romantic Group Chat Scenarios', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text('Put characters into intense shared group conversations and watch their chemistry ignite.', style: TextStyle(fontSize: 12, color: Colors.white60)),
+          const SizedBox(height: 12),
+          ...scenarios.map((sc) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: ListTile(
+                title: Text(sc['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber)),
+                subtitle: Text(sc['desc']!, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                trailing: ElevatedButton(
+                  onPressed: () async {
+                    if (characters.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add characters to this story first!')));
+                      return;
+                    }
+                    try {
+                      final session = await ApiService.createGroupChat(widget.storyId);
+                      if (mounted) {
+                        context.push('/group_chat', extra: {
+                          'storyId': widget.storyId,
+                          'sessionId': session['id'].toString(),
+                        });
+                      }
+                    } catch (e) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting group chat: $e')));
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+                  child: const Text('Start 👥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisualStudioTab() {
+    final styles = ['Anime/Manga', 'Oil Painting', 'Dark Fantasy', 'Photorealistic'];
+    final coverUrl = story?['cover_image_url'];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Section 1: Book Cover Studio
+          const Row(
+            children: [
+              Icon(Icons.palette, color: Colors.cyanAccent, size: 22),
+              SizedBox(width: 8),
+              Text('Multi-Style Book Cover Studio', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text('Switch visual art styles and generate stunning high-resolution novel covers.', style: TextStyle(fontSize: 12, color: Colors.white60)),
+          const SizedBox(height: 12),
+          // Style Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: styles.map((st) {
+                final isSel = selectedCoverStyle == st;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    label: Text(st),
+                    selected: isSel,
+                    selectedColor: Colors.cyan.shade700,
+                    onSelected: (val) {
+                      if (val) setState(() => selectedCoverStyle = st);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Cover display
+          Center(
+            child: Container(
+              width: 180,
+              height: 240,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: (coverUrl != null && coverUrl.isNotEmpty)
+                    ? Image.network(coverUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildCoverPlaceholder())
+                    : _buildCoverPlaceholder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: isGeneratingCoverStyle ? null : () async {
+              setState(() => isGeneratingCoverStyle = true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Generating novel cover in $selectedCoverStyle style...')),
+              );
+              try {
+                final res = await ApiService.generateStoryCover(widget.storyId, style: selectedCoverStyle);
+                if (mounted) {
+                  setState(() {
+                    story?['cover_image_url'] = res['cover_image_url'];
+                    isGeneratingCoverStyle = false;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('New book cover generated and set! 🎨')),
+                  );
+                  _loadData();
+                }
+              } catch (e) {
+                if (mounted) {
+                  setState(() => isGeneratingCoverStyle = false);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            },
+            icon: isGeneratingCoverStyle 
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome),
+            label: Text(isGeneratingCoverStyle ? 'Painting Cover...' : 'Generate Cover in $selectedCoverStyle Style'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.cyan.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Section 2: Manga Comic Strip Gallery
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.auto_stories, color: Colors.amber, size: 20),
+                  SizedBox(width: 8),
+                  Text('Manga Comic Strips', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              if (chapters.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _showMangaComicDialog(chapters.first),
+                  icon: const Icon(Icons.visibility, size: 14, color: Colors.amber),
+                  label: const Text('Open Comic Strip', style: TextStyle(fontSize: 12, color: Colors.amber)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text('Turn key scenes and romantic climaxes into 4-panel black & white manga pages with dialogue speech bubbles.', style: TextStyle(fontSize: 12, color: Colors.white60)),
+          const SizedBox(height: 10),
+          if (chapters.isEmpty)
+            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Write chapters to create manga comics.')))
+          else
+            ...chapters.map((ch) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.collections_bookmark, color: Colors.amber),
+                  title: Text(ch['title'] ?? 'Chapter ${ch['chapter_number']}'),
+                  trailing: OutlinedButton(
+                    onPressed: () => _showMangaComicDialog(ch),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.amber)),
+                    child: const Text('View Manga 🎌', style: TextStyle(fontSize: 11, color: Colors.amber)),
+                  ),
+                ),
+              );
+            }),
+          const SizedBox(height: 20),
+
+          // Section 3: Scene Illustrations
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.image, color: Colors.purpleAccent, size: 20),
+                  SizedBox(width: 8),
+                  Text('Scene Illustrations Gallery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              Text('${illustrations.length} arts', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildArtGalleryTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverPlaceholder() {
+    return Container(
+      color: Colors.deepPurple.shade900,
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.book, size: 50, color: Colors.white54),
+            SizedBox(height: 8),
+            Text('No Cover Art', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -909,6 +909,31 @@ class ApiService {
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to update character chemistry');
   }
+
+  static Future<List<dynamic>> getAllUserCharacters() async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/users/me/all-characters'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> getStoryOutlinePlan(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('$baseUrl/stories/$storyId/outline-plan'), headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate story outline plan');
+  }
+
+  static Future<Map<String, dynamic>> generateStoryCover(String storyId, {String style = 'Anime/Manga'}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/generate-cover'),
+      headers: headers,
+      body: jsonEncode({'style': style}),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate book cover');
+  }
 }
 
 

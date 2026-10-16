@@ -807,5 +807,106 @@ async def analyze_character_chemistry(characters_data: list, chapter_content: st
         print(f"Error analyzing character chemistry: {e}")
         return []
 
+async def generate_story_outline_plan(title: str, genre: str, synopsis: str, chapters_summary: str) -> dict:
+    prompt = f"""You are a master fiction editor and bestselling romance novel architect.
+Analyze the novel's trajectory and provide a structured 4-Act Outline and Future Chapter Roadmap.
+
+Novel Title: "{title}"
+Genre / Subgenre: "{genre}"
+Synopsis: "{synopsis}"
+
+Existing Chapters:
+{chapters_summary if chapters_summary.strip() else "No chapters written yet."}
+
+Return a valid JSON object matching this exact schema:
+{{
+  "current_act": "Act 1: The Spark & Magnetic Encounter" (or Act 2, Act 3, Act 4 based on progress),
+  "progress_percentage": 25,
+  "acts": [
+    {{"act_name": "Act I: Inciting Chemistry", "description": "Introduction of the leads, electric tension, and initial friction.", "status": "completed or active or upcoming"}},
+    {{"act_name": "Act II: Deepening Intimacy & Danger", "description": "Vulnerability, lingering physical touch, unspoken confessions, rising stakes.", "status": "completed or active or upcoming"}},
+    {{"act_name": "Act III: The Crisis & Possessive Peak", "description": "Secrets revealed, jealousy, intense emotional or physical confrontation.", "status": "completed or active or upcoming"}},
+    {{"act_name": "Act IV: Devotion & Climactic Resolution", "description": "Definitive choices, passionate union, and lasting aftermath.", "status": "completed or active or upcoming"}}
+  ],
+  "upcoming_chapters": [
+    {{
+      "suggested_title": "Chapter Title",
+      "hook": "A short 1-line hook",
+      "synopsis": "2-3 sentences explaining the core romantic conflict and scene progression.",
+      "tension_rating": "🔥 High Tension / Deep Intimacy",
+      "suggested_pov": "Lead Character Name"
+    }},
+    {{
+      "suggested_title": "Chapter Title",
+      "hook": "A short 1-line hook",
+      "synopsis": "2-3 sentences explaining the core romantic conflict and scene progression.",
+      "tension_rating": "🥀 Vulnerable / Emotional",
+      "suggested_pov": "Lead Character Name"
+    }}
+  ],
+  "editor_advice": "A 2-sentence note from the editor on character chemistry and narrative pacing."
+}}
+Return ONLY the raw JSON object. No other text."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                match = re.search(r'\{.*\}', raw, re.DOTALL)
+                if match:
+                    return json.loads(match.group(0))
+    except Exception as e:
+        print(f"Error generating outline plan: {e}")
+
+    return {
+        "current_act": "Act II: Deepening Intimacy & Tension",
+        "progress_percentage": 40,
+        "acts": [
+            {"act_name": "Act I: Inciting Chemistry", "description": "First encounter and irresistible friction.", "status": "completed"},
+            {"act_name": "Act II: Deepening Intimacy", "description": "Private moments, intense conversations, rising desire.", "status": "active"},
+            {"act_name": "Act III: The Crisis", "description": "Jealousy, betrayal, or unavoidable confrontation.", "status": "upcoming"},
+            {"act_name": "Act IV: Devotion & Climax", "description": "Climactic union and emotional aftermath.", "status": "upcoming"}
+        ],
+        "upcoming_chapters": [
+            {
+                "suggested_title": "Whispers in the Dark",
+                "hook": "An undeniable confession under the cover of night.",
+                "synopsis": "The leads are forced into close quarters where their emotional walls finally crumble.",
+                "tension_rating": "🔥 High Tension",
+                "suggested_pov": "First Person"
+            }
+        ],
+        "editor_advice": "Maintain strong romantic banter while gradually lowering the leads' emotional defenses."
+    }
+
+def generate_book_cover_url(title: str, synopsis: str, genre: str, style: str = "Anime/Manga") -> str:
+    import urllib.parse
+    style_modifiers = {
+        "Anime/Manga": "anime style, Japanese light novel aesthetic art, vibrant colors, ultra-detailed character art, high resolution, 8k",
+        "Oil Painting": "classical oil painting style, expressive brushstrokes, dramatic chiaroscuro lighting, romantic fine art, masterpiece",
+        "Dark Fantasy": "dark fantasy gothic romance, moody atmospheric lighting, ethereal glow, intricate shadows, photorealistic fantasy, 8k",
+        "Photorealistic": "cinematic photorealism, bestselling book cover photography, dramatic rim lighting, 35mm portrait lens, 8k resolution"
+    }
+    modifier = style_modifiers.get(style, style_modifiers["Anime/Manga"])
+    clean_synopsis = synopsis[:120].replace('\n', ' ') if synopsis else "An intense romantic novel"
+    prompt = f"Bestselling novel book cover for '{title}', {genre}, {clean_synopsis}, {modifier}, textless, gorgeous composition, masterpiece"
+    encoded = urllib.parse.quote(prompt[:280])
+    import time
+    seed = int(time.time() * 1000) % 1000000
+    return f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=1024&model=flux&nologo=true&seed={seed}"
+
+
 
 

@@ -12,6 +12,7 @@ import 'screens/group_chat_screen.dart';
 import 'screens/persona_screen.dart';
 import 'screens/visual_novel_reader.dart';
 import 'screens/community_feed_screen.dart';
+import 'screens/main_navigation_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -39,7 +40,7 @@ void main() async {
       GoRoute(
         path: '/',
         builder: (BuildContext context, GoRouterState state) {
-          return const DashboardScreen();
+          return const MainNavigationScreen();
         },
       ),
     GoRoute(
