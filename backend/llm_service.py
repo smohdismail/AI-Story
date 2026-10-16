@@ -1152,7 +1152,177 @@ Return ONLY JSON."""
         "transcript": "Hey... I know it's late. I know you're probably asleep. But I couldn't stop thinking about what you said today... how you looked at me. Don't listen to this in the morning and act like nothing happened... because I can't do this pretending anymore. Goodnight."
     }
 
+async def generate_unsent_letters(story_title: str, characters_str: str, chapters_context: str) -> list:
+    prompt = f"""You are a master romantic novelist.
+Novel Title: {story_title}
+Characters: {characters_str}
+Story Context:
+{chapters_context[-3500:]}
 
+TASK:
+Generate 3 to 4 deeply emotional "Unsent Letters & Burn-After-Reading Notes" written in secret by the characters during moments of intense longing, heartbreak, or hesitation—letters they never had the courage to deliver in the main chapters.
 
+INSTRUCTIONS:
+1. Each letter must reveal raw, unfiltered vulnerability, secret attraction, and unspoken fears.
+2. Include realistic crossed-out phrases showing hesitation and self-censorship (use ~~crossed-out text~~).
+3. Strictly NO RPG stats, dice rolls, or game mechanics. Pure, evocative adult literary romance prose.
+4. Return strictly a JSON array of letter objects:
+[
+  {{
+    "id": "letter-1",
+    "author_name": "Alexander",
+    "recipient_name": "Elena",
+    "time_context": "3:14 AM on torn hotel stationery",
+    "wax_seal_color": "Crimson",
+    "letter_title": "The note left inside his coat pocket",
+    "burn_status": "Unsent & hidden in nightstand",
+    "crossed_out_phrases": ["I should have walked away", "Forget I ever said your name"],
+    "letter_body": "Elena,\\n\\n~~I should have walked away when you asked me to.~~ You think I didn't notice the way your hand trembled when I touched your waist tonight? I spent two hours staring at the ceiling of this hotel room, listening to the rain, wondering if you were doing the exact same thing. ~~Forget I ever said your name.~~ If I come to your door tomorrow, don't let me in. Because if you do, I won't stop this time.\\n\\n— A."
+  }}
+]
+Return ONLY a valid JSON array."""
 
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=1500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                res = json.loads(raw.strip())
+                if isinstance(res, list): return res
+                if isinstance(res, dict) and "letters" in res: return res["letters"]
+            except Exception:
+                m = re.search(r'\[.*\]', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating unsent letters: {e}")
 
+    return [
+        {
+            "id": "default-1",
+            "author_name": "The Lead",
+            "recipient_name": "You",
+            "time_context": "2:45 AM on creased paper",
+            "wax_seal_color": "Crimson",
+            "letter_title": "The unsent note from that rainy night",
+            "burn_status": "Edges scorched by candle flame",
+            "crossed_out_phrases": ["I should have let you go", "This was a mistake"],
+            "letter_body": "~~I should have let you go.~~ I told myself tonight was just an alliance, just a circumstance. But every time your breath brushed against my collar, every defense I built for five years turned to dust. If you look at me like that tomorrow, I will ruin both of us."
+        }
+    ]
+
+async def generate_what_if_vignette(story_title: str, chapter_title: str, crossroad_scenario: str, chapter_excerpt: str = "") -> dict:
+    prompt = f"""You are an acclaimed romance author writing an alternate timeline / 'What-If' romantic vignette.
+Novel: {story_title}
+Chapter Context: {chapter_title}
+Excerpt: {chapter_excerpt[-1800:]}
+
+THE 'WHAT IF' DIVERGENCE SCENARIO:
+"{crossroad_scenario}"
+
+INSTRUCTIONS:
+1. Explore what would have happened if the characters made this alternate, impulsive, or intensely passionate choice instead of holding back or parting ways.
+2. Write 500 to 750 words of rich, emotionally charged and sensual novel prose exploring the forbidden outcome—including physical touch, breathless vocalizations, and the collision of their mutual desire.
+3. Absolutely NO RPG stats, game levels, or numbers. Pure literary romance.
+4. Return a valid JSON object:
+{{
+  "vignette_title": "What If: ...",
+  "divergence_point": "The exact canon moment where the path split...",
+  "alternate_prose": "Full alternate novel scene prose...",
+  "emotional_aftermath": "How their dynamic would have changed forever..."
+}}
+Return ONLY valid JSON."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=1500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating what-if vignette: {e}")
+
+    return {
+        "vignette_title": f"What If: {crossroad_scenario[:40]}...",
+        "divergence_point": "The moment hesitation gave way to raw impulse.",
+        "alternate_prose": "The silence in the hallway broke with the sudden sound of his palm against the door behind her. He didn't let her step away. 'Look at me,' his voice was low, rough with the truth he had choked down for weeks. When his fingers touched the curve of her jaw, the hesitation evaporated entirely...",
+        "emotional_aftermath": "A point of no return that irrevocably bound their fates together."
+    }
+
+async def generate_polaroid_memories(story_title: str, characters_str: str, chapters_context: str) -> list:
+    prompt = f"""You are a romantic novelist and visual storyteller.
+Novel Title: {story_title}
+Characters: {characters_str}
+Story Context:
+{chapters_context[-3500:]}
+
+TASK:
+Create 4 to 5 intimate, candid "Polaroid Snapshot Memories" representing spontaneous, memorable moments exchanged between the leads throughout their story.
+
+INSTRUCTIONS:
+1. Capture candid, atmospheric moments (e.g., tangled fingers over morning coffee, blurred laughing selfie in the passenger seat on a rainy drive, her wearing his oversized coat by the bay window).
+2. Each polaroid must have:
+   - "id": string or number
+   - "title": e.g. "Midnight Drive back to the city"
+   - "date_caption": e.g. "October 14th — You swore you weren't cold."
+   - "location": e.g. "North Pier Hotel Balcony"
+   - "visual_prompt": detailed visual description of the photo scene
+   - "memory_reflection": 2-3 sentences of emotional reflection from the character's perspective about why this snapshot means everything to them.
+   - "rotation_deg": integer between -3 and 3 (for realistic polaroid tilt)
+
+Return strictly a JSON array of polaroid objects."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=1400,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                res = json.loads(raw.strip())
+                if isinstance(res, list): return res
+                if isinstance(res, dict) and "polaroids" in res: return res["polaroids"]
+            except Exception:
+                m = re.search(r'\[.*\]', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating polaroid memories: {e}")
+
+    return [
+        {
+            "id": "polaroid-1",
+            "title": "Midnight on the North Balcony",
+            "date_caption": "Nov 2nd — We pretended the rain didn't matter.",
+            "location": "The Grand Harbor Suite",
+            "visual_prompt": "Candid vintage polaroid of two lovers laughing softly on a rain-streaked hotel balcony under warm amber city lights.",
+            "memory_reflection": "You were wearing my jacket, looking out at the skyline. I wasn't looking at the city at all.",
+            "rotation_deg": -2
+        }
+    ]

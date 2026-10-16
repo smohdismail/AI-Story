@@ -30,6 +30,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
   bool _stopRequested = false;
   List<dynamic> _characters = [];
   String? _selectedPovCharacter;
+  String? _selectedNarrativeSpark;
 
   @override
   void initState() {
@@ -76,6 +77,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
           globalCustomRules: globalCustomRules,
           selectedChoice: widget.selectedChoice,
           povCharacter: _selectedPovCharacter,
+          narrativeSpark: _selectedNarrativeSpark,
       )) {
         if (!mounted || _stopRequested) break;
         setState(() {
@@ -519,6 +521,40 @@ class _DirectorScreenState extends State<DirectorScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Text('⚡ Sparks: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amber)),
+                      const SizedBox(width: 4),
+                      ...[
+                        {'label': 'Rival Suitor', 'icon': '🍷', 'desc': 'Rival suitor provokes acute jealousy and razor-sharp banter'},
+                        {'label': 'Forced Proximity', 'icon': '🛏️', 'desc': 'Forced proximity / only one bed with electric unspoken tension'},
+                        {'label': 'Protective Shield', 'icon': '🛡️', 'desc': 'Fierce protective intervention in public with possessive touch'},
+                        {'label': 'Simmering Rain', 'icon': '🌧️', 'desc': 'Trapped in torrential rain leading to a breathless emotional confession'},
+                        {'label': 'Whispered Secret', 'icon': '🥀', 'desc': 'A painful past secret slips out during a late-night private encounter'},
+                      ].map((spark) {
+                        final sparkKey = "${spark['icon']} ${spark['label']}: ${spark['desc']}";
+                        final isSelected = _selectedNarrativeSpark == sparkKey;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text('${spark['icon']} ${spark['label']}', style: const TextStyle(fontSize: 12)),
+                            selected: isSelected,
+                            selectedColor: Colors.deepOrange.shade800,
+                            tooltip: spark['desc'] as String,
+                            onSelected: (selected) {
+                              setState(() {
+                                _selectedNarrativeSpark = selected ? sparkKey : null;
+                              });
+                            },
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _promptController,

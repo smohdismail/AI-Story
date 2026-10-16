@@ -380,7 +380,7 @@ class ApiService {
     }
   }
 
-  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = '', String? selectedChoice, String? povCharacter}) async* {
+  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = '', String? selectedChoice, String? povCharacter, String? narrativeSpark}) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
     request.headers.addAll(headers);
@@ -391,6 +391,7 @@ class ApiService {
       'global_custom_rules': globalCustomRules,
       if (selectedChoice != null && selectedChoice.isNotEmpty) 'selected_choice': selectedChoice,
       if (povCharacter != null && povCharacter.isNotEmpty) 'pov_character': povCharacter,
+      if (narrativeSpark != null && narrativeSpark.isNotEmpty) 'narrative_spark': narrativeSpark,
     });
 
     final client = http.Client();
@@ -1003,6 +1004,37 @@ class ApiService {
     );
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to generate midnight voicemail');
+  }
+
+  static Future<List<dynamic>> getUnsentLetters(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/unsent-letters'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['letters'] ?? [];
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> generateWhatIfVignette(String chapterId, {required String scenario, int heatLevel = 5}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/chapters/$chapterId/what-if'),
+      headers: headers,
+      body: jsonEncode({'scenario': scenario, 'heat_level': heatLevel}),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate what-if vignette');
+  }
+
+  static Future<List<dynamic>> getPolaroids(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/polaroids'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['polaroids'] ?? [];
+    }
+    return [];
   }
 }
 

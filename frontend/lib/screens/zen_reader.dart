@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:convert';
+import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../services/ambient_sound_service.dart';
 import '../api.dart';
 
 enum ReaderTheme {
@@ -76,6 +79,13 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   Map<String, dynamic>? _chapterTeaser;
   bool _loadingTeaser = false;
 
+  // Ambient Soundscape, Tactile Haptics & What-If Cut
+  final AmbientSoundService _ambientService = AmbientSoundService();
+  bool _enableHeartbeatHaptics = true;
+  Timer? _heartbeatTimer;
+  Map<String, dynamic>? _whatIfVignette;
+  bool _loadingWhatIf = false;
+
   @override
   void initState() {
     super.initState();
@@ -146,20 +156,53 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
   void _initTts() {
     flutterTts.setCompletionHandler(() {
+      _stopHeartbeatHaptics();
+      _ambientService.restoreVolume();
       if (mounted) setState(() => _isPlaying = false);
     });
     flutterTts.setErrorHandler((msg) {
+      _stopHeartbeatHaptics();
+      _ambientService.restoreVolume();
       if (mounted) setState(() => _isPlaying = false);
     });
+  }
+
+  void _triggerHeartbeatHaptic() {
+    if (!_enableHeartbeatHaptics) return;
+    HapticFeedback.lightImpact();
+    Future.delayed(const Duration(milliseconds: 140), () {
+      HapticFeedback.mediumImpact();
+    });
+  }
+
+  void _startHeartbeatHaptics() {
+    _heartbeatTimer?.cancel();
+    if (!_enableHeartbeatHaptics) return;
+    _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 1200), (t) {
+      if (!_enableHeartbeatHaptics || !mounted) {
+        t.cancel();
+        return;
+      }
+      _triggerHeartbeatHaptic();
+    });
+  }
+
+  void _stopHeartbeatHaptics() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   Future<void> _togglePlayback() async {
     if (_isPlaying) {
       await flutterTts.stop();
+      _stopHeartbeatHaptics();
+      _ambientService.restoreVolume();
       if (mounted) setState(() => _isPlaying = false);
     } else {
       if (_currentContent.trim().isNotEmpty) {
         if (mounted) setState(() => _isPlaying = true);
+        _ambientService.duckVolume();
+        _startHeartbeatHaptics();
         await flutterTts.setSpeechRate(_ttsSpeed);
         await flutterTts.setPitch(_ttsPitch);
         await flutterTts.speak(_currentContent);
@@ -615,6 +658,326 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     );
   }
 
+  // ==========================================
+  // FEATURE 2: SENSORY AMBIENT SOUNDSCAPES
+  // ==========================================
+
+  void _showAmbientSoundSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF140F1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.music_note, color: Colors.tealAccent),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Sensory Ambient Soundscapes',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                      ),
+                      const Spacer(),
+                      if (_ambientService.isPlaying)
+                        TextButton.icon(
+                          onPressed: () {
+                            _ambientService.stop();
+                            setSheetState(() {});
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.stop, color: Colors.redAccent, size: 16),
+                          label: const Text('Mute', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Atmospheric sound loops playing softly behind your novel.',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 14),
+                  // Volume Slider
+                  Row(
+                    children: [
+                      const Icon(Icons.volume_down, size: 16, color: Colors.tealAccent),
+                      Expanded(
+                        child: Slider(
+                          value: _ambientService.volume,
+                          min: 0.0,
+                          max: 1.0,
+                          activeColor: Colors.tealAccent,
+                          onChanged: (v) {
+                            _ambientService.setVolume(v);
+                            setSheetState(() {});
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                      Text('${(_ambientService.volume * 100).toInt()}%', style: const TextStyle(fontSize: 12, color: Colors.tealAccent)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Presets List
+                  ...AmbientSoundService.presets.map((p) {
+                    final isSelected = _ambientService.isPlaying && _ambientService.currentPreset?.id == p.id;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: isSelected ? Colors.tealAccent.withValues(alpha: 0.2) : Colors.white10,
+                        child: Text(p.icon, style: const TextStyle(fontSize: 18)),
+                      ),
+                      title: Text(p.name, style: TextStyle(color: isSelected ? Colors.tealAccent : Colors.white, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      subtitle: Text(p.description, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                      trailing: isSelected
+                          ? const Icon(Icons.graphic_eq, color: Colors.tealAccent)
+                          : const Icon(Icons.play_arrow, color: Colors.white38),
+                      onTap: () async {
+                        if (isSelected) {
+                          await _ambientService.stop();
+                        } else {
+                          await _ambientService.playPreset(p);
+                        }
+                        setSheetState(() {});
+                        setState(() {});
+                      },
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ==========================================
+  // FEATURE 3: "WHAT-IF" ALTERNATE ROMANCE CUTS
+  // ==========================================
+
+  void _showWhatIfDialog() {
+    final TextEditingController scenarioCtrl = TextEditingController();
+    final presets = [
+      'What if he pulled her back before she got into the rain?',
+      'What if they gave in to temptation during the midnight blackout?',
+      'What if she confessed her secret instead of running away?',
+      'What if they were forced to share a single bed at the inn?',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF140E1B),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.alt_route, color: Colors.purpleAccent),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('🔀 "What-If" Alternate Romance Cut', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                  ),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Explore a forbidden alternate path without changing your canon novel timeline.',
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: presets.map((p) => ActionChip(
+                  backgroundColor: Colors.purple.shade900.withValues(alpha: 0.35),
+                  label: Text(p, style: const TextStyle(fontSize: 11, color: Colors.pinkAccent)),
+                  onPressed: () {
+                    scenarioCtrl.text = p;
+                    setModalState(() {});
+                  },
+                )).toList(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: scenarioCtrl,
+                maxLines: 2,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Or describe your own crossroad scenario...',
+                  hintStyle: const TextStyle(fontSize: 12, color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: _loadingWhatIf ? null : () async {
+                  if (scenarioCtrl.text.trim().isEmpty || _currentChapterId == null) return;
+                  Navigator.pop(ctx);
+                  _executeWhatIf(scenarioCtrl.text.trim());
+                },
+                icon: const Icon(Icons.auto_awesome, size: 16),
+                label: const Text('Generate Alternate Cut'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executeWhatIf(String scenario) async {
+    if (_currentChapterId == null) return;
+    setState(() => _loadingWhatIf = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🔀 Generating alternate romance timeline...')),
+    );
+
+    try {
+      final res = await ApiService.generateWhatIfVignette(_currentChapterId!, scenario: scenario);
+      if (mounted) {
+        setState(() {
+          _whatIfVignette = res['vignette'];
+          _loadingWhatIf = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Alternate romance cut generated!'), backgroundColor: Colors.purple),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingWhatIf = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to generate what-if cut: $e')));
+      }
+    }
+  }
+
+  Widget _buildWhatIfCard() {
+    final textColor = _getTextColor();
+    final cardColor = _getCardColor();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      child: Card(
+        color: cardColor,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.alt_route, color: Colors.purpleAccent, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    '🔀 "What-If" Alternate Romance Cut',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                  ),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    onPressed: _showWhatIfDialog,
+                    icon: _loadingWhatIf
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.auto_awesome, size: 14),
+                    label: Text(_whatIfVignette == null ? 'Explore Cut' : 'New Cut', style: const TextStyle(fontSize: 11)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Explore what would happen if the leads took an alternate, passionate crossroad in this scene.',
+                style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.7)),
+              ),
+              if (_whatIfVignette != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.shade900.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _whatIfVignette!['vignette_title'] ?? 'Alternate Cut',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.pinkAccent),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '⚡ Divergence Point: "${_whatIfVignette!['divergence_point'] ?? ''}"',
+                        style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amberAccent),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _whatIfVignette!['alternate_prose'] ?? '',
+                        style: TextStyle(fontSize: 13, height: 1.5, color: textColor),
+                      ),
+                      if (_whatIfVignette!['emotional_aftermath'] != null) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '🥀 Aftermath: ${_whatIfVignette!['emotional_aftermath']}',
+                            style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: textColor.withValues(alpha: 0.8)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showAppearanceSettings() {
     showModalBottomSheet(
       context: context,
@@ -688,6 +1051,25 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                         },
                       ),
                     ],
+                  ),
+                  const Divider(height: 24),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Row(
+                      children: [
+                        const Icon(Icons.favorite, color: Colors.pinkAccent, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Tactile Heartbeat & Breath Haptics', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    subtitle: Text('Simulate physical heartbeat pulses during intense romantic scenes', style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 11)),
+                    value: _enableHeartbeatHaptics,
+                    activeColor: Colors.pinkAccent,
+                    onChanged: (val) {
+                      setSheetState(() => _enableHeartbeatHaptics = val);
+                      setState(() => _enableHeartbeatHaptics = val);
+                      if (val) _triggerHeartbeatHaptic();
+                    },
                   ),
                 ],
               ),
@@ -808,6 +1190,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       _cachedStandardContent = null;
       _cachedAfterHoursContent = null;
       _chapterTeaser = null;
+      _whatIfVignette = null;
     });
 
     if (ch['choices_json'] != null) {
@@ -852,6 +1235,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
   @override
   void dispose() {
+    _stopHeartbeatHaptics();
+    _ambientService.stop();
     flutterTts.stop();
     _customChoiceController.dispose();
     super.dispose();
@@ -1094,6 +1479,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   onPressed: _isLoadingAfterHours ? null : _toggleAfterHours,
                 ),
                 IconButton(
+                  icon: Icon(
+                    _ambientService.isPlaying ? Icons.music_note : Icons.music_note_outlined,
+                    color: _ambientService.isPlaying ? Colors.tealAccent : textColor,
+                  ),
+                  tooltip: _ambientService.isPlaying ? 'Sensory Ambient (Playing)' : 'Sensory Ambient Soundscapes',
+                  onPressed: _showAmbientSoundSheet,
+                ),
+                IconButton(
                   icon: const Icon(Icons.record_voice_over, color: Colors.pinkAccent),
                   tooltip: '💬 Mid-Scene Dialogue Whisper',
                   onPressed: _showWhisperDialog,
@@ -1179,6 +1572,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                     _buildChapterNavigation(),
                     // Cinematic Chapter Teasers & Cliffhangers
                     _buildTeaserCard(),
+                    // "What-If" Alternate Romance Cuts
+                    _buildWhatIfCard(),
                     // Interactive Next Chapter Choices
                     _buildChoicesWidget(),
                   ],

@@ -705,6 +705,7 @@ class GenerateRequest(BaseModel):
     global_custom_rules: str = ""
     selected_choice: str | None = None
     pov_character: str | None = None
+    narrative_spark: str | None = None
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
@@ -712,6 +713,15 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
     
     if request.selected_choice:
         story_context += f"--- SELECTED NARRATIVE CHOICE ---\nThe reader selected this choice for how the story MUST proceed: \"{request.selected_choice}\"\nYou MUST seamlessly weave this choice into the beginning and progression of this new chapter.\n----------------------------------\n\n"
+    
+    if request.narrative_spark:
+        story_context += (
+            f"--- ⚡ DRAMATIC ROMANCE SPARK (ACTIVE) ---\n"
+            f"You MUST organically introduce this dramatic tension dilemma into the chapter:\n"
+            f"\"{request.narrative_spark}\"\n"
+            f"Characters must display heightened protective tension, possessive glances, simmering jealousy, and sharp banter.\n"
+            f"--------------------------------------------\n\n"
+        )
     
     if request.global_custom_rules:
         story_context += f"--- GLOBAL AI RULES (Strictly Follow) ---\n{request.global_custom_rules}\n-----------------------------------------\n\n"
@@ -2021,7 +2031,58 @@ async def generate_midnight_voicemail_endpoint(character_id: uuid.UUID, db: Asyn
         "emotional_state": mood,
     }
 
+@app.get("/api/v1/stories/{story_id}/unsent-letters")
+async def get_unsent_letters_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()).limit(5))
+    chapters = chaps_res.scalars().all()
+    chapters_text = "\n\n".join([f"Chapter {c.chapter_number} ({c.title}):\n{c.content[:800]}" for c in chapters])
+    
+    letters = await llm_service.generate_unsent_letters(story.title or "Novel", chars_str, chapters_text)
+    return {"status": "success", "letters": letters}
+
+class WhatIfRequest(BaseModel):
+    scenario: str
+    heat_level: int = 5
+
+@app.post("/api/v1/chapters/{chapter_id}/what-if")
+async def generate_what_if_endpoint(chapter_id: uuid.UUID, req: WhatIfRequest, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_title = story.title if story else "Novel"
+    
+    vignette = await llm_service.generate_what_if_vignette(
+        story_title,
+        chapter.title or f"Chapter {chapter.chapter_number}",
+        req.scenario,
+        chapter.content or ""
+    )
+    return {"status": "success", "vignette": vignette}
+
+@app.get("/api/v1/stories/{story_id}/polaroids")
+async def get_polaroids_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()).limit(5))
+    chapters = chaps_res.scalars().all()
+    chapters_text = "\n\n".join([f"Chapter {c.chapter_number}:\n{c.content[:800]}" for c in chapters])
+    
+    polaroids = await llm_service.generate_polaroid_memories(story.title or "Novel", chars_str, chapters_text)
+    return {"status": "success", "polaroids": polaroids}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+

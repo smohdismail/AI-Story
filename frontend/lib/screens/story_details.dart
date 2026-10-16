@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -40,6 +41,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   bool isLoadingKeepsakes = false;
   Map<String, dynamic>? chemistryCurveData;
   bool isLoadingChemistryCurve = false;
+  List<dynamic>? storyUnsentLetters;
+  bool isLoadingUnsentLetters = false;
+  final Set<String> _brokenWaxSeals = {};
+  List<dynamic>? storyPolaroids;
+  bool isLoadingPolaroids = false;
 
   @override
   void initState() {
@@ -788,7 +794,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 10,
+      length: 12,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -810,6 +816,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               Tab(icon: Icon(Icons.palette), text: 'Visual & Manga Studio'),
               Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Keepsake Box'),
               Tab(icon: Icon(Icons.show_chart), text: 'Chemistry Curve'),
+              Tab(icon: Icon(Icons.mark_email_unread_outlined), text: 'Unsent Letters'),
+              Tab(icon: Icon(Icons.photo_camera_back_outlined), text: 'Polaroids'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
               Tab(icon: Icon(Icons.map), text: 'World Map'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
@@ -901,6 +909,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildVisualStudioTab(),
             _buildKeepsakeBoxTab(),
             _buildChemistryCurveTab(),
+            _buildUnsentLettersTab(),
+            _buildPolaroidsTab(),
             _buildWorldTab(),
             _buildWorldMapTab(),
             _buildUserPersonaTab(),
@@ -4751,6 +4761,758 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       ),
                     );
                   },
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // FEATURE 1: UNSENT LETTERS & BURN-AFTER-READING
+  // ==========================================
+
+  Widget _buildCrossedOutText(String text, {double fontSize = 14, Color defaultColor = Colors.white}) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'~~(.*?)~~');
+    int lastIndex = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: TextStyle(fontSize: fontSize, color: defaultColor, height: 1.5),
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: TextStyle(
+          fontSize: fontSize,
+          color: Colors.white38,
+          decoration: TextDecoration.lineThrough,
+          decorationColor: Colors.redAccent,
+          decorationThickness: 2.0,
+          fontStyle: FontStyle.italic,
+          height: 1.5,
+        ),
+      ));
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: TextStyle(fontSize: fontSize, color: defaultColor, height: 1.5),
+      ));
+    }
+
+    return SelectableText.rich(
+      TextSpan(children: spans),
+    );
+  }
+
+  Future<void> _fetchUnsentLetters() async {
+    setState(() => isLoadingUnsentLetters = true);
+    try {
+      final res = await ApiService.getUnsentLetters(widget.storyId);
+      if (mounted) {
+        setState(() {
+          storyUnsentLetters = res;
+          isLoadingUnsentLetters = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingUnsentLetters = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load unsent letters: $e')));
+      }
+    }
+  }
+
+  void _showLetterDialog(Map<String, dynamic> letter) {
+    final letterId = letter['id']?.toString() ?? UniqueKey().toString();
+    setState(() {
+      _brokenWaxSeals.add(letterId);
+    });
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF1E1424),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Text('💌', style: TextStyle(fontSize: 22)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    letter['letter_title']?.toString() ?? 'Unsent Letter',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                  ),
+                  Text(
+                    '${letter['author_name'] ?? 'Author'} ➔ ${letter['recipient_name'] ?? 'Recipient'}',
+                    style: const TextStyle(fontSize: 12, color: Colors.pinkAccent),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.schedule, size: 14, color: Colors.amber),
+                    label: Text(letter['time_context']?.toString() ?? 'Secret Moment', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                  Chip(
+                    avatar: const Icon(Icons.local_fire_department, size: 14, color: Colors.deepOrangeAccent),
+                    label: Text(letter['burn_status']?.toString() ?? 'Unsent', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                ),
+                child: _buildCrossedOutText(
+                  letter['letter_body']?.toString() ?? '',
+                  fontSize: 14,
+                  defaultColor: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 13, color: Colors.white38),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Crossed-out lines show moments of hesitation before the thought was censored.',
+                      style: TextStyle(fontSize: 11, color: Colors.white38, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('🔥 The note was consigned to ash. Its secrets remain between the pages.'),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            },
+            icon: const Icon(Icons.local_fire_department, color: Colors.deepOrangeAccent, size: 16),
+            label: const Text('Consign to Ash', style: TextStyle(color: Colors.deepOrangeAccent)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fold & Keep', style: TextStyle(color: Colors.pinkAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnsentLettersTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.red.shade900.withValues(alpha: 0.4), Colors.purple.shade900.withValues(alpha: 0.4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('💌', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Unsent Letters & Burn Notes',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.redAccent),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Secret letters written at 3:00 AM full of unfiltered longing, self-censorship, and crossed-out fears.',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isLoadingUnsentLetters ? null : _fetchUnsentLetters,
+                  icon: isLoadingUnsentLetters
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.mail_outline, size: 16),
+                  label: Text(storyUnsentLetters == null ? 'Open Tray' : 'Scan', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (isLoadingUnsentLetters) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(color: Colors.redAccent),
+                    SizedBox(height: 12),
+                    Text('Unsealing character drawers and nightstands...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyUnsentLetters == null) ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.mark_email_unread_outlined, size: 64, color: Colors.redAccent.withValues(alpha: 0.3)),
+                    const SizedBox(height: 12),
+                    const Text('Letter tray has not been opened yet.', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    const Text('Tap "Open Tray" to discover the secret confessions and unsent notes.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyUnsentLetters!.isEmpty) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Text('No unsent letters found yet. Write more chapters to uncover secret letters!', style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ] else ...[
+            Text('Discovered Letters (${storyUnsentLetters!.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 10),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: storyUnsentLetters!.length,
+              itemBuilder: (ctx, i) {
+                final letter = storyUnsentLetters![i] as Map<String, dynamic>;
+                final letterId = letter['id']?.toString() ?? 'letter-$i';
+                final isSealBroken = _brokenWaxSeals.contains(letterId);
+                final author = letter['author_name'] ?? 'Author';
+                final recipient = letter['recipient_name'] ?? 'Recipient';
+                final title = letter['letter_title'] ?? 'Secret Note';
+                final timeContext = letter['time_context'] ?? 'Midnight';
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(color: isSealBroken ? Colors.redAccent.withValues(alpha: 0.3) : Colors.amber.withValues(alpha: 0.4)),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      HapticFeedback.heavyImpact();
+                      _showLetterDialog(letter);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: isSealBroken ? Colors.grey.shade800 : Colors.red.shade800,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isSealBroken ? Colors.transparent : Colors.red.withValues(alpha: 0.5),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    isSealBroken ? '✉️' : '🏮',
+                                    style: const TextStyle(fontSize: 16),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$author ➔ $recipient',
+                                      style: const TextStyle(fontSize: 12, color: Colors.pinkAccent),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: isSealBroken ? Colors.white10 : Colors.amber.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  isSealBroken ? 'Seal Broken' : 'Wax Sealed',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isSealBroken ? Colors.white60 : Colors.amber,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              const Icon(Icons.schedule, size: 13, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  timeContext,
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () {
+                                  HapticFeedback.heavyImpact();
+                                  _showLetterDialog(letter);
+                                },
+                                icon: Icon(isSealBroken ? Icons.mark_email_read : Icons.lock_open, size: 14, color: Colors.redAccent),
+                                label: Text(isSealBroken ? 'Read Note' : 'Break Wax Seal & Read', style: const TextStyle(fontSize: 11, color: Colors.redAccent)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // FEATURE 4: CANDID POLAROID ALBUM
+  // ==========================================
+
+  Future<void> _fetchPolaroids() async {
+    setState(() => isLoadingPolaroids = true);
+    try {
+      final res = await ApiService.getPolaroids(widget.storyId);
+      if (mounted) {
+        setState(() {
+          storyPolaroids = res;
+          isLoadingPolaroids = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingPolaroids = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load polaroids: $e')));
+      }
+    }
+  }
+
+  void _showPolaroidDialog(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF1E1424),
+        title: Row(
+          children: [
+            const Icon(Icons.photo_camera, color: Colors.cyanAccent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                item['title']?.toString() ?? 'Candid Snapshot',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.location_on, size: 14, color: Colors.cyanAccent),
+                    label: Text(item['location']?.toString() ?? 'Unknown Location', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                  Chip(
+                    avatar: const Icon(Icons.calendar_today, size: 14, color: Colors.amber),
+                    label: Text(item['date_caption']?.toString() ?? '', style: const TextStyle(fontSize: 11)),
+                    backgroundColor: Colors.white10,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              // Polaroid Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFDF8),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 170,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.purple.shade900, Colors.indigo.shade900, Colors.pink.shade900],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.camera_alt, color: Colors.white70, size: 32),
+                          const SizedBox(height: 8),
+                          Text(
+                            item['visual_prompt']?.toString() ?? '',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      item['date_caption']?.toString() ?? '',
+                      style: const TextStyle(
+                        fontFamily: 'Courier',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: Colors.black87,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Why This Memory Matters:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.pinkAccent)),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.pink.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  item['memory_reflection']?.toString() ?? '',
+                  style: const TextStyle(fontSize: 13, height: 1.45, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Back to Album', style: TextStyle(color: Colors.cyanAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPolaroidsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.cyan.shade900.withValues(alpha: 0.4), Colors.indigo.shade900.withValues(alpha: 0.4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.cyan.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('📸', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Candid Polaroid Album',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.cyanAccent),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Spontaneous snapshots, quiet morning coffee moments, and rainy passenger seat memories.',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isLoadingPolaroids ? null : _fetchPolaroids,
+                  icon: isLoadingPolaroids
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.photo_library, size: 16),
+                  label: Text(storyPolaroids == null ? 'Develop' : 'Refresh', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.cyan,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (isLoadingPolaroids) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(color: Colors.cyanAccent),
+                    SizedBox(height: 12),
+                    Text('Developing vintage candid polaroids in darkroom...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyPolaroids == null) ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.photo_library_outlined, size: 64, color: Colors.cyan.withValues(alpha: 0.3)),
+                    const SizedBox(height: 12),
+                    const Text('Polaroid album is empty.', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    const Text('Tap "Develop" to generate candid snapshots of intimate moments between the leads.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyPolaroids!.isEmpty) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Text('No polaroids captured yet. Progress the story to develop new memories!', style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ] else ...[
+            Text('Developed Memories (${storyPolaroids!.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 12),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 14,
+                childAspectRatio: 0.76,
+              ),
+              itemCount: storyPolaroids!.length,
+              itemBuilder: (ctx, i) {
+                final item = storyPolaroids![i] as Map<String, dynamic>;
+                final title = item['title']?.toString() ?? 'Memory';
+                final dateCaption = item['date_caption']?.toString() ?? '';
+                final location = item['location']?.toString() ?? '';
+                final rotDeg = ((item['rotation_deg'] ?? ((i % 3) - 1)) as num).toDouble();
+
+                return Transform.rotate(
+                  angle: rotDeg * 0.02,
+                  child: GestureDetector(
+                    onTap: () => _showPolaroidDialog(item),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFAF7F2),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.purple.shade900,
+                                    Colors.indigo.shade900,
+                                    Colors.pink.shade900,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              padding: const EdgeInsets.all(8),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.camera_alt, color: Colors.white70, size: 24),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    title,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 11),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (location.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '📍 $location',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white70, fontSize: 9),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            dateCaption.isNotEmpty ? dateCaption : title,
+                            style: const TextStyle(
+                              fontFamily: 'Courier',
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 );
               },
             ),
