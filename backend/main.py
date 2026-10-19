@@ -2259,9 +2259,76 @@ async def get_sonic_score_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Dep
     )
     return {"status": "success", "sonic_score": score}
 
+@app.get("/api/v1/chapters/{chapter_id}/private-diary")
+async def get_chapter_private_diary_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_title = story.title if story else "Novel"
+
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == chapter.story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    lead_name = chars[0].name if chars else "Alexander"
+
+    diary = await llm_service.generate_private_diary_entry(
+        story_title=story_title,
+        chapter_title=chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter_content=chapter.content or "",
+        character_name=lead_name,
+        characters_summary=chars_str
+    )
+    return {"status": "success", "diary": diary}
+
+class WaxSealReplyRequest(BaseModel):
+    recipient_name: Optional[str] = None
+    stationery: Optional[str] = "Parchment"
+    wax_color: Optional[str] = "Crimson"
+    user_reply: str
+
+@app.post("/api/v1/stories/{story_id}/reply-letter")
+async def reply_letter_endpoint(story_id: uuid.UUID, req: WaxSealReplyRequest, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    recipient = req.recipient_name or (chars[0].name if chars else "Lead")
+    user_name = story.user_persona_name or "you"
+
+    reaction = await llm_service.generate_wax_seal_reply_reaction(
+        story_title=story.title or "Novel",
+        recipient_name=recipient,
+        stationery=req.stationery or "Parchment",
+        wax_color=req.wax_color or "Crimson",
+        user_reply=req.user_reply,
+        user_name=user_name
+    )
+    return {"status": "success", "reaction": reaction}
+
+@app.get("/api/v1/stories/{story_id}/red-thread")
+async def get_red_thread_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+
+    crossings = await llm_service.generate_red_thread_crossings(
+        story_title=story.title or "Novel",
+        synopsis=story.synopsis or "",
+        characters_summary=chars_str
+    )
+    return {"status": "success", "crossings": crossings}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
 
 

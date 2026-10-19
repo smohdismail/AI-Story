@@ -12,6 +12,7 @@ enum ReaderTheme {
   dark,
   sepia,
   light,
+  candlelight,
 }
 
 class ZenReaderScreen extends StatefulWidget {
@@ -100,6 +101,20 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   Map<String, dynamic>? _cachedSonicScore;
   bool _loadingSonicScore = false;
 
+  // Batch 4: 🎙️ Dual-Cast Audio Drama
+  bool _enableDualCast = true;
+  String _currentSpeaker = 'Narrator';
+  int _audioSegmentIndex = 0;
+  List<Map<String, String>> _audioSegments = [];
+
+  // Batch 4: 🕯️ Candlelight & Hearthglow reading animation
+  double _candleFlicker = 1.0;
+  Timer? _flickerTimer;
+
+  // Batch 4: 📜 Post-Chapter Private Diary
+  Map<String, dynamic>? _cachedDiary;
+  bool _loadingDiary = false;
+
   @override
   void initState() {
     super.initState();
@@ -113,6 +128,22 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
     _initTts();
     _loadChoices();
+    _initCandleFlickerTimer();
+  }
+
+  void _initCandleFlickerTimer() {
+    _flickerTimer?.cancel();
+    _flickerTimer = Timer.periodic(const Duration(milliseconds: 650), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_readerTheme == ReaderTheme.candlelight) {
+        setState(() {
+          _candleFlicker = 0.93 + (DateTime.now().millisecond % 8) * 0.01;
+        });
+      }
+    });
   }
 
   String _extractPlainText(String raw) {
@@ -170,6 +201,13 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
   void _initTts() {
     flutterTts.setCompletionHandler(() {
+      if (_enableDualCast && _isPlaying && _audioSegments.isNotEmpty) {
+        if (_audioSegmentIndex < _audioSegments.length - 1) {
+          _audioSegmentIndex++;
+          _speakCurrentAudioSegment();
+          return;
+        }
+      }
       _stopHeartbeatHaptics();
       _ambientService.restoreVolume();
       if (mounted) setState(() => _isPlaying = false);
@@ -179,6 +217,103 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       _ambientService.restoreVolume();
       if (mounted) setState(() => _isPlaying = false);
     });
+  }
+
+  List<Map<String, String>> _parseAudioDramaSegments(String text) {
+    final segments = <Map<String, String>>[];
+    final regex = RegExp(r'("[^"]*?"|[“][^”]*?[”])');
+    int lastEnd = 0;
+    int dialogueCounter = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        final narration = text.substring(lastEnd, match.start).trim();
+        if (narration.isNotEmpty) {
+          segments.add({'role': 'narrator', 'text': narration});
+        }
+      }
+      final quote = match.group(0)?.trim() ?? '';
+      if (quote.isNotEmpty) {
+        final startLookback = (match.start > 60) ? match.start - 60 : 0;
+        final endLookahead = (match.end + 60 < text.length) ? match.end + 60 : text.length;
+        final contextAround = (text.substring(startLookback, match.start) + ' ' + text.substring(match.end, endLookahead)).toLowerCase();
+
+        String role;
+        if (contextAround.contains('she ') || contextAround.contains('her ') || contextAround.contains('elena') || contextAround.contains('whispered she') || contextAround.contains('she said')) {
+          role = 'female_lead';
+        } else if (contextAround.contains('he ') || contextAround.contains('his ') || contextAround.contains('him ') || contextAround.contains('growled') || contextAround.contains('rasped') || contextAround.contains('alexander')) {
+          role = 'male_lead';
+        } else {
+          role = (dialogueCounter % 2 == 0) ? 'male_lead' : 'female_lead';
+        }
+        dialogueCounter++;
+
+        final cleanedQuote = quote.replaceAll('"', '').replaceAll('“', '').replaceAll('”', '');
+        if (cleanedQuote.trim().isNotEmpty) {
+          segments.add({'role': role, 'text': cleanedQuote.trim()});
+        }
+      }
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      final remaining = text.substring(lastEnd).trim();
+      if (remaining.isNotEmpty) {
+        segments.add({'role': 'narrator', 'text': remaining});
+      }
+    }
+
+    if (segments.isEmpty && text.trim().isNotEmpty) {
+      segments.add({'role': 'narrator', 'text': text.trim()});
+    }
+    return segments;
+  }
+
+  Future<void> _speakCurrentAudioSegment() async {
+    if (!_isPlaying || _audioSegmentIndex >= _audioSegments.length) {
+      if (mounted) setState(() => _isPlaying = false);
+      return;
+    }
+
+    final seg = _audioSegments[_audioSegmentIndex];
+    final role = seg['role'] ?? 'narrator';
+    final text = seg['text'] ?? '';
+
+    if (text.trim().isEmpty) {
+      if (_audioSegmentIndex < _audioSegments.length - 1) {
+        _audioSegmentIndex++;
+        await _speakCurrentAudioSegment();
+      }
+      return;
+    }
+
+    double pitch = _ttsPitch;
+    double rate = _ttsSpeed;
+    String speakerLabel = 'Narrator';
+
+    if (role == 'male_lead') {
+      pitch = (_ttsPitch * 0.76).clamp(0.5, 1.5);
+      rate = (_ttsSpeed * 0.94).clamp(0.2, 1.5);
+      speakerLabel = 'Male Lead (Deep & Resonant)';
+    } else if (role == 'female_lead') {
+      pitch = (_ttsPitch * 1.25).clamp(0.5, 1.5);
+      rate = (_ttsSpeed * 0.98).clamp(0.2, 1.5);
+      speakerLabel = 'Female Lead (Soft & Melodic)';
+    } else {
+      pitch = (_ttsPitch * 1.0).clamp(0.5, 1.5);
+      rate = (_ttsSpeed * 0.92).clamp(0.2, 1.5);
+      speakerLabel = 'Narrator (Atmospheric)';
+    }
+
+    if (mounted) {
+      setState(() {
+        _currentSpeaker = speakerLabel;
+      });
+    }
+
+    await flutterTts.setPitch(pitch);
+    await flutterTts.setSpeechRate(rate);
+    await flutterTts.speak(text);
   }
 
   void _triggerHeartbeatHaptic() {
@@ -208,6 +343,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
   Future<void> _togglePlayback() async {
     if (_isPlaying) {
+      _audioSegments.clear();
+      _audioSegmentIndex = 0;
       await flutterTts.stop();
       _stopHeartbeatHaptics();
       _ambientService.restoreVolume();
@@ -217,9 +354,16 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         if (mounted) setState(() => _isPlaying = true);
         _ambientService.duckVolume();
         _startHeartbeatHaptics();
-        await flutterTts.setSpeechRate(_ttsSpeed);
-        await flutterTts.setPitch(_ttsPitch);
-        await flutterTts.speak(_currentContent);
+
+        if (_enableDualCast) {
+          _audioSegments = _parseAudioDramaSegments(_currentContent);
+          _audioSegmentIndex = 0;
+          await _speakCurrentAudioSegment();
+        } else {
+          await flutterTts.setSpeechRate(_ttsSpeed);
+          await flutterTts.setPitch(_ttsPitch);
+          await flutterTts.speak(_currentContent);
+        }
       }
     }
   }
@@ -235,79 +379,105 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
             final textColor = _getTextColor();
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Audiobook Voice Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-                      IconButton(
-                        icon: Icon(Icons.close, color: textColor.withValues(alpha: 0.6)),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(Icons.speed, color: textColor),
-                      const SizedBox(width: 12),
-                      Text('Speed: ${_ttsSpeed.toStringAsFixed(1)}x', style: TextStyle(color: textColor)),
-                      Expanded(
-                        child: Slider(
-                          value: _ttsSpeed,
-                          min: 0.2,
-                          max: 1.5,
-                          activeColor: Colors.amber,
-                          onChanged: (val) {
-                            setSheetState(() => _ttsSpeed = val);
-                            setState(() => _ttsSpeed = val);
-                            flutterTts.setSpeechRate(val);
-                          },
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Audiobook Voice Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                        IconButton(
+                          icon: Icon(Icons.close, color: textColor.withValues(alpha: 0.6)),
+                          onPressed: () => Navigator.pop(context),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Row(
+                        children: [
+                          const Icon(Icons.record_voice_over, color: Colors.amber, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            '🎙️ Dual-Cast Audio Drama',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Icon(Icons.record_voice_over, color: textColor),
-                      const SizedBox(width: 12),
-                      Text('Pitch: ${_ttsPitch.toStringAsFixed(1)}x', style: TextStyle(color: textColor)),
-                      Expanded(
-                        child: Slider(
-                          value: _ttsPitch,
-                          min: 0.5,
-                          max: 1.5,
-                          activeColor: Colors.amber,
-                          onChanged: (val) {
-                            setSheetState(() => _ttsPitch = val);
-                            setState(() => _ttsPitch = val);
-                            flutterTts.setPitch(val);
-                          },
-                        ),
+                      subtitle: Text(
+                        'Automatically shifts between deep male cadence, melodic female cadence, and atmospheric narration for dialogue.',
+                        style: TextStyle(fontSize: 11, color: textColor.withValues(alpha: 0.7)),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _togglePlayback();
+                      value: _enableDualCast,
+                      activeColor: Colors.amber,
+                      onChanged: (val) {
+                        setSheetState(() => _enableDualCast = val);
+                        setState(() => _enableDualCast = val);
                       },
-                      icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
-                      label: Text(_isPlaying ? 'Stop Reading' : 'Start Reading Aloud'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    const Divider(height: 20),
+                    Row(
+                      children: [
+                        Icon(Icons.speed, color: textColor),
+                        const SizedBox(width: 12),
+                        Text('Speed: ${_ttsSpeed.toStringAsFixed(1)}x', style: TextStyle(color: textColor)),
+                        Expanded(
+                          child: Slider(
+                            value: _ttsSpeed,
+                            min: 0.2,
+                            max: 1.5,
+                            activeColor: Colors.amber,
+                            onChanged: (val) {
+                              setSheetState(() => _ttsSpeed = val);
+                              setState(() => _ttsSpeed = val);
+                              flutterTts.setSpeechRate(val);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Icon(Icons.record_voice_over, color: textColor),
+                        const SizedBox(width: 12),
+                        Text('Pitch: ${_ttsPitch.toStringAsFixed(1)}x', style: TextStyle(color: textColor)),
+                        Expanded(
+                          child: Slider(
+                            value: _ttsPitch,
+                            min: 0.5,
+                            max: 1.5,
+                            activeColor: Colors.amber,
+                            onChanged: (val) {
+                              setSheetState(() => _ttsPitch = val);
+                              setState(() => _ttsPitch = val);
+                              flutterTts.setPitch(val);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _togglePlayback();
+                        },
+                        icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
+                        label: Text(_isPlaying ? 'Stop Reading' : (_enableDualCast ? 'Start Dual-Cast Audio Drama' : 'Start Reading Aloud')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -906,6 +1076,348 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // BATCH 4 FEATURE: 📜 THE CHARACTER'S PRIVATE DIARY
+  // ==========================================
+
+  Widget _buildCrossedOutText(String text, {double fontSize = 14, Color defaultColor = Colors.white}) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'~~(.*?)~~');
+    int lastIndex = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: TextStyle(fontSize: fontSize, color: defaultColor, height: 1.5),
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: TextStyle(
+          fontSize: fontSize,
+          color: Colors.white38,
+          decoration: TextDecoration.lineThrough,
+          decorationColor: Colors.redAccent,
+          decorationThickness: 2.0,
+          fontStyle: FontStyle.italic,
+          height: 1.5,
+        ),
+      ));
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: TextStyle(fontSize: fontSize, color: defaultColor, height: 1.5),
+      ));
+    }
+
+    return RichText(text: TextSpan(children: spans));
+  }
+
+  Future<void> _fetchPrivateDiary() async {
+    if (_currentChapterId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Active chapter required to open character diary.')),
+      );
+      return;
+    }
+
+    if (_cachedDiary != null) {
+      _showPrivateDiarySheet();
+      return;
+    }
+
+    setState(() => _loadingDiary = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unlocking character private journal...')),
+    );
+
+    try {
+      final res = await ApiService.getChapterPrivateDiary(_currentChapterId!);
+      if (mounted) {
+        setState(() {
+          _cachedDiary = res['diary'];
+          _loadingDiary = false;
+        });
+        _showPrivateDiarySheet();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingDiary = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not unlock diary: $e')));
+      }
+    }
+  }
+
+  void _showPrivateDiarySheet() {
+    if (_cachedDiary == null) return;
+    final diary = _cachedDiary!;
+    final characterName = diary['character_name'] ?? 'Character';
+    final dateStamp = diary['date_stamp'] ?? 'Late Night';
+    final location = diary['location'] ?? 'Secluded Room';
+    final rawConfession = diary['raw_confession'] ?? '';
+    final hesitations = (diary['crossed_out_hesitations'] as List<dynamic>?) ?? [];
+    final intensity = diary['emotional_intensity'] ?? 'Unguarded Vulnerability';
+    final marginNote = diary['margin_note'] ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1108),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.78,
+          maxChildSize: 0.94,
+          minChildSize: 0.45,
+          expand: false,
+          builder: (ctx, scrollCtrl) {
+            return Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1108),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.35), width: 1.5),
+              ),
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.all(22),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD4AF37).withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Text('📜', style: TextStyle(fontSize: 24)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$characterName\'s Private Diary',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFDE68A),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            Text(
+                              '$dateStamp • $location',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFFD97706), fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white60),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade900.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.favorite, size: 14, color: Colors.pinkAccent),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Tension & Intensity: $intensity',
+                          style: const TextStyle(fontSize: 12, color: Colors.pinkAccent, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Diary Paper Sheet
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF28180E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF8D5B2A).withValues(alpha: 0.4)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('🖋️ Written by candlelight behind locked doors',
+                                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFFD4AF37))),
+                            const Spacer(),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(color: Color(0xFF3E2723), shape: BoxShape.circle),
+                            ),
+                          ],
+                        ),
+                        const Divider(color: Color(0xFF5D4037), height: 24),
+                        _buildCrossedOutText(
+                          rawConfession,
+                          fontSize: 15,
+                          defaultColor: const Color(0xFFFDF0CD),
+                        ),
+                        if (hesitations.isNotEmpty) ...[
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Scratched-out Lines (Censored Hesitations):',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                ),
+                                const SizedBox(height: 6),
+                                ...hesitations.map((h) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4.0),
+                                  child: Text(
+                                    '• "$h"',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white60,
+                                      decoration: TextDecoration.lineThrough,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                )),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (marginNote.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF331F10),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFB45309).withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('📌 Margin note:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B))),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '"$marginNote"',
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFFFDE68A)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.lock, size: 16),
+                    label: const Text('Lock Diary & Return to Story'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF78350F),
+                      foregroundColor: const Color(0xFFFDE68A),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPrivateDiaryCard() {
+    final textColor = _getTextColor();
+    final cardColor = _getCardColor();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.4), width: 1.2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.menu_book, color: Color(0xFFF59E0B), size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '📜 Character\'s Private Diary Entry',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _loadingDiary ? null : _fetchPrivateDiary,
+                  icon: _loadingDiary
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.lock_open, size: 14),
+                  label: Text(_cachedDiary == null ? 'Unlock Diary' : 'Read Journal', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB45309),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Discover what the male lead penned in secret right after this chapter occurred—raw feelings, crossed-out regrets, and ink-stained confessions.',
+              style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.7)),
+            ),
           ],
         ),
       ),
@@ -1577,9 +2089,11 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   // Themes row
                   Text('Background Theme', style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.7))),
                   const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
+                      _buildThemeChip('🕯️ Candlelight', ReaderTheme.candlelight, const Color(0xFF241408), const Color(0xFFFEE685), setSheetState),
                       _buildThemeChip('AMOLED', ReaderTheme.amoled, Colors.black, Colors.white, setSheetState),
                       _buildThemeChip('Dark', ReaderTheme.dark, const Color(0xFF1E1E2E), Colors.white, setSheetState),
                       _buildThemeChip('Sepia', ReaderTheme.sepia, const Color(0xFFF7EFE2), const Color(0xFF4A3728), setSheetState),
@@ -1691,6 +2205,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFFF7EFE2);
       case ReaderTheme.light:
         return const Color(0xFFFAFAFA);
+      case ReaderTheme.candlelight:
+        return const Color(0xFF140B04); // Deep smoky warm hearth
     }
   }
 
@@ -1704,6 +2220,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFFEFE2CE);
       case ReaderTheme.light:
         return const Color(0xFFEEEEEE);
+      case ReaderTheme.candlelight:
+        return const Color(0xFF241408); // Warm dark amber hearth
     }
   }
 
@@ -1716,6 +2234,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFF382918);
       case ReaderTheme.light:
         return const Color(0xFF1A1A1A);
+      case ReaderTheme.candlelight:
+        return const Color(0xFFFEE685); // Warm flickering golden amber
     }
   }
 
@@ -1728,6 +2248,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFF8B4513);
       case ReaderTheme.light:
         return const Color(0xFF1565C0);
+      case ReaderTheme.candlelight:
+        return const Color(0xFFF59E0B); // Vibrant molten honey
     }
   }
 
@@ -1818,6 +2340,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
   @override
   void dispose() {
+    _flickerTimer?.cancel();
     _stopHeartbeatHaptics();
     _ambientService.stop();
     flutterTts.stop();
@@ -2300,66 +2823,126 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                 ),
               ],
             ),
-      body: GestureDetector(
-        onDoubleTap: () => setState(() => _fullscreen = !_fullscreen),
-        child: Container(
-          color: bgColor,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Chapter Title Header
-                    Text(
-                      _currentTitle,
-                      style: TextStyle(
-                        fontSize: _fontSize * 1.5,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: _fontFamily,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
+      body: Stack(
+        children: [
+          GestureDetector(
+            onDoubleTap: () => setState(() => _fullscreen = !_fullscreen),
+            child: Container(
+              color: bgColor,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.access_time, size: 14, color: textColor.withValues(alpha: 0.5)),
-                        const SizedBox(width: 4),
-                        Text(
-                          '~ $readTimeMinutes min read • $wordCount words',
-                          style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5)),
-                        ),
-                        if (_fullscreen) ...[
-                          const Spacer(),
-                          TextButton.icon(
-                            onPressed: () => setState(() => _fullscreen = false),
-                            icon: const Icon(Icons.fullscreen_exit, size: 14),
-                            label: const Text('Exit Fullscreen', style: TextStyle(fontSize: 12)),
+                        // If Dual-Cast is playing, show live audio indicator banner
+                        if (_isPlaying && _enableDualCast)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 20),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amberAccent, width: 1),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.graphic_eq, color: Colors.amberAccent, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '🎙️ Dual-Cast Audio Drama: $_currentSpeaker',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 20),
+                                  onPressed: _togglePlayback,
+                                  tooltip: 'Stop Audio Drama',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        // Chapter Title Header
+                        Text(
+                          _currentTitle,
+                          style: TextStyle(
+                            fontSize: _fontSize * 1.5,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: _fontFamily,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time, size: 14, color: textColor.withValues(alpha: 0.5)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '~ $readTimeMinutes min read • $wordCount words',
+                              style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5)),
+                            ),
+                            if (_fullscreen) ...[
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed: () => setState(() => _fullscreen = false),
+                                icon: const Icon(Icons.fullscreen_exit, size: 14),
+                                label: const Text('Exit Fullscreen', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const Divider(height: 32),
+                        // Story Content Body
+                        _buildNovelBody(),
+                        // Previous / Next Chapter Buttons
+                        _buildChapterNavigation(),
+                        // Mind Reader Button Card
+                        _buildMindReaderButtonCard(),
+                        // Cinematic Chapter Teasers & Cliffhangers
+                        _buildTeaserCard(),
+                        // "The Character's Private Diary" Entry Card
+                        _buildPrivateDiaryCard(),
+                        // "What-If" Alternate Romance Cuts
+                        _buildWhatIfCard(),
+                        // Interactive Next Chapter Choices
+                        _buildChoicesWidget(),
                       ],
                     ),
-                    const Divider(height: 32),
-                    // Story Content Body
-                    _buildNovelBody(),
-                    // Previous / Next Chapter Buttons
-                    _buildChapterNavigation(),
-                    // Mind Reader Button Card
-                    _buildMindReaderButtonCard(),
-                    // Cinematic Chapter Teasers & Cliffhangers
-                    _buildTeaserCard(),
-                    // "What-If" Alternate Romance Cuts
-                    _buildWhatIfCard(),
-                    // Interactive Next Chapter Choices
-                    _buildChoicesWidget(),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          // Candlelight & Hearthglow warm flickering illumination layer
+          if (_readerTheme == ReaderTheme.candlelight)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 600),
+                  opacity: _candleFlicker,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment.center,
+                        radius: 1.15,
+                        colors: [
+                          Colors.transparent,
+                          Color(0x22F59E0B),
+                          Color(0x66140B04),
+                        ],
+                        stops: [0.5, 0.85, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showWhisperDialog,

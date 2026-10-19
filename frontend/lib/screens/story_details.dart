@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
 import 'package:translator/translator.dart';
 import 'package:path_provider/path_provider.dart';
@@ -51,6 +52,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   bool isLoadingSensoryProfile = false;
   List<dynamic>? scheduledLetters;
   bool isLoadingScheduledLetters = false;
+  // Batch 4: 🪢 Red Thread of Fate
+  List<dynamic>? storyRedThread;
+  bool isLoadingRedThread = false;
+  // Batch 4: 💌 Wax-Sealed Reply Dispatch
+  bool isDispatchingWaxReply = false;
+  Map<String, dynamic>? lastWaxReplyReaction;
 
   @override
   void initState() {
@@ -804,7 +811,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 14,
+      length: 15,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -830,6 +837,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               Tab(icon: Icon(Icons.photo_camera_back_outlined), text: 'Polaroids'),
               Tab(icon: Icon(Icons.flare_outlined), text: 'Sensory Profile'),
               Tab(icon: Icon(Icons.schedule_send_outlined), text: 'Midnight Letters'),
+              Tab(icon: Icon(Icons.grain), text: 'Red Thread of Fate'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
               Tab(icon: Icon(Icons.map), text: 'World Map'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
@@ -965,6 +973,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildPolaroidsTab(),
             _buildSensoryProfileTab(),
             _buildScheduledLettersTab(),
+            _buildRedThreadTab(),
             _buildWorldTab(),
             _buildWorldMapTab(),
             _buildUserPersonaTab(),
@@ -4990,10 +4999,717 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             icon: const Icon(Icons.local_fire_department, color: Colors.deepOrangeAccent, size: 16),
             label: const Text('Consign to Ash', style: TextStyle(color: Colors.deepOrangeAccent)),
           ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showWaxSealReplyDialog(
+                recipientName: letter['author_name']?.toString() ?? 'Character',
+              );
+            },
+            icon: const Icon(Icons.history_edu, size: 16),
+            label: const Text('Wax-Sealed Reply 💌'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber.shade800,
+              foregroundColor: Colors.white,
+            ),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Fold & Keep', style: TextStyle(color: Colors.pinkAccent)),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // BATCH 4 FEATURE: 💌 WAX-SEALED REPLY DISPATCH
+  // ==========================================
+
+  void _showWaxSealReplyDialog({String? recipientName}) {
+    String selectedRecipient = recipientName ?? (characters.isNotEmpty ? (characters.first['name'] ?? 'Male Lead') : 'Character');
+    String selectedStationery = 'Parchment';
+    String selectedWax = 'Crimson';
+    final replyController = TextEditingController();
+    double stampProgress = 0.0;
+    Timer? stampTimer;
+
+    final quickReplies = [
+      'I found your note under the door. You didn\'t have to cross out what you truly felt...',
+      'I am still awake too. Don\'t walk away without saying goodbye tomorrow.',
+      'I heard every word you didn\'t have the courage to say out loud.',
+      'Meet me on the balcony when the rain stops. No masks, no secrets.',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF19111E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Color waxColor;
+            switch (selectedWax) {
+              case 'Imperial Gold':
+                waxColor = const Color(0xFFD4AF37);
+                break;
+              case 'Rose Gold':
+                waxColor = const Color(0xFFB76E79);
+                break;
+              case 'Crimson':
+              default:
+                waxColor = const Color(0xFFB71C1C);
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: waxColor.withValues(alpha: 0.2), shape: BoxShape.circle),
+                          child: const Text('💌', style: TextStyle(fontSize: 22)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Wax-Sealed Reply Dispatch',
+                                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              Text(
+                                'Send an intimate, physical-style letter back to $selectedRecipient',
+                                style: const TextStyle(fontSize: 12, color: Colors.pinkAccent),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(icon: const Icon(Icons.close, color: Colors.white60), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // Choose Stationery
+                    const Text('Stationery Style:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: ['Parchment', 'Midnight Silk', 'Black Gold'].map((s) {
+                        final isSel = selectedStationery == s;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: InkWell(
+                              onTap: () => setSheetState(() => selectedStationery = s),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSel ? Colors.amber.withValues(alpha: 0.2) : Colors.white10,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: isSel ? Colors.amber : Colors.white24),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    s,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                      color: isSel ? Colors.amber : Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    // Choose Wax Stamp Color
+                    const Text('Wax Seal Color:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        {'name': 'Crimson', 'color': const Color(0xFFB71C1C)},
+                        {'name': 'Imperial Gold', 'color': const Color(0xFFD4AF37)},
+                        {'name': 'Rose Gold', 'color': const Color(0xFFB76E79)},
+                      ].map((w) {
+                        final name = w['name'] as String;
+                        final color = w['color'] as Color;
+                        final isSel = selectedWax == name;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: InkWell(
+                              onTap: () => setSheetState(() => selectedWax = name),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: isSel ? 0.35 : 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: isSel ? color : Colors.white24, width: isSel ? 2 : 1),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                        color: isSel ? Colors.white : Colors.white70,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 14),
+                    // Quick replies
+                    const Text('Romantic Whisper Templates:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: quickReplies.map((r) => ActionChip(
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        label: Text(r, style: const TextStyle(fontSize: 11, color: Colors.pinkAccent), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onPressed: () {
+                          replyController.text = r;
+                          setSheetState(() {});
+                        },
+                      )).toList(),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: replyController,
+                      maxLines: 3,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Pour your unfiltered thoughts into this letter...',
+                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                        filled: true,
+                        fillColor: Colors.black26,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    // Interactive Hold to Melt & Stamp Ritual
+                    Center(
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            onTapDown: (_) {
+                              HapticFeedback.mediumImpact();
+                              stampProgress = 0.0;
+                              stampTimer?.cancel();
+                              stampTimer = Timer.periodic(const Duration(milliseconds: 40), (t) {
+                                setSheetState(() {
+                                  stampProgress += 0.05;
+                                  if (stampProgress >= 1.0) {
+                                    stampProgress = 1.0;
+                                    t.cancel();
+                                    HapticFeedback.heavyImpact();
+                                  }
+                                });
+                              });
+                            },
+                            onTapUp: (_) {
+                              stampTimer?.cancel();
+                              if (stampProgress < 1.0) {
+                                setSheetState(() {
+                                  stampProgress = 0.0;
+                                });
+                              }
+                            },
+                            onTapCancel: () {
+                              stampTimer?.cancel();
+                              setSheetState(() {
+                                stampProgress = 0.0;
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 76,
+                              height: 76,
+                              decoration: BoxDecoration(
+                                color: waxColor,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: waxColor.withValues(alpha: stampProgress > 0 ? 0.8 : 0.4),
+                                    blurRadius: stampProgress > 0 ? 18 : 8,
+                                    spreadRadius: stampProgress * 4,
+                                  ),
+                                ],
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 2),
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  if (stampProgress > 0 && stampProgress < 1.0)
+                                    CircularProgressIndicator(
+                                      value: stampProgress,
+                                      strokeWidth: 3,
+                                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                                    ),
+                                  Icon(
+                                    stampProgress >= 1.0 ? Icons.check : Icons.touch_app,
+                                    color: Colors.white,
+                                    size: 32,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            stampProgress >= 1.0
+                                ? '✨ Wax Seal Melted & Stamped!'
+                                : 'Press & Hold Stamp to Melt Wax Seal',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: stampProgress >= 1.0 ? Colors.amberAccent : Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: (replyController.text.trim().isEmpty || stampProgress < 0.95)
+                          ? null
+                          : () async {
+                              Navigator.pop(ctx);
+                              _dispatchWaxReply(
+                                recipientName: selectedRecipient,
+                                stationery: selectedStationery,
+                                waxColor: selectedWax,
+                                userReply: replyController.text.trim(),
+                              );
+                            },
+                      icon: const Icon(Icons.send_rounded),
+                      label: const Text('Dispatch Sealed Letter to Character 🕊️'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: waxColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _dispatchWaxReply({
+    required String recipientName,
+    required String stationery,
+    required String waxColor,
+    required String userReply,
+  }) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Colors.redAccent),
+            SizedBox(width: 18),
+            Expanded(child: Text('Courier delivering your wax-sealed letter...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final res = await ApiService.sendWaxSealedReply(
+        widget.storyId,
+        recipientName: recipientName,
+        stationery: stationery,
+        waxColor: waxColor,
+        userReply: userReply,
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        final reaction = (res['reaction'] as Map<String, dynamic>?) ?? {};
+        setState(() {
+          lastWaxReplyReaction = reaction;
+        });
+
+        _showWaxReplyReactionDialog(reaction, recipientName);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to deliver reply: $e')));
+      }
+    }
+  }
+
+  void _showWaxReplyReactionDialog(Map<String, dynamic> reaction, String characterName) {
+    final immediateReaction = reaction['character_immediate_reaction'] ?? 'Stunned into breathless silence.';
+    final speech = reaction['dialogue_response'] ?? '';
+    final emotion = reaction['emotional_shift'] ?? 'Vulnerable';
+    final token = reaction['physical_keepsake_reaction'] ?? '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF1E101E),
+        title: Row(
+          children: [
+            const Icon(Icons.mark_email_read, color: Colors.amberAccent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$characterName Received Your Letter!',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.pink.shade900.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  '💓 Emotional Shift: $emotion',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.pinkAccent),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('Immediate Reaction:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white70)),
+              const SizedBox(height: 4),
+              Text(
+                immediateReaction,
+                style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
+              ),
+              if (speech.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black38,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    '"$speech"',
+                    style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.amberAccent, height: 1.4),
+                  ),
+                ),
+              ],
+              if (token.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  '🕊️ $token',
+                  style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.white60),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white),
+            child: const Text('Keep in Keepsake Tray'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // BATCH 4 FEATURE: 🪢 THE RED THREAD OF FATE
+  // ==========================================
+
+  Future<void> _fetchRedThread() async {
+    setState(() => isLoadingRedThread = true);
+    try {
+      final res = await ApiService.getRedThreadCrossings(widget.storyId);
+      if (mounted) {
+        setState(() {
+          storyRedThread = res;
+          isLoadingRedThread = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingRedThread = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to trace red thread: $e')));
+      }
+    }
+  }
+
+  Widget _buildRedThreadTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4A0E17), Color(0xFF1E0A12)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('🪢', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'The Red Thread of Fate',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.redAccent),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Uncover secret past near-miss encounters where the leads brushed shoulders years before Chapter 1 without ever speaking.',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isLoadingRedThread ? null : _fetchRedThread,
+                  icon: isLoadingRedThread
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.grain, size: 16),
+                  label: Text(storyRedThread == null ? 'Trace Thread' : 'Re-trace', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade800,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (isLoadingRedThread) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(color: Colors.redAccent),
+                    SizedBox(height: 12),
+                    Text('Tracing fateful knots across past timelines...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (storyRedThread == null) ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    const Icon(Icons.gesture, size: 48, color: Colors.redAccent),
+                    const SizedBox(height: 12),
+                    const Text('The Red Thread has not yet been traced for this story.', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _fetchRedThread,
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Trace Past Encounters'),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            Text('Fateful Crossroads & Near-Misses (${storyRedThread!.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 12),
+            ...List.generate(storyRedThread!.length, (index) {
+              final crossing = storyRedThread![index] as Map<String, dynamic>;
+              final timeframe = crossing['timeframe'] ?? 'Past Encounter';
+              final title = crossing['encounter_title'] ?? 'The Silent Crossing';
+              final location = crossing['location'] ?? 'Unknown City';
+              final prose = crossing['near_miss_prose'] ?? '';
+              final item = crossing['linking_item_or_token'] ?? '';
+              final irony = crossing['poetic_irony'] ?? '';
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Timeline thread line with glowing node
+                    Column(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade900,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.redAccent, width: 2),
+                            boxShadow: [
+                              BoxShadow(color: Colors.redAccent.withValues(alpha: 0.5), blurRadius: 8),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${index + 1}',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ),
+                        if (index < storyRedThread!.length - 1)
+                          Container(
+                            width: 2,
+                            height: 120,
+                            color: Colors.redAccent.withValues(alpha: 0.4),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    // Encounter Card
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1B0E14),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    timeframe,
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '📍 $location',
+                              style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontStyle: FontStyle.italic),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              prose,
+                              style: const TextStyle(fontSize: 13, height: 1.45, color: Colors.white70),
+                            ),
+                            if (item.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Text('🔗 Shared Token: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
+                                    Expanded(
+                                      child: Text(
+                                        item,
+                                        style: const TextStyle(fontSize: 11, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (irony.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '✨ "$irony"',
+                                style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.white54),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );
@@ -5045,17 +5761,31 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: isLoadingUnsentLetters ? null : _fetchUnsentLetters,
-                  icon: isLoadingUnsentLetters
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.mail_outline, size: 16),
-                  label: Text(storyUnsentLetters == null ? 'Open Tray' : 'Scan', style: const TextStyle(fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  ),
+                Column(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: isLoadingUnsentLetters ? null : _fetchUnsentLetters,
+                      icon: isLoadingUnsentLetters
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.mail_outline, size: 16),
+                      label: Text(storyUnsentLetters == null ? 'Open Tray' : 'Scan', style: const TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    OutlinedButton.icon(
+                      onPressed: () => _showWaxSealReplyDialog(),
+                      icon: const Icon(Icons.history_edu, size: 14, color: Colors.amberAccent),
+                      label: const Text('Reply 💌', style: TextStyle(fontSize: 11, color: Colors.amberAccent)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.amberAccent),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

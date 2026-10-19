@@ -1122,6 +1122,48 @@ class ApiService {
     }
     return {};
   }
+
+  static Future<Map<String, dynamic>> getChapterPrivateDiary(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/private-diary'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['diary'] ?? {};
+    }
+    return {};
+  }
+
+  static Future<Map<String, dynamic>> sendWaxSealedReply(
+    String storyId, {
+    String? recipientName,
+    String stationery = "Parchment",
+    String waxColor = "Crimson",
+    required String userReply,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/reply-letter'),
+      headers: headers,
+      body: jsonEncode({
+        'recipient_name': recipientName,
+        'stationery': stationery,
+        'wax_color': waxColor,
+        'user_reply': userReply,
+      }),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to send wax-sealed reply');
+  }
+
+  static Future<List<dynamic>> getRedThreadCrossings(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/red-thread'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['crossings'] ?? [];
+    }
+    return [];
+  }
 }
 
 

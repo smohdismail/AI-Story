@@ -1809,4 +1809,208 @@ Return strictly a JSON object:
         "music_director_note": "Sparse, resonant piano chords mirroring emotional hesitation and physical proximity."
     }
 
+async def generate_private_diary_entry(story_title: str, chapter_title: str, chapter_content: str, character_name: str = "", characters_summary: str = "") -> dict:
+    char_target = character_name or "The Male Lead"
+    prompt = f"""You are a master romantic novelist writing the private, locked journal of {char_target}.
+After the intense events of this chapter, the character retreats to their private room late at night, unlocks their personal leatherbound diary, and confesses their deepest, most vulnerable thoughts with raw emotional honesty.
+
+Story Title: {story_title}
+Chapter Title: {chapter_title}
+Character Writing Diary: {char_target}
+Characters: {characters_summary}
+
+CHAPTER EVENTS THAT JUST HAPPENED:
+{chapter_content[-3000:]}
+
+TASK:
+Write their private journal entry for tonight.
+Include:
+1. `entry_text`: Emotional, raw, and unfiltered cursive diary prose. Use markdown strikethrough `~~like this~~` to represent lines they wrote and then self-censored/crossed out in hesitation.
+2. `date_entry`: Atmospheric time & date (e.g. "October 24th, 2:40 AM — Rain against the library windows").
+3. `location`: Private setting where they are writing.
+4. `crossed_out_hesitations`: List of 2-3 crossed out lines.
+5. `raw_emotional_confession`: The most dangerous truth they admit to themselves.
+6. `ink_blot_note`: Visual description of handwriting state, ink smudges, or trembling pen strokes.
+
+Return strictly a JSON object:
+{{
+  "character_name": "{char_target}",
+  "date_entry": "October 24th, 2:40 AM",
+  "location": "Darkened study with whiskey and low candlelight",
+  "entry_text": "I told her to leave tonight. ~~I wanted to lock the doors and never let her walk away.~~ God help me, my hands were shaking so hard I couldn't hold the glass. Every time she tilts her chin and looks at me with those defiant eyes, my pulse jumps into my throat.",
+  "crossed_out_hesitations": [
+    "I wanted to lock the doors and never let her walk away.",
+    "If she stays one more minute, I will lose every shred of control I have left."
+  ],
+  "raw_emotional_confession": "I am completely, terrifyingly in love with her, and it will be my undoing.",
+  "ink_blot_note": "Trembling pen marks and a smudge of wet ink where his fist rested against the parchment."
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1400,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating private diary entry: {e}")
+
+    return {
+        "character_name": char_target,
+        "date_entry": "Late Night — 2:15 AM",
+        "location": "Quiet study under amber lamplight",
+        "entry_text": "I forced myself to keep my hands inside my pockets tonight so she wouldn't see the tremor in my fingers. ~~I wanted to pull her into my arms and ruin everything.~~ She stood there, breathless and stubborn, and I knew right then that if she took one step closer, every boundary I've built would turn to ash.",
+        "crossed_out_hesitations": [
+            "I wanted to pull her into my arms and ruin everything.",
+            "I don't think I can survive another night pretending I don't want her."
+        ],
+        "raw_emotional_confession": "Every rule I've ever lived by vanishes the moment she breathes my name.",
+        "ink_blot_note": "A heavy blot of black ink where the pen lingered too long in hesitation."
+    }
+
+async def generate_wax_seal_reply_reaction(story_title: str, recipient_name: str, stationery: str, wax_color: str, user_reply: str, user_name: str = "") -> dict:
+    prompt = f"""You are roleplaying as {recipient_name} in the romance novel "{story_title}".
+The reader/protagonist ({user_name or 'the reader'}) just sealed a personal, physical letter in {stationery} stationery, stamped with melted {wax_color} wax, and dispatched it directly to you.
+
+READER'S WRITTEN REPLY / LETTER:
+\"{user_reply}\"
+
+STATIONERY USED: {stationery}
+WAX SEAL COLOR: {wax_color}
+
+TASK:
+Generate {recipient_name}'s tender, emotionally charged reaction to receiving and breaking open your wax-sealed letter.
+Show:
+1. His physical reaction to breaking the seal (fingers tracing the wax, heart hammering, reading it in silence).
+2. His written follow-up reply letter acknowledging your words.
+3. His vulnerability surge (0-100%).
+
+Return strictly a JSON object:
+{{
+  "character_name": "{recipient_name}",
+  "seal_cracking_action": "He held the {wax_color} seal to the candlelight, thumbnail tracing the stamped impression before cracking it open with breathless care.",
+  "reaction_prose": "His breath hitched in his chest as his eyes scanned the handwritten lines. For five long minutes, the only sound in the room was the quiet rustle of {stationery} parchment between his trembling fingers.",
+  "character_response_letter": "I have read your words four times now. I'm keeping your letter inside my coat pocket, right against my ribs. You shouldn't have written those things to me... unless you meant every single word.",
+  "vulnerability_surge": 96,
+  "unspoken_thought": "I will never let anyone else read what you wrote to me."
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1100,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating wax seal reply: {e}")
+
+    return {
+        "character_name": recipient_name,
+        "seal_cracking_action": f"He carefully cracked the warm {wax_color} wax seal, holding the {stationery} envelope with reverent stillness.",
+        "reaction_prose": f"A breathless hush fell over him as he unfolded your letter. His fingers traced the curve of your handwriting before he closed his eyes, inhaling the subtle scent of the parchment.",
+        "character_response_letter": f"I have your letter here in front of me. I don't know what possessed you to write those words, but now that they're in my hands, I'm never letting them go.",
+        "vulnerability_surge": 94,
+        "unspoken_thought": "You have no idea how completely you've undone me."
+    }
+
+async def generate_red_thread_crossings(story_title: str, synopsis: str, characters_summary: str) -> list:
+    prompt = f"""You are a master romantic novelist creating 'The Red Thread of Fate'—secret past near-miss encounters between the leads before they officially met in Chapter 1.
+Story Title: {story_title}
+Synopsis: {synopsis}
+Characters: {characters_summary}
+
+TASK:
+Generate 3 to 4 poetic, fateful past moments where the two leads unknowingly crossed paths years or months before the story began without realizing it was their future lover:
+- A rainy metro station where an umbrella was exchanged.
+- An elevator where a perfume scent lingered.
+- An antique bookstore where both reached for the same worn volume.
+- A crowded airport departure gate during a midnight delay.
+
+Return strictly a JSON array:
+[
+  {{
+    "timeline_tag": "3 Years Ago",
+    "location": "Rain-soaked café near St. Pancras Station",
+    "the_near_miss": "You accidentally left a black umbrella by the café door while rushing for the morning train. He noticed, took it, and kept it in his hallway for three years hoping the girl with the silver ring would return.",
+    "fateful_token": "The rainy black umbrella with the silver ferrule",
+    "coincidence_level": "96% Destined",
+    "sensory_memory": "The scent of rainy bergamot and damp wool lingering in the doorway."
+  }}
+]"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                res = json.loads(raw.strip())
+                if isinstance(res, list): return res
+                if isinstance(res, dict) and "crossings" in res: return res["crossings"]
+            except Exception:
+                m = re.search(r'\[.*\]', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating red thread crossings: {e}")
+
+    return [
+        {
+            "timeline_tag": "3 Years Ago",
+            "location": "Rain-soaked café near St. Pancras Station",
+            "the_near_miss": "You accidentally left a black umbrella by the café door while rushing for the morning train. He noticed, took it, and kept it on his coat rack for three years hoping you would return.",
+            "fateful_token": "The rainy black umbrella with the silver handle",
+            "coincidence_level": "96% Destined",
+            "sensory_memory": "The scent of rainy bergamot and damp wool lingering by the door."
+        },
+        {
+            "timeline_tag": "18 Months Ago",
+            "location": "JFK Airport Terminal 4, Gate B22",
+            "the_near_miss": "During a midnight flight delay, you were sitting back-to-back on the boarding lounge chairs listening to music. You dropped a silver pen; he picked it up, turned around, but you had already walked to the boarding gate.",
+            "fateful_token": "The engraved silver pen inside his briefcase",
+            "coincidence_level": "92% Destined",
+            "sensory_memory": "The soft click of heels fading down the carpeted terminal."
+        },
+        {
+            "timeline_tag": "6 Months Ago",
+            "location": "Old Greenwich Village Antiquarian Books",
+            "the_near_miss": "Both of your fingers brushed against the same worn volume of vintage poetry on the top shelf. You smiled and let him have it. He still keeps that exact page bookmarked.",
+            "fateful_token": "Dog-eared page 42 of sonnets",
+            "coincidence_level": "98% Destined",
+            "sensory_memory": "The warmth of skin contact that sent a shockwave through his hand."
+        }
+    ]
+
+
 
