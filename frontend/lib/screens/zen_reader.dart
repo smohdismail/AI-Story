@@ -85,6 +85,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   Timer? _heartbeatTimer;
   Map<String, dynamic>? _whatIfVignette;
   bool _loadingWhatIf = false;
+  bool _loadingSubconscious = false;
+  List<dynamic>? _cachedSubconscious;
 
   @override
   void initState() {
@@ -978,6 +980,240 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     );
   }
 
+  // ==========================================
+  // MIND READER: CHARACTER SUBCONSCIOUS & INNER MONOLOGUE
+  // ==========================================
+
+  Future<void> _showSubconsciousSheet() async {
+    if (_currentChapterId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Active chapter required to read character subconscious.')),
+      );
+      return;
+    }
+
+    if (_cachedSubconscious == null) {
+      setState(() => _loadingSubconscious = true);
+      try {
+        final moments = await ApiService.getCharacterSubconscious(_currentChapterId!);
+        if (mounted) {
+          setState(() {
+            _cachedSubconscious = moments;
+            _loadingSubconscious = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _loadingSubconscious = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error reading subconscious: $e')));
+          return;
+        }
+      }
+    }
+
+    if (!mounted || _cachedSubconscious == null || _cachedSubconscious!.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF140F1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      isScrollControlled: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          maxChildSize: 0.92,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Text('🧠', style: TextStyle(fontSize: 22)),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Character Mind Reader',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.amber),
+                            ),
+                            Text(
+                              'Hidden subconscious thoughts, racing pulses, and unspoken truths.',
+                              style: TextStyle(fontSize: 11, color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24, color: Colors.white12),
+                  ..._cachedSubconscious!.map((m) {
+                    final item = m as Map<String, dynamic>;
+                    final charName = item['character_name'] ?? 'Lead';
+                    final spoken = item['spoken_dialogue'] ?? '';
+                    final contextNote = item['spoken_context'] ?? '';
+                    final subconscious = item['hidden_subconscious'] ?? '';
+                    final tell = item['physical_tell'] ?? '';
+                    final unspoken = item['unspoken_desire'] ?? '';
+                    final vuln = (item['vulnerability_percentage'] ?? 85) as num;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text('🎭 $charName', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amberAccent, fontSize: 14)),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text('❤️ Vulnerability: $vuln%', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                              ),
+                            ],
+                          ),
+                          if (contextNote.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text('📍 $contextNote', style: const TextStyle(fontSize: 11, color: Colors.white54, fontStyle: FontStyle.italic)),
+                          ],
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('🗣️ ', style: TextStyle(fontSize: 12)),
+                                Expanded(
+                                  child: Text('“$spoken”', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text('Inner Subconscious Monologue:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                          const SizedBox(height: 4),
+                          Text(subconscious, style: const TextStyle(fontSize: 12, height: 1.45, color: Colors.white)),
+                          if (tell.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('💓 Physical Tell: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
+                                Expanded(child: Text(tell, style: const TextStyle(fontSize: 11, color: Colors.white70, fontStyle: FontStyle.italic))),
+                              ],
+                            ),
+                          ],
+                          if (unspoken.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('🔒 Unspoken Desire: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrangeAccent)),
+                                Expanded(child: Text('“$unspoken”', style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontStyle: FontStyle.italic))),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMindReaderButtonCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.amber.shade900.withValues(alpha: 0.35), Colors.purple.shade900.withValues(alpha: 0.35)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.4), width: 1.2),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _loadingSubconscious ? null : _showSubconsciousSheet,
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('🧠', style: TextStyle(fontSize: 22)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Mind Reader: Inner Monologue',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amberAccent),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Tap to reveal characters’ hidden racing pulses, secret jealousy, and unspoken thoughts.',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                _loadingSubconscious
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent))
+                    : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.amberAccent),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showAppearanceSettings() {
     showModalBottomSheet(
       context: context,
@@ -1191,6 +1427,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       _cachedAfterHoursContent = null;
       _chapterTeaser = null;
       _whatIfVignette = null;
+      _cachedSubconscious = null;
     });
 
     if (ch['choices_json'] != null) {
@@ -1479,6 +1716,17 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   onPressed: _isLoadingAfterHours ? null : _toggleAfterHours,
                 ),
                 IconButton(
+                  icon: _loadingSubconscious
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent),
+                        )
+                      : const Icon(Icons.remove_red_eye_outlined, color: Colors.amberAccent),
+                  tooltip: '🧠 Mind Reader (Character Subconscious)',
+                  onPressed: _loadingSubconscious ? null : _showSubconsciousSheet,
+                ),
+                IconButton(
                   icon: Icon(
                     _ambientService.isPlaying ? Icons.music_note : Icons.music_note_outlined,
                     color: _ambientService.isPlaying ? Colors.tealAccent : textColor,
@@ -1570,6 +1818,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                     _buildNovelBody(),
                     // Previous / Next Chapter Buttons
                     _buildChapterNavigation(),
+                    // Mind Reader Button Card
+                    _buildMindReaderButtonCard(),
                     // Cinematic Chapter Teasers & Cliffhangers
                     _buildTeaserCard(),
                     // "What-If" Alternate Romance Cuts

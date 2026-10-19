@@ -21,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? selectedGenre;
   String? selectedSubgenre;
   Map<String, dynamic>? streakInfo;
+  String _privacyFilter = 'all';
 
   @override
   void initState() {
@@ -337,10 +338,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildBodyContent() {
     if (!isFolderView) {
       final latestStory = stories.isNotEmpty ? stories.first : null;
+      final filteredStories = stories.where((s) {
+        if (_privacyFilter == 'private') return s['is_published'] != true;
+        if (_privacyFilter == 'public') return s['is_published'] == true;
+        return true;
+      }).toList();
+
+      final privateCount = stories.where((s) => s['is_published'] != true).length;
+      final publicCount = stories.where((s) => s['is_published'] == true).length;
+
       return Column(
         children: [
           if (latestStory != null) _buildContinueReadingCard(latestStory),
-          Expanded(child: _buildStoriesGrid(stories)),
+          // Privacy Filter Selector
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text('All (${stories.length})', style: const TextStyle(fontSize: 12)),
+                  selected: _privacyFilter == 'all',
+                  onSelected: (_) => setState(() => _privacyFilter = 'all'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.public, size: 14, color: Colors.cyanAccent),
+                  label: Text('Public ($publicCount)', style: const TextStyle(fontSize: 12)),
+                  selected: _privacyFilter == 'public',
+                  selectedColor: Colors.cyan.shade900,
+                  onSelected: (_) => setState(() => _privacyFilter = 'public'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.lock, size: 14, color: Colors.deepOrangeAccent),
+                  label: Text('Private ($privateCount)', style: const TextStyle(fontSize: 12)),
+                  selected: _privacyFilter == 'private',
+                  selectedColor: Colors.deepOrange.shade900,
+                  onSelected: (_) => setState(() => _privacyFilter = 'private'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: _buildStoriesGrid(filteredStories)),
         ],
       );
     }
@@ -386,6 +425,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       itemCount: targetStories.length,
       itemBuilder: (context, index) {
         final story = targetStories[index];
+        final isPublic = story['is_published'] == true;
         return Card(
           elevation: 4,
           child: InkWell(
@@ -397,16 +437,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: story['cover_base64'] != null
-                    ? Image.memory(
-                        base64Decode(story['cover_base64']),
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      )
-                    : Container(
-                        color: Colors.deepPurple.shade800,
-                        child: const Icon(Icons.book, size: 64, color: Colors.white54),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: story['cover_base64'] != null
+                          ? Image.memory(
+                              base64Decode(story['cover_base64']),
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              color: Colors.deepPurple.shade800,
+                              child: const Icon(Icons.book, size: 64, color: Colors.white54),
+                            ),
                       ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isPublic ? Colors.cyanAccent : Colors.deepOrangeAccent,
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isPublic ? Icons.public : Icons.lock,
+                                size: 10,
+                                color: isPublic ? Colors.cyanAccent : Colors.deepOrangeAccent,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                isPublic ? 'Public' : 'Private',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: isPublic ? Colors.cyanAccent : Colors.deepOrangeAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0, right: 4.0, top: 4.0),

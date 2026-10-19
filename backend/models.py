@@ -50,7 +50,7 @@ class Story(Base):
     story_summary = Column(Text, default="")
     custom_rules = Column(Text, default="")
     cover_base64 = Column(Text, nullable=True)
-    is_published = Column(Boolean, default=False)
+    is_published = Column(Boolean, default=True)
     likes_count = Column(Integer, default=0)
     nsfw_preferences = Column(Text, default="")
     intimacy_level = Column(String, default="explicit")

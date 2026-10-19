@@ -252,11 +252,16 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isPub ? 'Story Published to Community Feed!' : 'Story Unpublished.')),
+          SnackBar(
+            content: Text(isPub 
+              ? '🌐 Novel is now PUBLIC — Visible to all users in Community Feed!' 
+              : '🔒 Novel is now PRIVATE — Strictly locked to your personal library.'),
+            backgroundColor: isPub ? Colors.cyan.shade900 : Colors.deepOrange.shade900,
+          ),
         );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error publishing: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating visibility: $e')));
     }
   }
 
@@ -824,6 +829,46 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             ],
           ),
           actions: [
+            if (story != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 4.0),
+                child: InkWell(
+                  onTap: _togglePublishStory,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: story?['is_published'] == true 
+                          ? Colors.cyan.withValues(alpha: 0.2) 
+                          : Colors.deepOrange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: story?['is_published'] == true ? Colors.cyanAccent : Colors.deepOrangeAccent,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          story?['is_published'] == true ? Icons.public : Icons.lock_outline,
+                          size: 14,
+                          color: story?['is_published'] == true ? Colors.cyanAccent : Colors.deepOrangeAccent,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          story?['is_published'] == true ? 'Public' : 'Private',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: story?['is_published'] == true ? Colors.cyanAccent : Colors.deepOrangeAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             if (story != null && chapters.isNotEmpty)
               IconButton(
                 icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent),

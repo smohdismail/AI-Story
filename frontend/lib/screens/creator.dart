@@ -56,6 +56,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   String _selectedIntimacy = 'explicit';
   String _selectedPov = 'Standard';
   bool _jealousyTrigger = false;
+  bool _isPublic = true; // By default keep public as requested
 
   final _intimacyOptions = [
     {'value': 'mild', 'label': '🌸 Mild Romance (Sweet & Flirty, No Explicit Scenes)'},
@@ -84,6 +85,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
         'intimacy_level': _selectedIntimacy,
         'pov_mode': _selectedPov,
         'jealousy_trigger': _jealousyTrigger,
+        'is_published': _isPublic,
       };
       
       if (_personaNameController.text.trim().isNotEmpty) {
@@ -135,6 +137,72 @@ class _CreatorScreenState extends State<CreatorScreen> {
                   controller: _synopsisController,
                   maxLines: 4,
                   decoration: const InputDecoration(labelText: 'Synopsis / Premise', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  color: _isPublic ? Colors.cyan.withValues(alpha: 0.12) : Colors.deepOrange.withValues(alpha: 0.12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: _isPublic ? Colors.cyanAccent.withValues(alpha: 0.5) : Colors.deepOrangeAccent.withValues(alpha: 0.5)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(_isPublic ? Icons.public : Icons.lock_outline, color: _isPublic ? Colors.cyanAccent : Colors.deepOrangeAccent, size: 20),
+                            const SizedBox(width: 8),
+                            const Text('Story Privacy & Visibility', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.public, size: 16),
+                                    SizedBox(width: 6),
+                                    Text('Public (Everyone)'),
+                                  ],
+                                ),
+                                selected: _isPublic,
+                                selectedColor: Colors.cyan.shade800,
+                                onSelected: (val) => setState(() => _isPublic = true),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.lock, size: 16),
+                                    SizedBox(width: 6),
+                                    Text('Private (Only Me)'),
+                                  ],
+                                ),
+                                selected: !_isPublic,
+                                selectedColor: Colors.deepOrange.shade800,
+                                onSelected: (val) => setState(() => _isPublic = false),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _isPublic 
+                              ? '🌐 Public (Default): Visible in Community Discover Feed for all users to read, like, and explore.'
+                              : '🔒 Private: Strictly locked to you. Only visible in your personal library and hidden from all other users.',
+                          style: const TextStyle(fontSize: 11, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(

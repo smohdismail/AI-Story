@@ -1036,6 +1036,16 @@ class ApiService {
     }
     return [];
   }
+
+  static Future<List<dynamic>> getCharacterSubconscious(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/subconscious'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['moments'] ?? [];
+    }
+    return [];
+  }
 }
 
 

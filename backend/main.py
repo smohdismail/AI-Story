@@ -277,7 +277,10 @@ def read_root():
 
 @app.post("/api/v1/stories", response_model=schemas.StoryResponse)
 async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    db_story = models.Story(**story.model_dump(), user_id=current_user.id)
+    data = story.model_dump()
+    if data.get("is_published") is None:
+        data["is_published"] = True
+    db_story = models.Story(**data, user_id=current_user.id)
     db.add(db_story)
     await db.commit()
     await db.refresh(db_story)
@@ -285,7 +288,11 @@ async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(ge
 
 @app.get("/api/v1/stories", response_model=list[schemas.StoryResponse])
 async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    result = await db.execute(select(models.Story).order_by(models.Story.created_at.desc()))
+    result = await db.execute(
+        select(models.Story)
+        .where(or_(models.Story.user_id == current_user.id, models.Story.user_id == None))
+        .order_by(models.Story.created_at.desc())
+    )
     return result.scalars().all()
 
 @app.get("/api/v1/stories/{story_id}", response_model=schemas.StoryResponse)
@@ -293,6 +300,8 @@ async def get_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cur
     story = await db.get(models.Story, story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    if not story.is_published and story.user_id and story.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="This novel is marked Private by its author and is not accessible.")
     return story
 
 @app.put("/api/v1/stories/{story_id}", response_model=schemas.StoryResponse)
@@ -1513,10 +1522,12 @@ async def analyze_relationships(story_id: uuid.UUID, db: AsyncSession = Depends(
 
 @app.post("/api/v1/stories/{story_id}/publish", response_model=schemas.StoryResponse)
 async def publish_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
+    result = await db.execute(select(models.Story).where(models.Story.id == story_id))
     story = result.scalars().first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    if story.user_id and story.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the story author can change visibility settings")
         
     story.is_published = not story.is_published
     await db.commit()
@@ -2080,6 +2091,25 @@ async def get_polaroids_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends
     
     polaroids = await llm_service.generate_polaroid_memories(story.title or "Novel", chars_str, chapters_text)
     return {"status": "success", "polaroids": polaroids}
+
+@app.get("/api/v1/chapters/{chapter_id}/subconscious")
+async def get_chapter_subconscious_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_title = story.title if story else "Novel"
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == chapter.story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    
+    moments = await llm_service.generate_character_subconscious(
+        chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter.content or "",
+        characters_summary=chars_str
+    )
+    return {"status": "success", "moments": moments}
 
 if __name__ == "__main__":
     import uvicorn

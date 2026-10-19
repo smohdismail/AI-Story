@@ -268,6 +268,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  void _insertEmotionalAction(String actionText) {
+    if (_msgController.text.trim().isEmpty) {
+      _msgController.text = actionText;
+    } else {
+      _msgController.text = "${_msgController.text.trim()} $actionText";
+    }
+    _msgController.selection = TextSelection.fromPosition(TextPosition(offset: _msgController.text.length));
+  }
+
   Future<void> _regenerate() async {
     if (_messages.isEmpty) return;
     setState(() => _isSending = true);
@@ -1011,6 +1020,37 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                   TextButton.icon(icon: const Icon(Icons.psychology, size: 16), label: const Text('Thought'), onPressed: _isSending ? null : _generateThought),
                                   TextButton.icon(icon: const Icon(Icons.refresh, size: 16), label: const Text('Regenerate'), onPressed: _isSending ? null : _regenerateChat),
                                   TextButton.icon(icon: const Icon(Icons.restart_alt, size: 16, color: Colors.red), label: const Text('Restart', style: TextStyle(color: Colors.red)), onPressed: _isSending ? null : _restartChat),
+                                ],
+                              ),
+                            ),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.only(top: 4.0, bottom: 6.0),
+                              child: Row(
+                                children: [
+                                  const Text('✨ Emotion: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber)),
+                                  ...[
+                                    {'label': 'Smile', 'icon': '😊', 'action': '*smiles warmly at you*'},
+                                    {'label': 'Laugh', 'icon': '😄', 'action': '*lets out a soft, amused laugh*'},
+                                    {'label': 'Chuckle', 'icon': '😏', 'action': '*chuckles under breath and steps closer*'},
+                                    {'label': 'Bite Lip', 'icon': '🫦', 'action': '*bites lower lip in quiet hesitation*'},
+                                    {'label': 'Blush', 'icon': '😳', 'action': '*flushes warmly, looking away for a second*'},
+                                    {'label': 'Whisper', 'icon': '💬', 'action': '*whispers softly near your ear*'},
+                                    {'label': 'Gasp', 'icon': '😮', 'action': '*gasps softly as breath catches*'},
+                                    {'label': 'Touch Hand', 'icon': '🤝', 'action': '*gently brushes fingers against yours*'},
+                                    {'label': 'Embrace', 'icon': '🫂', 'action': '*pulls you into a warm, lingering embrace*'},
+                                  ].map((em) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6.0),
+                                      child: ActionChip(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                        avatar: Text(em['icon']!, style: const TextStyle(fontSize: 12)),
+                                        label: Text(em['label']!, style: const TextStyle(fontSize: 11)),
+                                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                        onPressed: () => _insertEmotionalAction(em['action']!),
+                                      ),
+                                    );
+                                  }),
                                 ],
                               ),
                             ),

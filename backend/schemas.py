@@ -71,7 +71,7 @@ class StoryBase(BaseModel):
     user_persona_appearance: Optional[str] = None
     user_persona_personality: Optional[str] = None
     user_persona_backstory: Optional[str] = None
-    is_published: Optional[bool] = False
+    is_published: Optional[bool] = True
     likes_count: Optional[int] = 0
     nsfw_preferences: Optional[str] = None
     intimacy_level: Optional[str] = "explicit"
