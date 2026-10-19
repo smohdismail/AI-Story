@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -372,9 +373,34 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            // Action Button Row 3: Midnight Phone Call
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showMidnightPhoneCallDialog(char),
+                icon: const Icon(Icons.phone_in_talk, size: 16),
+                label: const Text('📲 Midnight Phone Call', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal.shade800,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showMidnightPhoneCallDialog(Map<String, dynamic> char) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _MidnightPhoneCallDialog(char: char),
     );
   }
 
@@ -972,3 +998,445 @@ class _MidnightVoicemailDialogState extends State<_MidnightVoicemailDialog> {
     );
   }
 }
+
+// ==========================================
+// FEATURE 2: 📲 MIDNIGHT PHONE CALL DIALOG
+// ==========================================
+
+class _MidnightPhoneCallDialog extends StatefulWidget {
+  final Map<String, dynamic> char;
+  const _MidnightPhoneCallDialog({required this.char});
+
+  @override
+  State<_MidnightPhoneCallDialog> createState() => _MidnightPhoneCallDialogState();
+}
+
+class _MidnightPhoneCallDialogState extends State<_MidnightPhoneCallDialog> with SingleTickerProviderStateMixin {
+  final FlutterTts _tts = FlutterTts();
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  String _callStatus = 'ringing'; // 'ringing', 'connected', 'ended'
+  int _callSeconds = 0;
+  Timer? _callTimer;
+  int _turn = 1;
+
+  Map<String, dynamic>? _callData;
+  bool _isSpeaking = false;
+  bool _isLoadingResponse = false;
+  final TextEditingController _customWhisperCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.94, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
+    _tts.setErrorHandler((_) {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _callTimer?.cancel();
+    _pulseController.dispose();
+    _tts.stop();
+    _customWhisperCtrl.dispose();
+    super.dispose();
+  }
+
+  void _answerCall() async {
+    final charId = widget.char['id']?.toString() ?? '';
+    setState(() {
+      _callStatus = 'connected';
+      _isLoadingResponse = true;
+    });
+
+    _startTimer();
+
+    try {
+      final res = await ApiService.startMidnightPhoneCall(charId);
+      if (mounted) {
+        setState(() {
+          _callData = res['call_data'] as Map<String, dynamic>?;
+          _isLoadingResponse = false;
+        });
+        _speakCharacterSpeech();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingResponse = false);
+      }
+    }
+  }
+
+  void _startTimer() {
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (mounted) {
+        setState(() => _callSeconds++);
+      }
+    });
+  }
+
+  String _formatCallDuration(int sec) {
+    final m = (sec ~/ 60).toString().padLeft(2, '0');
+    final s = (sec % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  void _speakCharacterSpeech() async {
+    final text = _callData?['clean_tts_text']?.toString() ?? _callData?['character_speech']?.toString();
+    if (text != null && text.isNotEmpty) {
+      await _tts.setSpeechRate(0.36);
+      await _tts.setPitch(0.92);
+      setState(() => _isSpeaking = true);
+      await _tts.speak(text);
+    }
+  }
+
+  void _sendWhisper(String whisper) async {
+    final charId = widget.char['id']?.toString() ?? '';
+    setState(() {
+      _isLoadingResponse = true;
+      _turn++;
+    });
+    await _tts.stop();
+
+    try {
+      final res = await ApiService.respondMidnightPhoneCall(charId, whisper: whisper, turn: _turn);
+      if (mounted) {
+        setState(() {
+          _callData = res['call_data'] as Map<String, dynamic>?;
+          _isLoadingResponse = false;
+        });
+        _speakCharacterSpeech();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingResponse = false);
+      }
+    }
+  }
+
+  void _hangUp() {
+    _callTimer?.cancel();
+    _tts.stop();
+    setState(() => _callStatus = 'ended');
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) Navigator.pop(context);
+    });
+  }
+
+  Widget _buildAvatar() {
+    final avatar = widget.char['avatar_base64'];
+    final name = widget.char['name'] ?? 'Character';
+    if (avatar != null && avatar.toString().isNotEmpty) {
+      try {
+        final bytes = base64Decode(avatar);
+        return CircleAvatar(radius: 46, backgroundImage: MemoryImage(bytes));
+      } catch (_) {}
+    }
+    return CircleAvatar(
+      radius: 46,
+      backgroundColor: Colors.teal.shade800,
+      child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.char['name'] ?? 'Character';
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.88,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D0A14),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+          ),
+
+          // Caller Avatar & Pulse
+          ScaleTransition(
+            scale: _callStatus == 'ringing' ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _callStatus == 'connected' ? Colors.tealAccent : (_callStatus == 'ended' ? Colors.redAccent : Colors.cyanAccent),
+                  width: 3,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (_callStatus == 'connected' ? Colors.tealAccent : Colors.cyanAccent).withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    spreadRadius: 4,
+                  ),
+                ],
+              ),
+              child: _buildAvatar(),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Caller Name & Call Status
+          Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+          const SizedBox(height: 4),
+          Text(
+            _callStatus == 'ringing'
+                ? 'Incoming Call • 2:34 AM...'
+                : (_callStatus == 'connected' ? _formatCallDuration(_callSeconds) : 'Call Ended'),
+            style: TextStyle(
+              fontSize: 13,
+              color: _callStatus == 'connected' ? Colors.tealAccent : Colors.white70,
+              fontWeight: _callStatus == 'connected' ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+
+          // Ambient sound indicator
+          if (_callStatus == 'connected' && _callData != null && _callData!['ambient_description'] != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '🎧 ${_callData!['ambient_description']}',
+                style: const TextStyle(fontSize: 11, color: Colors.white70),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          // Main Call Content Area
+          Expanded(
+            child: _callStatus == 'ringing'
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.nightlight_round, size: 36, color: Colors.cyanAccent),
+                        const SizedBox(height: 12),
+                        Text(
+                          '$name is calling in the quiet of the night...',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.white60),
+                        ),
+                      ],
+                    ),
+                  )
+                : (_callStatus == 'ended'
+                    ? const Center(
+                        child: Text('Call Ended', style: TextStyle(color: Colors.white38, fontSize: 16)),
+                      )
+                    : ListView(
+                        children: [
+                          // Character speech bubble
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.25)),
+                            ),
+                            child: _isLoadingResponse
+                                ? const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(12.0),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.tealAccent)),
+                                          SizedBox(width: 10),
+                                          Text('Listening to the line...', style: TextStyle(fontSize: 12, color: Colors.white60)),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            _isSpeaking ? Icons.graphic_eq : Icons.volume_up,
+                                            size: 16,
+                                            color: Colors.tealAccent,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            _callData?['emotional_tone'] ?? 'Intimate whisper',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                                          ),
+                                          const Spacer(),
+                                          IconButton(
+                                            icon: Icon(_isSpeaking ? Icons.stop : Icons.replay, size: 16, color: Colors.white70),
+                                            onPressed: _speakCharacterSpeech,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        _callData?['character_speech'] ?? '“...”',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: Colors.white,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Whisper response choices
+                          const Text('Whisper back softly:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70)),
+                          const SizedBox(height: 8),
+                          if (_callData != null && _callData!['whisper_options'] is List)
+                            ...(_callData!['whisper_options'] as List).map((opt) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: InkWell(
+                                  onTap: _isLoadingResponse ? null : () => _sendWhisper(opt.toString()),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.cyan.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.chat_bubble_outline, size: 14, color: Colors.cyanAccent),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            opt.toString(),
+                                            style: const TextStyle(fontSize: 12, color: Colors.cyanAccent),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+
+                          // Custom whisper text input
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _customWhisperCtrl,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    hintText: 'Whisper your own words...',
+                                    hintStyle: const TextStyle(fontSize: 12, color: Colors.white38),
+                                    filled: true,
+                                    fillColor: Colors.white10,
+                                    isDense: true,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.send, color: Colors.tealAccent),
+                                onPressed: () {
+                                  final text = _customWhisperCtrl.text.trim();
+                                  if (text.isNotEmpty) {
+                                    _customWhisperCtrl.clear();
+                                    _sendWhisper(text);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      )),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Bottom Call Control Buttons
+          if (_callStatus == 'ringing')
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Decline Button
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                        child: const Icon(Icons.call_end, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text('Decline', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                // Answer Button
+                GestureDetector(
+                  onTap: _answerCall,
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                        child: const Icon(Icons.call, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text('Answer', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          else if (_callStatus == 'connected')
+            GestureDetector(
+              onTap: _hangUp,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                    child: const Icon(Icons.call_end, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('Hang Up', style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+

@@ -2111,8 +2111,157 @@ async def get_chapter_subconscious_endpoint(chapter_id: uuid.UUID, db: AsyncSess
     )
     return {"status": "success", "moments": moments}
 
+class PovFlipRequest(BaseModel):
+    target_character: Optional[str] = None
+
+@app.post("/api/v1/chapters/{chapter_id}/pov-flip")
+async def generate_pov_flip_endpoint(chapter_id: uuid.UUID, req: PovFlipRequest, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_title = story.title if story else "Novel"
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == chapter.story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    
+    target_char = req.target_character
+    if not target_char and chars:
+        target_char = chars[0].name
+
+    pov_data = await llm_service.generate_pov_flip(
+        story_title=story_title,
+        chapter_title=chapter.title or f"Chapter {chapter.chapter_number}",
+        original_content=chapter.content or "",
+        target_character_name=target_char or "Lead Love Interest",
+        characters_summary=chars_str
+    )
+    return {"status": "success", "pov_data": pov_data}
+
+@app.post("/api/v1/characters/{character_id}/phone-call/start")
+async def start_midnight_phone_call_endpoint(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    story = await db.get(models.Story, char.story_id)
+    user_name = story.user_persona_name if story and story.user_persona_name else "you"
+
+    call_data = await llm_service.generate_midnight_phone_call(
+        character_name=char.name,
+        character_role=char.role or "Love Interest",
+        personality=char.personality or "Passionate, guarded, intense",
+        relationship_status=char.relationship_status or "Intimate",
+        dialogue_style=char.dialogue_style or "Low, deep cadence, breathless",
+        user_persona_name=user_name,
+        call_turn=1,
+        user_whisper=""
+    )
+    return {"status": "success", "call_data": call_data, "character_name": char.name}
+
+class PhoneCallRespondRequest(BaseModel):
+    whisper: Optional[str] = ""
+    turn: Optional[int] = 1
+
+@app.post("/api/v1/characters/{character_id}/phone-call/respond")
+async def respond_midnight_phone_call_endpoint(character_id: uuid.UUID, req: PhoneCallRespondRequest, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    story = await db.get(models.Story, char.story_id)
+    user_name = story.user_persona_name if story and story.user_persona_name else "you"
+
+    call_data = await llm_service.generate_midnight_phone_call(
+        character_name=char.name,
+        character_role=char.role or "Love Interest",
+        personality=char.personality or "Passionate, guarded, intense",
+        relationship_status=char.relationship_status or "Intimate",
+        dialogue_style=char.dialogue_style or "Low, deep cadence, breathless",
+        user_persona_name=user_name,
+        call_turn=req.turn or 1,
+        user_whisper=req.whisper or ""
+    )
+    return {"status": "success", "call_data": call_data, "character_name": char.name}
+
+class MarginSteerRequest(BaseModel):
+    paragraph_context: str
+    reader_scribble: str
+
+@app.post("/api/v1/chapters/{chapter_id}/steer")
+async def steer_chapter_endpoint(chapter_id: uuid.UUID, req: MarginSteerRequest, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    story = await db.get(models.Story, chapter.story_id)
+    story_title = story.title if story else "Novel"
+
+    steer_result = await llm_service.steer_chapter_from_margin(
+        story_title=story_title,
+        chapter_title=chapter.title or f"Chapter {chapter.chapter_number}",
+        paragraph_context=req.paragraph_context,
+        reader_scribble=req.reader_scribble,
+        existing_content=chapter.content or ""
+    )
+    return {"status": "success", "steer_result": steer_result}
+
+@app.get("/api/v1/stories/{story_id}/sensory-profile")
+async def get_sensory_profile_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role}): {c.appearance or ''}" for c in chars])
+    
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()).limit(3))
+    chapters = chaps_res.scalars().all()
+    sample_text = "\n\n".join([c.content[:600] for c in chapters])
+
+    profile = await llm_service.generate_sensory_profile(
+        story_title=story.title or "Novel",
+        synopsis=story.synopsis or "",
+        characters_summary=chars_str,
+        chapter_samples=sample_text
+    )
+    return {"status": "success", "profile": profile}
+
+@app.get("/api/v1/stories/{story_id}/scheduled-letters")
+async def get_scheduled_letters_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    
+    chaps_res = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc()).limit(3))
+    chapters = chaps_res.scalars().all()
+    sample_text = "\n\n".join([c.content[:600] for c in chapters])
+
+    letters = await llm_service.generate_scheduled_letters(
+        story_title=story.title or "Novel",
+        characters_summary=chars_str,
+        chapter_samples=sample_text
+    )
+    return {"status": "success", "letters": letters}
+
+@app.get("/api/v1/chapters/{chapter_id}/sonic-score")
+async def get_sonic_score_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(models.Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    score = await llm_service.generate_sonic_mood_score(
+        chapter_title=chapter.title or f"Chapter {chapter.chapter_number}",
+        chapter_content=chapter.content or ""
+    )
+    return {"status": "success", "sonic_score": score}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
 

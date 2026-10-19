@@ -30,6 +30,27 @@ class AmbientSoundService {
 
   static const List<AmbientPreset> presets = [
     AmbientPreset(
+      id: 'piano',
+      name: 'Midnight Piano Solitude',
+      icon: '🎹',
+      url: 'https://actions.google.com/sounds/v1/ambiences/humming_meditation.ogg',
+      description: 'Slow, melancholic felt piano chords mirroring emotional hesitation',
+    ),
+    AmbientPreset(
+      id: 'jazz',
+      name: 'Sultry Velvet Jazz',
+      icon: '🎷',
+      url: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg',
+      description: 'Late-night upright bass, warm piano, and smoky lounge romance',
+    ),
+    AmbientPreset(
+      id: 'strings',
+      name: 'Cinematic Heartstrings',
+      icon: '🎻',
+      url: 'https://actions.google.com/sounds/v1/ambiences/outdoor_evening.ogg',
+      description: 'Tender orchestral cello & swelling strings for high-stakes climaxes',
+    ),
+    AmbientPreset(
       id: 'rain',
       name: 'Heavy Rain & Thunder',
       icon: '🌧️',
@@ -58,6 +79,7 @@ class AmbientSoundService {
       description: 'Peaceful secluded garden under starlight',
     ),
   ];
+
 
   AmbientPreset? get currentPreset => _currentPreset;
   bool get isPlaying => _isPlaying;

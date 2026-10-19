@@ -1387,3 +1387,426 @@ Return strictly a JSON array:
         }
     ]
 
+async def generate_pov_flip(story_title: str, chapter_title: str, original_content: str, target_character_name: str = "", characters_summary: str = "") -> dict:
+    prompt = f"""You are a master romantic novelist writing intimate, high-tension dual-POV scenes.
+Rewrite this chapter's key emotional scene exclusively through the direct perspective (First Person 'I' or intimate Close Third Person) of the OTHER lead character ({target_character_name or 'the male love interest'}).
+
+Story Title: {story_title}
+Chapter Title: {chapter_title}
+Characters: {characters_summary}
+Target Character to Write As: {target_character_name or 'the love interest'}
+
+ORIGINAL CANON TEXT (Reference for what happens):
+{original_content[-3500:]}
+
+TASK:
+Write the exact same scene from THEIR side of the emotional battlefield.
+Show what they were hiding behind their calm exterior:
+- Their hammering pulse, shaking hands kept hidden in pockets, jaw clenching.
+- The jealousy, overwhelming attraction, or terror of vulnerability they fought to conceal.
+- Dialogue that matches the original scene, but framed with their raw internal sensory thoughts, involuntary vocalizations, breathless reactions, and desperate restraint.
+
+Return strictly a JSON object:
+{{
+  "character_name": "{target_character_name or 'Alexander'}",
+  "pov_title": "His Lens: Beneath The Surface",
+  "heart_rate_bpm": 142,
+  "internal_emotion": "Desperate restraint & raw possessiveness",
+  "unspoken_confession": "If I touch you now, I won't have the strength to let you go.",
+  "pov_prose": "..."
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1800,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating POV flip: {e}")
+
+    char_name = target_character_name or "Alexander"
+    return {
+        "character_name": char_name,
+        "pov_title": f"{char_name}'s Lens: What Was Left Unsaid",
+        "heart_rate_bpm": 136,
+        "internal_emotion": "Electric restraint & raw longing",
+        "unspoken_confession": "I was terrified that if you looked at me any longer, you would see how completely I was falling apart.",
+        "pov_prose": f"Every muscle in my chest locked tight the second you stepped into the room. I forced my expression into cold, steady stillness, keeping both hands buried inside my coat pockets so you wouldn't see the tremor in my fingers.\n\n\"You shouldn't have stayed,\" I heard myself say, the words sounding far harsher than I intended. Inside, my pulse was hammering against my temples at a sickening tempo. God, look at you.\n\nWhen you tilted your chin up, meeting my eyes with that stubborn, breathless defiance, my breath caught hard in my throat. I wanted nothing more than to close the two inches between us, pull you against my chest, and erase every ounce of distance left between our mouths. But instead, I stood there like stone, enduring the sweetest agony of my life."
+    }
+
+async def generate_midnight_phone_call(character_name: str, character_role: str, personality: str, relationship_status: str, dialogue_style: str, user_persona_name: str = "", call_turn: int = 1, user_whisper: str = "") -> dict:
+    prompt = f"""You are roleplaying as {character_name} ({character_role}) during an intimate, private late-night telephone call.
+Personality: {personality}
+Relationship Status: {relationship_status}
+Speaking Style: {dialogue_style or 'Low, deep, raspy cadence, unhurried, intimate'}
+User's Name: {user_persona_name or 'you'}
+Call Turn: {call_turn}
+User's Spoken Whisper/Reply: {user_whisper or '[Call just connected, silence on the line]'}
+
+TASK:
+Generate the next intimate audio response for this late-night phone call.
+It is 2:30 AM. You are alone in your room or office, unable to sleep because your mind is consumed by the user.
+Include realistic vocalizations and micro-sounds in *asterisks* (e.g. *soft low chuckle*, *intake of breath*, *quiet sigh against the receiver*, *rustle of bedsheets*).
+Provide 3 seductive or emotionally vulnerable whisper options the user can say back.
+
+Return strictly a JSON object:
+{{
+  "character_speech": "*quiet raspy laugh against the receiver* I know what time it is... I tried to tell myself not to call you.",
+  "clean_tts_text": "I know what time it is. I tried to tell myself not to call you, but I couldn't stop thinking about you.",
+  "ambient_sound": "rain_against_glass",
+  "ambient_description": "Rain drumming on bedroom window with late night silence",
+  "emotional_tone": "Raspy, vulnerable, deep-toned",
+  "whisper_options": [
+    "I couldn't sleep either...",
+    "Why didn't you call me sooner?",
+    "Tell me what you're thinking right now."
+  ]
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=900,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating midnight phone call: {e}")
+
+    return {
+        "character_speech": f"*soft raspy sigh against the phone* I stared at your name on my screen for twenty minutes before dialing. I know it's late... but I couldn't fall asleep with the sound of your voice echoing in my head.",
+        "clean_tts_text": f"I stared at your name on my screen for twenty minutes before dialing. I know it's late, but I couldn't fall asleep with the sound of your voice echoing in my head.",
+        "ambient_sound": "rain_against_glass",
+        "ambient_description": "Soft night rain and clock ticking",
+        "emotional_tone": "Warm, raspy, breathless",
+        "whisper_options": [
+            "I'm glad you called...",
+            "What were you thinking about?",
+            "Stay on the line with me until I fall asleep."
+        ]
+    }
+
+async def steer_chapter_from_margin(story_title: str, chapter_title: str, paragraph_context: str, reader_scribble: str, existing_content: str = "") -> dict:
+    prompt = f"""You are a master romance author collaborating live with an active reader who is reading the book.
+The reader highlighted a paragraph and jotted a spontaneous 'Margin Scribble' desiring a specific romantic tension, confrontation, or touch.
+
+Story Title: {story_title}
+Chapter Title: {chapter_title}
+
+PARAGRAPH WHERE READER SCRIBBLED IN THE MARGIN:
+\"\"\"{paragraph_context}\"\"\"
+
+READER'S PRIVATE IMPULSE / MARGIN SCRIBBLE:
+\"{reader_scribble}\"
+
+RECENT CHAPTER PROSE CONTEXT:
+{existing_content[-2000:]}
+
+TASK:
+Weave the reader's impulsive scribble directly into the narrative scene as a fluid, high-tension literary continuation (250-450 words).
+Ensure:
+1. 60%+ direct dialogue and intense verbal banter.
+2. Tangible human physical micro-expressions (biting lip, gasping, pupils darkening, trembling fingers, low chuckles, breath catching).
+3. The action directly fulfills the reader's margin scribble in seamless novel prose.
+
+Return strictly a JSON object:
+{{
+  "scribble_prompt": "{reader_scribble}",
+  "continuation_prose": "...",
+  "emotional_shift": "Sudden surge of possessive tension and electric physical closeness"
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1200,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error steering chapter from margin: {e}")
+
+    return {
+        "scribble_prompt": reader_scribble,
+        "continuation_prose": f"Before another breath could pass between them, his hand shot out, catching her wrist with sudden, breathless precision. The gentle jolt pulled her half a step backward, until the distance between their chests vanished into nothing.\n\n\"Don't walk away from me while I'm speaking to you,\" he murmured, his voice dropping into that dark, velvety register that sent a shiver straight down her spine.\n\nHer pulse leaped violently beneath his fingers. \"Alexander—\"\n\n\"Look at me,\" he urged softly, his thumb tracing the rapid fluttering beat at her wrist before his other hand rose, fingers gently brushing a stray lock of hair behind her ear. His breath was warm against her skin, laced with smoky cedar and unspoken promises. \"Tell me to let you go. Say it out loud, and I swear I will.\"\n\nShe parted her lips to speak, but the words withered on her tongue as his gaze fell to her mouth with deliberate, unhurried hunger.",
+        "emotional_shift": "Electric physical proximity and uncontainable romantic tension"
+    }
+
+async def generate_sensory_profile(story_title: str, synopsis: str, characters_summary: str, chapter_samples: str = "") -> dict:
+    prompt = f"""You are an elite luxury perfumer and literary aesthetic director.
+Create a rich, intoxicating SENSORY OLFACTORY & AESTHETIC PROFILE for this romance novel and its primary leads.
+
+Story Title: {story_title}
+Synopsis: {synopsis}
+Characters: {characters_summary}
+Chapter Context: {chapter_samples[-2500:]}
+
+TASK:
+Craft:
+1. **The Lead's Signature Fragrance Pyramid**:
+   - Top Notes (e.g. Smoky Bergamot, Cold Night Air, Crisp Gin)
+   - Heart Notes (e.g. Cedarwood, Crushed Cardamom, Dark Plum)
+   - Base Notes (e.g. Black Amber, Cashmere Musk, Smoked Leather)
+   - Scent Story (evocative description of how they smell when leaning in close)
+2. **Signature Wardrobe & Textures**:
+   - Fabrics, tailored garments, signature jewelry or accessories with tactile descriptions.
+3. **Atmospheric Color Palette**:
+   - 4 to 5 hex colors with poetic evocative names (e.g., '#1A1E29 Midnight Velvet', '#831843 Crushed Wine')
+4. **Tactile Sensations**:
+   - 3 visceral sensory sensations (e.g. 'Cold rain on bare collarbones', 'Heavyweight bespoke wool brushing silk')
+5. **Sonic Resonance**:
+   - The auditory atmosphere that defines their scenes.
+
+Return strictly a JSON object:
+{{
+  "fragrance_name": "Nocturne & Amber",
+  "perfume_pyramid": {{
+    "top_notes": ["Smoky Bergamot", "Cold River Mist", "Black Pepper"],
+    "heart_notes": ["Aged Cedarwood", "Crushed Iris", "Bitter Espresso"],
+    "base_notes": ["Warm Amber", "Smoked Leather", "Musky Cashmere"],
+    "scent_story": "He smells like rain on tailored wool, bitter espresso drunk in a darkened library, and the warm, addictive amber of skin after midnight."
+  }},
+  "signature_wardrobe": [
+    {{ "item": "Heavy Charcoal Overcoat", "texture": "Rough bespoke Italian wool with cold silk lining" }},
+    {{ "item": "Signet Ring", "texture": "Aged matte silver, cool against warm knuckles" }},
+    {{ "item": "Loosened Dress Shirt", "texture": "Crisp Egyptian cotton, unbuttoned at the collar" }}
+  ],
+  "atmospheric_palette": [
+    {{ "name": "Midnight Slate", "hex": "#1E293B", "mood": "Guarded shadows and rain" }},
+    {{ "name": "Velvet Burgundy", "hex": "#881337", "mood": "Desire and whispered confessions" }},
+    {{ "name": "Hearth Amber", "hex": "#D97706", "mood": "Skin warmth and candlelight" }},
+    {{ "name": "Muted Pearl", "hex": "#CBD5E1", "mood": "Tangled sheets at dawn" }}
+  ],
+  "tactile_sensations": [
+    "Cold fingertips tracing the heated curve of a jawline",
+    "Heavyweight cashmere wrapping around bare shoulders",
+    "A calloused thumb smoothing over trembling lips"
+  ],
+  "sonic_resonance": "Low rainfall drumming against double-paned glass, punctuated by the clinking of heavy crystal and the soft drag of breath."
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.75,
+            max_tokens=1500,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating sensory profile: {e}")
+
+    return {
+        "fragrance_name": "Nocturne & Amber",
+        "perfume_pyramid": {
+            "top_notes": ["Smoky Bergamot", "Cold River Mist", "Black Pepper"],
+            "heart_notes": ["Aged Cedarwood", "Crushed Iris", "Bitter Espresso"],
+            "base_notes": ["Warm Amber", "Smoked Leather", "Musky Cashmere"],
+            "scent_story": "He smells like rain on tailored wool, bitter espresso in a quiet study, and the intoxicating amber warmth of bare skin after midnight."
+        },
+        "signature_wardrobe": [
+            { "item": "Tailored Overcoat", "texture": "Heavyweight Italian wool with silk lining" },
+            { "item": "Signet Ring", "texture": "Matte sterling silver, cool against warm knuckles" },
+            { "item": "Loosened Shirt", "texture": "Crisp linen unbuttoned at the collarbone" }
+        ],
+        "atmospheric_palette": [
+            { "name": "Midnight Slate", "hex": "#1E293B", "mood": "Guarded shadows & rain" },
+            { "name": "Velvet Burgundy", "hex": "#881337", "mood": "Sensual desire & tension" },
+            { "name": "Hearth Amber", "hex": "#D97706", "mood": "Candlelight & skin warmth" },
+            { "name": "Muted Pearl", "hex": "#CBD5E1", "mood": "Tangled sheets at dawn" }
+        ],
+        "tactile_sensations": [
+            "Cold fingertips tracing the heated curve of a jawline",
+            "Heavyweight cashmere draped across bare shoulders",
+            "A calloused thumb smoothing over trembling lips"
+        ],
+        "sonic_resonance": "Low rainfall against floor-to-ceiling glass, clinking crystal, and whispered pauses between words."
+    }
+
+async def generate_scheduled_letters(story_title: str, characters_summary: str, chapter_samples: str = "") -> list:
+    prompt = f"""You are a master romantic novelist creating private, scheduled midnight direct messages from the leads to the reader.
+Story Title: {story_title}
+Characters: {characters_summary}
+Chapter Context: {chapter_samples[-2500:]}
+
+TASK:
+Generate 3 intimate, time-stamped messages written at genuine late-night hours by the character (e.g. 11:42 PM, 02:18 AM, 06:10 AM).
+These messages feel authentic, personal, and vulnerable—like a character texting or drafting a voice memo when they can't sleep.
+
+Return strictly a JSON array:
+[
+  {{
+    "id": "sched-1",
+    "character_name": "Alexander",
+    "timestamp_display": "11:42 PM",
+    "location_context": "Backseat of a black cab under rain-blurred streetlights",
+    "message_text": "I was supposed to go straight back to the hotel. Instead I had the driver circle your block twice. I'm not going to ring your buzzer... but God help me, I wanted to.",
+    "audio_whisper_text": "I had the driver circle your block twice. I'm not going to ring your buzzer... but I wanted to.",
+    "unread": true,
+    "vulnerability_score": 90
+  }}
+]"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1400,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                res = json.loads(raw.strip())
+                if isinstance(res, list): return res
+                if isinstance(res, dict) and "letters" in res: return res["letters"]
+            except Exception:
+                m = re.search(r'\[.*\]', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating scheduled letters: {e}")
+
+    return [
+        {
+            "id": "sched-1",
+            "character_name": "Lead Character",
+            "timestamp_display": "11:42 PM",
+            "location_context": "Backseat of a cab under streetlights",
+            "message_text": "I was supposed to go straight back to the hotel. Instead I had the driver circle your block twice. I'm not going to ring your buzzer... but God help me, I wanted to.",
+            "audio_whisper_text": "I had the driver circle your block twice. I'm not going to ring your buzzer... but I wanted to.",
+            "unread": true,
+            "vulnerability_score": 92
+        },
+        {
+            "id": "sched-2",
+            "character_name": "Lead Character",
+            "timestamp_display": "02:15 AM",
+            "location_context": "Hotel study with a glass of whiskey",
+            "message_text": "My phone is right here on the desk. Every five minutes I catch myself reaching for it, wondering if you're awake too.",
+            "audio_whisper_text": "Every five minutes I catch myself reaching for my phone, wondering if you're awake too.",
+            "unread": true,
+            "vulnerability_score": 96
+        },
+        {
+            "id": "sched-3",
+            "character_name": "Lead Character",
+            "timestamp_display": "06:20 AM",
+            "location_context": "Balcony looking at the cold morning fog",
+            "message_text": "First thing on my mind when my eyes opened. You've ruined my ability to concentrate on anything else today.",
+            "audio_whisper_text": "First thing on my mind when my eyes opened. You've ruined my ability to concentrate on anything else today.",
+            "unread": false,
+            "vulnerability_score": 85
+        }
+    ]
+
+async def generate_sonic_mood_score(chapter_title: str, chapter_content: str) -> dict:
+    prompt = f"""You are a master cinematic film composer and music supervisor for romance cinema.
+Analyze this chapter's emotional arc and generate the dynamic musical score profile.
+
+Chapter: {chapter_title}
+Prose Sample:
+{chapter_content[-2500:]}
+
+TASK:
+Determine:
+1. `dominant_genre`: e.g. 'Melancholic Felt Piano', 'Sultry Velvet Jazz', 'Heavy Cinematic Strings & Heartbeat', 'Midnight Rain & Synth'
+2. `tempo`: e.g. 'Largo (54 BPM)', 'Andante (72 BPM)', 'Adagio (62 BPM)'
+3. `emotional_intensity`: integer 1 to 10
+4. `soundtrack_title`: an evocative title for this chapter's theme
+5. `recommended_instruments`: list of 3-4 key instruments
+6. `preset_key`: one of ['piano', 'jazz', 'strings', 'rain', 'hearth', 'ocean']
+
+Return strictly a JSON object:
+{{
+  "soundtrack_title": "Midnight On Her Collarbone",
+  "dominant_genre": "Sultry Velvet Jazz & Upright Bass",
+  "tempo": "Adagio (58 BPM)",
+  "emotional_intensity": 8,
+  "key_signature": "D Minor / B-flat Major",
+  "recommended_instruments": ["Felt Piano", "Muted Trumpet", "Upright Double Bass", "Soft Rain Foley"],
+  "preset_key": "jazz",
+  "music_director_note": "A slow, smoky tempo with space between the piano chords to highlight breathless romantic dialogue."
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=900,
+        )
+        import json, re
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith('```json'): raw = raw[7:]
+            if raw.startswith('```'): raw = raw[3:]
+            if raw.endswith('```'): raw = raw[:-3]
+            try:
+                return json.loads(raw.strip())
+            except Exception:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m: return json.loads(m.group(0))
+    except Exception as e:
+        print(f"Error generating sonic mood score: {e}")
+
+    return {
+        "soundtrack_title": "Beneath The Rain",
+        "dominant_genre": "Melancholic Felt Piano & Strings",
+        "tempo": "Largo (56 BPM)",
+        "emotional_intensity": 8,
+        "key_signature": "C Minor",
+        "recommended_instruments": ["Felt Piano", "Solo Cello", "Rain Foley", "Soft Bass"],
+        "preset_key": "piano",
+        "music_director_note": "Sparse, resonant piano chords mirroring emotional hesitation and physical proximity."
+    }
+
+

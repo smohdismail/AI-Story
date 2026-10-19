@@ -13,6 +13,7 @@ import '../utils/name_generator.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../services/audiobook_service.dart';
 import 'audiobook_player_screen.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -46,6 +47,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   final Set<String> _brokenWaxSeals = {};
   List<dynamic>? storyPolaroids;
   bool isLoadingPolaroids = false;
+  Map<String, dynamic>? sensoryProfile;
+  bool isLoadingSensoryProfile = false;
+  List<dynamic>? scheduledLetters;
+  bool isLoadingScheduledLetters = false;
 
   @override
   void initState() {
@@ -799,7 +804,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 12,
+      length: 14,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -823,6 +828,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               Tab(icon: Icon(Icons.show_chart), text: 'Chemistry Curve'),
               Tab(icon: Icon(Icons.mark_email_unread_outlined), text: 'Unsent Letters'),
               Tab(icon: Icon(Icons.photo_camera_back_outlined), text: 'Polaroids'),
+              Tab(icon: Icon(Icons.flare_outlined), text: 'Sensory Profile'),
+              Tab(icon: Icon(Icons.schedule_send_outlined), text: 'Midnight Letters'),
               Tab(icon: Icon(Icons.public), text: 'World Lore'),
               Tab(icon: Icon(Icons.map), text: 'World Map'),
               Tab(icon: Icon(Icons.person), text: 'My Persona'),
@@ -956,6 +963,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             _buildChemistryCurveTab(),
             _buildUnsentLettersTab(),
             _buildPolaroidsTab(),
+            _buildSensoryProfileTab(),
+            _buildScheduledLettersTab(),
             _buildWorldTab(),
             _buildWorldMapTab(),
             _buildUserPersonaTab(),
@@ -5566,7 +5575,423 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
       ),
     );
   }
+
+  // ==========================================
+  // FEATURE 4: 🕯️ SENSORY OLFACTORY & AESTHETIC PROFILE
+  // ==========================================
+
+  Widget _buildSensoryProfileTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade900.withValues(alpha: 0.4), Colors.amber.shade900.withValues(alpha: 0.3)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.2), shape: BoxShape.circle),
+                  child: const Text('🕯️', style: TextStyle(fontSize: 26)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Sensory Olfactory & Aesthetic Profile',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amberAccent),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Fragrance pyramid, signature wardrobe textures & atmospheric palette.',
+                        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7)),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isLoadingSensoryProfile ? null : () async {
+                    setState(() => isLoadingSensoryProfile = true);
+                    try {
+                      final p = await ApiService.getSensoryProfile(widget.storyId);
+                      setState(() {
+                        sensoryProfile = p;
+                        isLoadingSensoryProfile = false;
+                      });
+                    } catch (e) {
+                      setState(() => isLoadingSensoryProfile = false);
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                  icon: isLoadingSensoryProfile
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.auto_awesome, size: 14),
+                  label: Text(isLoadingSensoryProfile ? 'Analyzing...' : (sensoryProfile == null ? 'Generate' : 'Refresh'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amberAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (sensoryProfile == null && !isLoadingSensoryProfile)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.spa_outlined, size: 48, color: Colors.amber.withValues(alpha: 0.5)),
+                    const SizedBox(height: 12),
+                    const Text('No sensory profile generated yet.', style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    const Text('Tap "Generate" to distill the scent pyramid, wardrobe textures, and color mood of your novel leads.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            )
+          else if (sensoryProfile != null) ...[
+            // Fragrance & Scent Story
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('🧴 Signature Fragrance:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+                      const SizedBox(width: 8),
+                      Text(sensoryProfile!['fragrance_name'] ?? 'Nocturne', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amberAccent)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (sensoryProfile!['perfume_pyramid'] is Map) ...[
+                    // Top Notes
+                    _buildNoteRow('Top Notes (First Impression)', (sensoryProfile!['perfume_pyramid']['top_notes'] as List?) ?? [], Colors.cyanAccent),
+                    const SizedBox(height: 8),
+                    // Heart Notes
+                    _buildNoteRow('Heart Notes (Core Emotion)', (sensoryProfile!['perfume_pyramid']['heart_notes'] as List?) ?? [], Colors.pinkAccent),
+                    const SizedBox(height: 8),
+                    // Base Notes
+                    _buildNoteRow('Base Notes (Lingering Intimacy)', (sensoryProfile!['perfume_pyramid']['base_notes'] as List?) ?? [], Colors.amberAccent),
+                    const SizedBox(height: 12),
+                    if (sensoryProfile!['perfume_pyramid']['scent_story'] != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(10)),
+                        child: Text(
+                          '“${sensoryProfile!['perfume_pyramid']['scent_story']}”',
+                          style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12, height: 1.4, color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Signature Wardrobe & Textures
+            if (sensoryProfile!['signature_wardrobe'] is List) ...[
+              const Text('👔 Signature Wardrobe & Physical Textures', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+              const SizedBox(height: 8),
+              ...((sensoryProfile!['signature_wardrobe'] as List).map((w) {
+                final item = w as Map<String, dynamic>;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.checkroom, color: Colors.pinkAccent, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item['item'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                            const SizedBox(height: 2),
+                            Text(item['texture'] ?? '', style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              })),
+              const SizedBox(height: 16),
+            ],
+
+            // Atmospheric Color Palette
+            if (sensoryProfile!['atmospheric_palette'] is List) ...[
+              const Text('🎨 Atmospheric Aesthetic Palette', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: (sensoryProfile!['atmospheric_palette'] as List).map((c) {
+                    final colorItem = c as Map<String, dynamic>;
+                    final hexStr = colorItem['hex']?.toString().replaceAll('#', '') ?? '1E293B';
+                    final colorVal = Color(int.tryParse('0xFF$hexStr') ?? 0xFF1E293B);
+                    return Container(
+                      width: 110,
+                      margin: const EdgeInsets.only(right: 10),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colorVal,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(colorItem['name'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white)),
+                          Text(colorItem['mood'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Colors.white70)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Tactile Sensations
+            if (sensoryProfile!['tactile_sensations'] is List) ...[
+              const Text('⚡ Tactile Sensations', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+              const SizedBox(height: 8),
+              ...((sensoryProfile!['tactile_sensations'] as List).map((t) => Padding(
+                padding: const EdgeInsets.only(bottom: 6.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ', style: TextStyle(color: Colors.amberAccent, fontSize: 14)),
+                    Expanded(child: Text(t.toString(), style: const TextStyle(fontSize: 12, color: Colors.white70))),
+                  ],
+                ),
+              ))),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteRow(String title, List<dynamic> notes, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: notes.map((n) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
+            ),
+            child: Text(n.toString(), style: TextStyle(fontSize: 11, color: color)),
+          )).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================
+  // FEATURE 5: ⏰ SCHEDULED REAL-TIME LETTERS & MIDNIGHT NOTES
+  // ==========================================
+
+  Widget _buildScheduledLettersTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.indigo.shade900.withValues(alpha: 0.4), Colors.pink.shade900.withValues(alpha: 0.3)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.pinkAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
+                  child: const Text('💌', style: TextStyle(fontSize: 26)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Scheduled Midnight Letters',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.pinkAccent),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Authentic time-stamped messages & audio whispers from your leads.',
+                        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7)),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isLoadingScheduledLetters ? null : () async {
+                    setState(() => isLoadingScheduledLetters = true);
+                    try {
+                      final l = await ApiService.getScheduledLetters(widget.storyId);
+                      setState(() {
+                        scheduledLetters = l;
+                        isLoadingScheduledLetters = false;
+                      });
+                    } catch (e) {
+                      setState(() => isLoadingScheduledLetters = false);
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                  icon: isLoadingScheduledLetters
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.schedule, size: 14),
+                  label: Text(isLoadingScheduledLetters ? 'Fetching...' : (scheduledLetters == null ? 'Retrieve' : 'Refresh'), style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pink.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (scheduledLetters == null && !isLoadingScheduledLetters)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.mark_email_unread_outlined, size: 48, color: Colors.pink.withValues(alpha: 0.5)),
+                    const SizedBox(height: 12),
+                    const Text('No midnight letters received yet.', style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    const Text('Tap "Retrieve" to sync private letters written by characters at late-night hours.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            )
+          else if (scheduledLetters != null) ...[
+            ...scheduledLetters!.map((item) {
+              final letter = item as Map<String, dynamic>;
+              final timeStr = letter['timestamp_display'] ?? '11:45 PM';
+              final charName = letter['character_name'] ?? 'Lead';
+              final locStr = letter['location_context'] ?? '';
+              final bodyText = letter['message_text'] ?? '';
+              final whisperText = letter['audio_whisper_text'] ?? bodyText;
+              final vuln = letter['vulnerability_score'] ?? 90;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1626),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3)),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.pink.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('⏰ $timeStr', style: const TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(charName, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
+                        const Spacer(),
+                        Text('💔 $vuln% Vulnerability', style: const TextStyle(color: Colors.amberAccent, fontSize: 11)),
+                      ],
+                    ),
+                    if (locStr.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text('📍 $locStr', style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic)),
+                    ],
+                    const Divider(height: 20, color: Colors.white12),
+                    Text(
+                      bodyText,
+                      style: const TextStyle(fontSize: 13, height: 1.5, color: Colors.white, fontStyle: FontStyle.italic),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final tts = FlutterTts();
+                            await tts.setSpeechRate(0.38);
+                            await tts.setPitch(0.92);
+                            await tts.speak(whisperText);
+                          },
+                          icon: const Icon(Icons.volume_up, size: 16),
+                          label: const Text('Listen to Whisper', style: TextStyle(fontSize: 11)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.pink.shade700,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
 }
+
 
 
 

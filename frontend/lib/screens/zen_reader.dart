@@ -88,6 +88,18 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   bool _loadingSubconscious = false;
   List<dynamic>? _cachedSubconscious;
 
+  // Feature 1: 🔄 POV Flip (Dual-Lens Scene Switcher)
+  bool _isPovFlipped = false;
+  bool _loadingPovFlip = false;
+  Map<String, dynamic>? _cachedPovData;
+
+  // Feature 3: ✍️ Margin Scribbles (Live Reader Co-Authoring)
+  bool _loadingMarginSteer = false;
+
+  // Feature 6: 🎧 Dynamic Story Mixtape & Sonic Mood Engine
+  Map<String, dynamic>? _cachedSonicScore;
+  bool _loadingSonicScore = false;
+
   @override
   void initState() {
     super.initState();
@@ -537,6 +549,246 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     }
   }
 
+  // ==========================================
+  // FEATURE 1: 🔄 "POV FLIP" (DUAL-LENS SCENE SWITCHER)
+  // ==========================================
+
+  Future<void> _togglePovFlip() async {
+    if (_isPovFlipped) {
+      setState(() {
+        _isPovFlipped = false;
+        if (_cachedStandardContent != null) {
+          _currentContent = _cachedStandardContent!;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Switched back to Canonical POV')),
+      );
+      return;
+    }
+
+    _cachedStandardContent = _currentContent;
+    if (_cachedPovData != null) {
+      setState(() {
+        _isPovFlipped = true;
+        _currentContent = _cachedPovData!['pov_prose'] ?? _currentContent;
+      });
+      _triggerHeartbeatHaptic();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🔄 Switched to ${_cachedPovData!['character_name'] ?? 'His'}\'s POV Lens!'),
+          backgroundColor: Colors.cyan.shade800,
+        ),
+      );
+      return;
+    }
+
+    if (_currentChapterId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Active chapter required for POV Flip.')),
+      );
+      return;
+    }
+
+    setState(() => _loadingPovFlip = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🔄 Flipping Scene to His Perspective & Hidden Thoughts...')),
+    );
+
+    try {
+      final res = await ApiService.generatePovFlip(_currentChapterId!);
+      final povData = res['pov_data'] as Map<String, dynamic>?;
+      if (mounted && povData != null) {
+        setState(() {
+          _cachedPovData = povData;
+          _isPovFlipped = true;
+          _loadingPovFlip = false;
+          _currentContent = povData['pov_prose'] ?? _currentContent;
+        });
+        _triggerHeartbeatHaptic();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🔄 Switched to ${povData['character_name'] ?? 'His'}\'s POV Lens!'),
+            backgroundColor: Colors.cyan.shade800,
+          ),
+        );
+      } else {
+        setState(() => _loadingPovFlip = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingPovFlip = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error flipping POV: $e')));
+      }
+    }
+  }
+
+  // ==========================================
+  // FEATURE 3: ✍️ "MARGIN SCRIBBLES" (LIVE CO-AUTHORING)
+  // ==========================================
+
+  void _showMarginScribbleDialog({String? initialParagraph}) {
+    final TextEditingController scribbleCtrl = TextEditingController();
+    final sampleParagraph = initialParagraph ?? (_currentContent.length > 250 ? _currentContent.substring(_currentContent.length - 250) : _currentContent);
+
+    final impulsePresets = [
+      'Make him pull her close before she can step away',
+      'Have him whisper his suppressed confession in her ear',
+      'Spark intense jealousy with razor-sharp dialogue',
+      'Make their hands touch as their breath catches',
+      'Let his calm facade break with desperate longing',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF13101E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.2), shape: BoxShape.circle),
+                    child: const Icon(Icons.drive_file_rename_outline, color: Colors.amberAccent, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('✍️ Margin Scribble (Steer Scene)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amberAccent)),
+                        Text('Scribble your desire in the margin to steer the narrative live.', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Text(
+                  'Current Margin Scene:\n"${sampleParagraph.trim()}"',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.white70),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Romantic Impulse Presets:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: impulsePresets.map((p) => ActionChip(
+                  backgroundColor: Colors.amber.shade900.withValues(alpha: 0.25),
+                  side: BorderSide(color: Colors.amber.withValues(alpha: 0.3)),
+                  label: Text(p, style: const TextStyle(fontSize: 11, color: Colors.amberAccent)),
+                  onPressed: () {
+                    scribbleCtrl.text = p;
+                    setModalState(() {});
+                  },
+                )).toList(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: scribbleCtrl,
+                maxLines: 2,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Or scribble your own custom desire (e.g. "Don\'t let him leave cold")...',
+                  hintStyle: const TextStyle(fontSize: 12, color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: _loadingMarginSteer ? null : () async {
+                  final text = scribbleCtrl.text.trim();
+                  if (text.isEmpty || _currentChapterId == null) return;
+                  Navigator.pop(ctx);
+                  _executeMarginSteer(sampleParagraph, text);
+                },
+                icon: _loadingMarginSteer 
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Icon(Icons.auto_awesome, size: 16),
+                label: Text(_loadingMarginSteer ? 'Weaving into Scene...' : 'Weave Scribble into Scene ✍️'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amberAccent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executeMarginSteer(String contextParagraph, String scribble) async {
+    if (_currentChapterId == null) return;
+    setState(() => _loadingMarginSteer = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✍️ Weaving "$scribble" into the story...'),
+        backgroundColor: Colors.amber.shade900,
+      ),
+    );
+
+    try {
+      final res = await ApiService.steerChapterFromMargin(
+        _currentChapterId!,
+        paragraphContext: contextParagraph,
+        readerScribble: scribble,
+      );
+      final steerResult = res['steer_result'] as Map<String, dynamic>?;
+      if (mounted && steerResult != null) {
+        final prose = steerResult['continuation_prose'] ?? '';
+        setState(() {
+          _loadingMarginSteer = false;
+          _currentContent += '\n\n— ✍️ Reader Margin Scribble: "$scribble" —\n\n$prose';
+        });
+        _triggerHeartbeatHaptic();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✨ Scene steered with your margin scribble!'),
+            backgroundColor: Colors.amber,
+          ),
+        );
+      } else {
+        setState(() => _loadingMarginSteer = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingMarginSteer = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error steering scene: $e')));
+      }
+    }
+  }
+
   Future<void> _fetchChapterTeaser() async {
     if (_currentChapterId == null) return;
     setState(() => _loadingTeaser = true);
@@ -701,8 +953,99 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Atmospheric sound loops playing softly behind your novel.',
+                    'Atmospheric sound loops & emotional soundtracks playing softly behind your novel.',
                     style: TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  // Feature 6: Dynamic Story Mixtape & Sonic Mood Score
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.teal.shade900.withValues(alpha: 0.4), Colors.purple.shade900.withValues(alpha: 0.4)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.auto_awesome, color: Colors.tealAccent, size: 16),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Dynamic Chapter Sonic Mood',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                            ),
+                            const Spacer(),
+                            if (_cachedSonicScore == null)
+                              ElevatedButton(
+                                onPressed: _loadingSonicScore ? null : () async {
+                                  if (_currentChapterId == null) return;
+                                  setSheetState(() => _loadingSonicScore = true);
+                                  try {
+                                    final res = await ApiService.getSonicScore(_currentChapterId!);
+                                    setSheetState(() {
+                                      _cachedSonicScore = res;
+                                      _loadingSonicScore = false;
+                                    });
+                                  } catch (e) {
+                                    setSheetState(() => _loadingSonicScore = false);
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal.shade700,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                child: Text(_loadingSonicScore ? 'Scoring...' : 'Analyze Chapter Score 🎧', style: const TextStyle(fontSize: 10)),
+                              ),
+                          ],
+                        ),
+                        if (_cachedSonicScore != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _cachedSonicScore!['soundtrack_title'] ?? 'Chapter Score',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_cachedSonicScore!['dominant_genre']} • ${_cachedSonicScore!['tempo']}',
+                            style: const TextStyle(fontSize: 11, color: Colors.tealAccent),
+                          ),
+                          if (_cachedSonicScore!['music_director_note'] != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _cachedSonicScore!['music_director_note'],
+                              style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.white70),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              final presetKey = _cachedSonicScore!['preset_key'] ?? 'piano';
+                              final targetPreset = AmbientSoundService.presets.firstWhere(
+                                (p) => p.id == presetKey,
+                                orElse: () => AmbientSoundService.presets.first,
+                              );
+                              await _ambientService.playPreset(targetPreset);
+                              setSheetState(() {});
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.play_circle_fill, size: 16),
+                            label: const Text('Play Recommended Chapter Score', style: TextStyle(fontSize: 11)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.tealAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 14),
                   // Volume Slider
@@ -1428,6 +1771,9 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       _chapterTeaser = null;
       _whatIfVignette = null;
       _cachedSubconscious = null;
+      _isPovFlipped = false;
+      _cachedPovData = null;
+      _cachedSonicScore = null;
     });
 
     if (ch['choices_json'] != null) {
@@ -1486,24 +1832,187 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: paragraphs.map((para) {
-        final trimmed = para.trim();
-        if (trimmed.isEmpty) return const SizedBox.shrink();
+      children: [
+        // Quick Action Bar for Novel Immersion: POV Flip & Margin Scribble
+        Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _loadingPovFlip ? null : _togglePovFlip,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _isPovFlipped ? Colors.cyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _isPovFlipped ? Colors.cyanAccent : Colors.white24,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _loadingPovFlip
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent))
+                            : Icon(Icons.sync_alt, size: 14, color: _isPovFlipped ? Colors.cyanAccent : Colors.white70),
+                        const SizedBox(width: 6),
+                        Text(
+                          _isPovFlipped ? '🔄 ${_cachedPovData?['character_name'] ?? 'His'} POV (Active)' : '🔄 Switch to His POV',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _isPovFlipped ? Colors.cyanAccent : Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InkWell(
+                  onTap: () => _showMarginScribbleDialog(),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 1),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.drive_file_rename_outline, size: 14, color: Colors.amberAccent),
+                        SizedBox(width: 6),
+                        Text(
+                          '✍️ Whisper to Story',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
 
-        // Check if paragraph is dialogue (starts with quotation mark)
-        final isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
-
-        return Container(
-          margin: EdgeInsets.only(bottom: _fontSize * 0.9),
-          child: SelectableText(
-            trimmed,
-            style: textStyle.copyWith(
-              color: isDialogue ? dialogueColor : textStyle.color,
-              fontStyle: isDialogue ? FontStyle.normal : FontStyle.normal,
+        // POV Flip Active Header Banner
+        if (_isPovFlipped && _cachedPovData != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 24),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.cyan.shade900.withValues(alpha: 0.35), Colors.black54],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.5), width: 1.2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.psychology, color: Colors.cyanAccent, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _cachedPovData!['pov_title'] ?? 'His Perspective Lens',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.cyanAccent),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '💓 ${_cachedPovData!['heart_rate_bpm'] ?? 140} BPM',
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_cachedPovData!['internal_emotion'] != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Inner State: ${_cachedPovData!['internal_emotion']}',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+                if (_cachedPovData!['unspoken_confession'] != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '"${_cachedPovData!['unspoken_confession']}"',
+                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.amberAccent),
+                  ),
+                ],
+              ],
             ),
           ),
-        );
-      }).toList(),
+
+        // Paragraphs of Novel
+        ...paragraphs.map((para) {
+          final trimmed = para.trim();
+          if (trimmed.isEmpty) return const SizedBox.shrink();
+
+          final isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
+
+          return Container(
+            margin: EdgeInsets.only(bottom: _fontSize * 0.9),
+            child: SelectableText(
+              trimmed,
+              style: textStyle.copyWith(
+                color: isDialogue ? dialogueColor : textStyle.color,
+                fontStyle: isDialogue ? FontStyle.normal : FontStyle.normal,
+              ),
+            ),
+          );
+        }),
+
+        // Interactive Margin Scribble Trigger Card at end of scene
+        Container(
+          margin: const EdgeInsets.only(top: 16, bottom: 24),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.border_color, color: Colors.amberAccent, size: 20),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Want to alter what happens here?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+                    Text('Scribble a margin direction to steer the next lines in real time.', style: TextStyle(fontSize: 11, color: Colors.white60)),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => _showMarginScribbleDialog(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amberAccent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('✍️ Scribble', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1701,6 +2210,25 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
               elevation: 0,
               title: Text(_currentTitle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
               actions: [
+                IconButton(
+                  icon: _loadingPovFlip
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent),
+                        )
+                      : Icon(
+                          _isPovFlipped ? Icons.sync_alt : Icons.switch_account_outlined,
+                          color: _isPovFlipped ? Colors.cyanAccent : textColor,
+                        ),
+                  tooltip: _isPovFlipped ? 'Switch Back to Main POV' : '🔄 POV Flip (His Perspective)',
+                  onPressed: _loadingPovFlip ? null : _togglePovFlip,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.drive_file_rename_outline, color: Colors.amberAccent),
+                  tooltip: '✍️ Margin Scribble (Steer Scene)',
+                  onPressed: () => _showMarginScribbleDialog(),
+                ),
                 IconButton(
                   icon: _isLoadingAfterHours
                       ? const SizedBox(

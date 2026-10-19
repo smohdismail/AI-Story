@@ -1046,7 +1046,84 @@ class ApiService {
     }
     return [];
   }
+
+  static Future<Map<String, dynamic>> generatePovFlip(String chapterId, {String? targetCharacter}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/chapters/$chapterId/pov-flip'),
+      headers: headers,
+      body: jsonEncode({'target_character': targetCharacter}),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to generate POV flip');
+  }
+
+  static Future<Map<String, dynamic>> startMidnightPhoneCall(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/phone-call/start'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to initiate midnight phone call');
+  }
+
+  static Future<Map<String, dynamic>> respondMidnightPhoneCall(String characterId, {String? whisper, int turn = 1}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/phone-call/respond'),
+      headers: headers,
+      body: jsonEncode({'whisper': whisper ?? '', 'turn': turn}),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to respond to midnight phone call');
+  }
+
+  static Future<Map<String, dynamic>> steerChapterFromMargin(String chapterId, {required String paragraphContext, required String readerScribble}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/chapters/$chapterId/steer'),
+      headers: headers,
+      body: jsonEncode({
+        'paragraph_context': paragraphContext,
+        'reader_scribble': readerScribble,
+      }),
+    );
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to steer chapter from margin');
+  }
+
+  static Future<Map<String, dynamic>> getSensoryProfile(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/sensory-profile'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['profile'] ?? {};
+    }
+    return {};
+  }
+
+  static Future<List<dynamic>> getScheduledLetters(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/scheduled-letters'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['letters'] ?? [];
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> getSonicScore(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/sonic-score'), headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['sonic_score'] ?? {};
+    }
+    return {};
+  }
 }
+
 
 
 
