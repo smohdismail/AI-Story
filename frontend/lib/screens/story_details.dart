@@ -1303,11 +1303,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           child: ElevatedButton.icon(
             onPressed: () async {
               try {
-                final session = await ApiService.createGroupChat(widget.storyId);
+                final session = await ApiService.getActiveGroupChat(widget.storyId);
                 if (context.mounted) {
                   context.push('/group_chat', extra: {
                     'storyId': widget.storyId,
-                    'sessionId': session['id'],
+                    'sessionId': session['id'].toString(),
                   });
                 }
               } catch(e) {
@@ -4029,7 +4029,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       return;
                     }
                     try {
-                      final session = await ApiService.createGroupChat(widget.storyId);
+                      final session = await ApiService.getActiveGroupChat(widget.storyId);
                       if (mounted) {
                         context.push('/group_chat', extra: {
                           'storyId': widget.storyId,

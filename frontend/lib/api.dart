@@ -630,16 +630,72 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> createGroupChat(String storyId) async {
+  static Future<Map<String, dynamic>> getActiveGroupChat(String storyId) async {
     final headers = await _getHeaders();
-    final response = await http.post(
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/group_chats/active'),
+      headers: headers,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to get active group chat');
+    }
+  }
+
+  static Future<List<dynamic>> getStoryGroupChats(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
       Uri.parse('$baseUrl/stories/$storyId/group_chats'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to get story group chats');
+    }
+  }
+
+  static Future<Map<String, dynamic>> createGroupChat(String storyId, {String? title}) async {
+    final headers = await _getHeaders();
+    final url = title != null
+        ? '$baseUrl/stories/$storyId/group_chats?title=${Uri.encodeComponent(title)}'
+        : '$baseUrl/stories/$storyId/group_chats';
+    final response = await http.post(
+      Uri.parse(url),
       headers: headers,
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to create group chat');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getGroupChatMembers(String sessionId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/group_chats/$sessionId/members'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to get group chat members');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateGroupChatMembers(String sessionId, List<String> characterIds) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/group_chats/$sessionId/members'),
+      headers: headers,
+      body: jsonEncode({'character_ids': characterIds}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to update group chat members');
     }
   }
 

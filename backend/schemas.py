@@ -248,6 +248,8 @@ class CopilotRequest(BaseModel):
 
 class GroupChatSessionBase(BaseModel):
     story_id: UUID4
+    title: Optional[str] = "Tavern Group Chat"
+    member_ids: Optional[str] = "[]"
 
 class GroupChatSessionCreate(GroupChatSessionBase):
     pass
@@ -255,8 +257,13 @@ class GroupChatSessionCreate(GroupChatSessionBase):
 class GroupChatSessionResponse(GroupChatSessionBase):
     id: UUID4
     created_at: datetime
+    message_count: Optional[int] = 0
+    last_message: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
+
+class GroupChatMembersUpdate(BaseModel):
+    character_ids: list[str]
 
 class GroupChatMessageBase(BaseModel):
     speaker_id: Optional[UUID4] = None

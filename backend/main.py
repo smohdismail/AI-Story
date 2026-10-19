@@ -4,10 +4,11 @@ from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete, or_
+from sqlalchemy import delete, or_, text
 from sqlalchemy.orm import selectinload
 from contextlib import asynccontextmanager
 import uuid
+import json
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 
@@ -107,6 +108,14 @@ async def lifespan(app: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            await conn.execute(text("ALTER TABLE group_chat_sessions ADD COLUMN member_ids TEXT DEFAULT '[]';"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE group_chat_sessions ADD COLUMN title VARCHAR DEFAULT 'Tavern Group Chat';"))
+        except Exception:
+            pass
     yield
     # Shutdown
     pass
@@ -1228,13 +1237,195 @@ async def generate_diary(character_id: uuid.UUID, db: AsyncSession = Depends(get
     diary_entry = await llm_service.generate_character_diary(char_info, story_summary, chat_history_str)
     return {"diary_entry": diary_entry}
 
+@app.get("/api/v1/stories/{story_id}/group_chats/active", response_model=schemas.GroupChatSessionResponse)
+async def get_or_create_active_group_chat(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.GroupChatSession)
+        .where(models.GroupChatSession.story_id == story_id)
+        .order_by(models.GroupChatSession.created_at.desc())
+    )
+    session = result.scalars().first()
+    
+    if not session:
+        chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
+        all_char_ids = [str(c) for c in chars_res.scalars().all()]
+        session = models.GroupChatSession(
+            story_id=story_id,
+            title="Tavern Group Chat",
+            member_ids=json.dumps(all_char_ids)
+        )
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
+    else:
+        try:
+            members = json.loads(session.member_ids or "[]")
+        except Exception:
+            members = []
+        if not members:
+            chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
+            all_char_ids = [str(c) for c in chars_res.scalars().all()]
+            session.member_ids = json.dumps(all_char_ids)
+            await db.commit()
+            await db.refresh(session)
+
+    msg_res = await db.execute(
+        select(models.GroupChatMessage)
+        .where(models.GroupChatMessage.session_id == session.id)
+        .order_by(models.GroupChatMessage.created_at.desc())
+        .limit(1)
+    )
+    last_msg = msg_res.scalars().first()
+    count_res = await db.execute(
+        select(models.GroupChatMessage.id)
+        .where(models.GroupChatMessage.session_id == session.id)
+    )
+    msg_count = len(count_res.scalars().all())
+
+    resp = schemas.GroupChatSessionResponse.model_validate(session)
+    resp.message_count = msg_count
+    resp.last_message = last_msg.message if last_msg else None
+    return resp
+
+@app.get("/api/v1/stories/{story_id}/group_chats", response_model=list[schemas.GroupChatSessionResponse])
+async def get_story_group_chats(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.GroupChatSession)
+        .where(models.GroupChatSession.story_id == story_id)
+        .order_by(models.GroupChatSession.created_at.desc())
+    )
+    sessions = result.scalars().all()
+    if not sessions:
+        chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
+        all_char_ids = [str(c) for c in chars_res.scalars().all()]
+        primary_session = models.GroupChatSession(
+            story_id=story_id,
+            title="Tavern Group Chat",
+            member_ids=json.dumps(all_char_ids)
+        )
+        db.add(primary_session)
+        await db.commit()
+        await db.refresh(primary_session)
+        sessions = [primary_session]
+
+    responses = []
+    for s in sessions:
+        r = schemas.GroupChatSessionResponse.model_validate(s)
+        msgs_res = await db.execute(
+            select(models.GroupChatMessage)
+            .where(models.GroupChatMessage.session_id == s.id)
+            .order_by(models.GroupChatMessage.created_at.desc())
+            .limit(1)
+        )
+        last_m = msgs_res.scalars().first()
+        r.last_message = last_m.message if last_m else None
+        
+        count_res = await db.execute(
+            select(models.GroupChatMessage.id)
+            .where(models.GroupChatMessage.session_id == s.id)
+        )
+        r.message_count = len(count_res.scalars().all())
+        responses.append(r)
+    return responses
+
 @app.post("/api/v1/stories/{story_id}/group_chats", response_model=schemas.GroupChatSessionResponse)
-async def create_group_chat(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    session = models.GroupChatSession(story_id=story_id)
+async def create_group_chat(story_id: uuid.UUID, title: Optional[str] = "New Group Chat", db: AsyncSession = Depends(get_db)):
+    chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
+    all_char_ids = [str(c) for c in chars_res.scalars().all()]
+    session = models.GroupChatSession(story_id=story_id, title=title, member_ids=json.dumps(all_char_ids))
     db.add(session)
     await db.commit()
     await db.refresh(session)
     return session
+
+@app.get("/api/v1/group_chats/{session_id}/members")
+async def get_group_chat_members(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    session_res = await db.execute(select(models.GroupChatSession).where(models.GroupChatSession.id == session_id))
+    session = session_res.scalars().first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == session.story_id))
+    all_chars = chars_res.scalars().all()
+    
+    try:
+        member_id_list = json.loads(session.member_ids or "[]")
+    except Exception:
+        member_id_list = []
+        
+    if not member_id_list and all_chars:
+        member_id_list = [str(c.id) for c in all_chars]
+        session.member_ids = json.dumps(member_id_list)
+        await db.commit()
+        
+    members = [c for c in all_chars if str(c.id) in member_id_list]
+    available = [c for c in all_chars if str(c.id) not in member_id_list]
+    
+    return {
+        "session_id": str(session.id),
+        "title": session.title or "Tavern Group Chat",
+        "members": [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "role": c.role,
+                "personality": c.personality,
+                "dialogue_style": c.dialogue_style,
+                "avatar_url": c.avatar_url,
+                "is_member": True
+            }
+            for c in members
+        ],
+        "available_characters": [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "role": c.role,
+                "personality": c.personality,
+                "dialogue_style": c.dialogue_style,
+                "avatar_url": c.avatar_url,
+                "is_member": False
+            }
+            for c in available
+        ]
+    }
+
+@app.post("/api/v1/group_chats/{session_id}/members")
+async def update_group_chat_members(session_id: uuid.UUID, update: schemas.GroupChatMembersUpdate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    session_res = await db.execute(select(models.GroupChatSession).where(models.GroupChatSession.id == session_id))
+    session = session_res.scalars().first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+        
+    try:
+        prev_members = set(json.loads(session.member_ids or "[]"))
+    except Exception:
+        prev_members = set()
+        
+    new_members = set(update.character_ids)
+    session.member_ids = json.dumps(list(new_members))
+    await db.commit()
+    await db.refresh(session)
+    
+    # Entrance message for newly invited characters
+    added_ids = new_members - prev_members
+    for added_id in added_ids:
+        try:
+            char_res = await db.execute(select(models.Character).where(models.Character.id == uuid.UUID(added_id)))
+            char = char_res.scalars().first()
+            if char:
+                entrance_msg = models.GroupChatMessage(
+                    session_id=session_id,
+                    speaker_id=char.id,
+                    speaker_name=char.name,
+                    message=f"*{char.name} stepped into the tavern lounge, sliding into the circle with a curious smile.* \"Did someone call for me? What are we talking about?\""
+                )
+                db.add(entrance_msg)
+        except Exception:
+            pass
+            
+    await db.commit()
+    return {"status": "success", "member_ids": list(new_members)}
 
 @app.get("/api/v1/group_chats/{session_id}/messages", response_model=list[schemas.GroupChatMessageResponse])
 async def get_group_chat_messages(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
@@ -1248,57 +1439,74 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
     db.add(user_msg)
     await db.commit()
     
-    # 2. Get all characters for the story
+    # 2. Get session & story
     session_res = await db.execute(select(models.GroupChatSession).where(models.GroupChatSession.id == session_id))
     session = session_res.scalars().first()
     if not session:
         raise HTTPException(404, "Session not found")
         
     chars_res = await db.execute(select(models.Character).where(models.Character.story_id == session.story_id))
-    chars = chars_res.scalars().all()
+    all_chars = chars_res.scalars().all()
     
+    # Filter characters to active members
+    try:
+        member_id_list = json.loads(session.member_ids or "[]")
+    except Exception:
+        member_id_list = []
+        
+    chars = [c for c in all_chars if str(c.id) in member_id_list] if member_id_list else all_chars
+    if not chars:
+        chars = all_chars
+        
     char_info_str = "\n---\n".join([f"Name: {c.name}\nRole: {c.role}\nPersonality: {c.personality}\nStyle: {c.dialogue_style}" for c in chars])
     
     story_res = await db.execute(select(models.Story).where(models.Story.id == session.story_id))
     story = story_res.scalars().first()
     
-    # 3. Get recent chat history
-    hist_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()).limit(20))
-    hist = hist_res.scalars().all()
+    # 3. Get recent chat history (25 most recent messages in chronological order)
+    hist_res = await db.execute(
+        select(models.GroupChatMessage)
+        .where(models.GroupChatMessage.session_id == session_id)
+        .order_by(models.GroupChatMessage.created_at.desc())
+        .limit(25)
+    )
+    hist = list(hist_res.scalars().all())
+    hist.reverse()
     chat_history_str = "\n".join([f"{m.speaker_name}: {m.message}" for m in hist])
     
-    # Retrieve relevant memories
     relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", request.message)
-    
-    # Retrieve Persona
     persona_info = await get_effective_persona_info(story, db)
 
     # 4. Generate AI response
     ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories, persona_info)
     
-    # 5. Save AI response(s). The AI might output multiple lines like "Char1: text \n Char2: text"
-    lines = ai_reply.split('\n')
-    for line in lines:
-        if ':' in line:
-            speaker, msg = line.split(':', 1)
-            speaker = speaker.strip()
-            msg = msg.strip()
-            # Try to match speaker to a character ID
-            speaker_char = next((c for c in chars if c.name.lower() in speaker.lower()), None)
+    # 5. Save AI responses with multi-paragraph support
+    pattern = re.compile(r'^([A-Za-z0-9 _\'-]+):\s*(.*)', re.DOTALL)
+    blocks = re.split(r'\n(?=[A-Za-z0-9 _\'-]+:)', ai_reply.strip())
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+        m = pattern.match(block)
+        if m:
+            speaker = m.group(1).strip()
+            msg = m.group(2).strip()
+            speaker_char = next((c for c in all_chars if c.name.lower() in speaker.lower()), None)
             speaker_id = speaker_char.id if speaker_char else None
-            
             ai_msg = models.GroupChatMessage(session_id=session_id, speaker_name=speaker, speaker_id=speaker_id, message=msg)
+            db.add(ai_msg)
+        elif ':' in block:
+            speaker, msg = block.split(':', 1)
+            speaker_char = next((c for c in all_chars if c.name.lower() in speaker.strip().lower()), None)
+            speaker_id = speaker_char.id if speaker_char else None
+            ai_msg = models.GroupChatMessage(session_id=session_id, speaker_name=speaker.strip(), speaker_id=speaker_id, message=msg.strip())
             db.add(ai_msg)
             
     await db.commit()
-    
-    # Trigger background summary check
     background_tasks.add_task(bg_summarize_group_chat, session_id, session.story_id)
     
-    # Return updated history
     final_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()))
     return final_res.scalars().all()
-
 
 @app.put("/api/v1/group_chats/{session_id}/messages/{msg_id}")
 async def edit_group_chat_message(session_id: uuid.UUID, msg_id: uuid.UUID, request: schemas.ChatRequest, db: AsyncSession = Depends(get_db)):
@@ -1316,7 +1524,6 @@ async def rewind_group_chat(session_id: uuid.UUID, msg_id: uuid.UUID, db: AsyncS
     msg = result.scalars().first()
     if not msg:
         raise HTTPException(404, "Message not found")
-    # Delete this message and all after it
     await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id, models.GroupChatMessage.created_at >= msg.created_at))
     await db.commit()
     return {"status": "rewound"}
@@ -1333,36 +1540,62 @@ async def delete_group_chat_message(session_id: uuid.UUID, msg_id: uuid.UUID, db
 
 @app.post("/api/v1/group_chats/{session_id}/continue", response_model=list[schemas.GroupChatMessageResponse])
 async def continue_group_chat(session_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    # Very similar to send_group_chat_message but without adding a user message
     session_res = await db.execute(select(models.GroupChatSession).where(models.GroupChatSession.id == session_id))
     session = session_res.scalars().first()
     if not session:
         raise HTTPException(404, "Session not found")
         
     chars_res = await db.execute(select(models.Character).where(models.Character.story_id == session.story_id))
-    chars = chars_res.scalars().all()
+    all_chars = chars_res.scalars().all()
+    
+    try:
+        member_id_list = json.loads(session.member_ids or "[]")
+    except Exception:
+        member_id_list = []
+        
+    chars = [c for c in all_chars if str(c.id) in member_id_list] if member_id_list else all_chars
+    if not chars:
+        chars = all_chars
+        
     char_info_str = "\n---\n".join([f"Name: {c.name}\nRole: {c.role}\nPersonality: {c.personality}\nStyle: {c.dialogue_style}" for c in chars])
     
     story_res = await db.execute(select(models.Story).where(models.Story.id == session.story_id))
     story = story_res.scalars().first()
     
-    hist_res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id).order_by(models.GroupChatMessage.created_at.asc()).limit(20))
-    hist = hist_res.scalars().all()
+    hist_res = await db.execute(
+        select(models.GroupChatMessage)
+        .where(models.GroupChatMessage.session_id == session_id)
+        .order_by(models.GroupChatMessage.created_at.desc())
+        .limit(25)
+    )
+    hist = list(hist_res.scalars().all())
+    hist.reverse()
     chat_history_str = "\n".join([f"{m.speaker_name}: {m.message}" for m in hist])
     
     relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", "Continue the conversation naturally.")
+    persona_info = await get_effective_persona_info(story, db)
     
-    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories)
+    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories, persona_info)
     
-    lines = ai_reply.split('\n')
-    for line in lines:
-        if ':' in line:
-            speaker, msg = line.split(':', 1)
-            speaker = speaker.strip()
-            msg = msg.strip()
-            speaker_char = next((c for c in chars if c.name.lower() in speaker.lower()), None)
+    pattern = re.compile(r'^([A-Za-z0-9 _\'-]+):\s*(.*)', re.DOTALL)
+    blocks = re.split(r'\n(?=[A-Za-z0-9 _\'-]+:)', ai_reply.strip())
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+        m = pattern.match(block)
+        if m:
+            speaker = m.group(1).strip()
+            msg = m.group(2).strip()
+            speaker_char = next((c for c in all_chars if c.name.lower() in speaker.lower()), None)
             speaker_id = speaker_char.id if speaker_char else None
             ai_msg = models.GroupChatMessage(session_id=session_id, speaker_name=speaker, speaker_id=speaker_id, message=msg)
+            db.add(ai_msg)
+        elif ':' in block:
+            speaker, msg = block.split(':', 1)
+            speaker_char = next((c for c in all_chars if c.name.lower() in speaker.strip().lower()), None)
+            speaker_id = speaker_char.id if speaker_char else None
+            ai_msg = models.GroupChatMessage(session_id=session_id, speaker_name=speaker.strip(), speaker_id=speaker_id, message=msg.strip())
             db.add(ai_msg)
             
     await db.commit()

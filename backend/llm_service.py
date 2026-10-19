@@ -182,18 +182,39 @@ async def generate_character_diary(character_info: str, story_summary: str, chat
 
 async def group_chat_with_characters(story_summary: str, characters_info: str, chat_history: str, relevant_memories: str = "", persona_info: str = "") -> str:
     memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
-    persona_section = f"\n\nUSER PERSONA (Who you are talking to):\n{persona_info}" if persona_info else ""
+    persona_section = f"\n\nUSER PERSONA (Who you are interacting with):\n{persona_info}" if persona_info else ""
+    system_prompt = f"""You are roleplaying multiple living characters sharing a lively, intimate group chat / tavern lounge with the user.
+
+STORY CONTEXT:
+{story_summary}
+
+CHARACTERS IN CHAT:
+{characters_info}{memory_section}{persona_section}
+
+CRITICAL RULES FOR ULTRA-NATURAL & ORGANIC REPLIES:
+1. HUMAN GROUP DYNAMICS: Characters do not give isolated monologues. They react directly to what the user said AND to each other (teasing, bouncing off each other's remarks, friendly banter, eye contact, interruptions, protective warmth).
+2. DISTINCT LIVING VOICES: Each character must strictly embody their unique personality, dialogue cadence, status, and emotional relationship. If one is brooding/possessive, he speaks with quiet gravity; if another is witty or feisty, she counters with playful jabs.
+3. VISCERAL HUMAN BEHAVIOR: Include realistic micro-expressions and vocalizations inside *asterisks* (e.g. *chuckles softly*, *rolls eyes with a smirk*, *sighs in defeat*, *gasps softly*, *leans in close*, *whispers*, *laughs out loud*).
+4. NATURAL SPEECH: Speak like real people in an ongoing conversation. Use natural flow, humor, genuine curiosity, vulnerability, and emotion.
+5. FORMAT REQUIREMENT:
+Generate 1 or 2 distinct character turns that respond naturally.
+Each turn MUST start on its own line in the exact format:
+CharacterName: *action or expression* "Spoken dialogue here"
+(You may use multiple natural sentences per character).
+Do NOT include any narrator or system commentary outside the 'CharacterName:' lines.
+Keep each character's reply between 25 and 75 words so the conversation moves fast and feels like a real chat!"""
+
     messages = [
-        {"role": "system", "content": f"You are acting as multiple characters in a group chat with the user in a fictional story.\n\nSTORY CONTEXT:\n{story_summary}\n\nCHARACTERS IN CHAT:\n{characters_info}{memory_section}{persona_section}\n\nYou must generate the NEXT response in the group chat. Pick ONE or TWO characters to reply to the latest message. Do not break character. Respond naturally. Format each character's message starting with 'Name: message'. You must heavily emphasize direct spoken dialogue between the characters and the user. Put any physical actions inside *asterisks* so they are formatted in italics. Make the dialogue visceral and real by including realistic emotional vocalizations (e.g. sighing, groaning, moaning, screaming, laughing).\nLENGTH CONSTRAINT: Keep the responses short and concise. MAXIMUM 100 WORDS total."}
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"RECENT GROUP CHAT HISTORY:\n\n{chat_history}\n\nPlease generate the next natural character response(s):"}
     ]
-    messages.append({"role": "user", "content": f"Here is the recent group chat history:\n\n{chat_history}\n\nPlease generate the next response(s)."})
     
     try:
         response = await llm_client.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
-            temperature=0.8,
-            max_tokens=600,
+            temperature=0.85,
+            max_tokens=500,
         )
         if response.choices and response.choices[0].message.content:
             return response.choices[0].message.content.strip()

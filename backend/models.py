@@ -137,6 +137,8 @@ class GroupChatSession(Base):
     __tablename__ = "group_chat_sessions"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    title = Column(String, default="Tavern Group Chat")
+    member_ids = Column(Text, default="[]") # JSON array of character IDs
     created_at = Column(DateTime, default=datetime.utcnow)
     
     story = relationship("Story", back_populates="group_chats")
