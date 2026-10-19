@@ -1275,25 +1275,41 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           child: Row(
             children: [
               Expanded(
+                flex: 3,
                 child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final res = await context.push('/character_image_studio', extra: {
+                      'storyId': widget.storyId,
+                    });
+                    if (res == true) {
+                      _loadData();
+                    }
+                  },
+                  icon: const Icon(Icons.auto_awesome, color: Colors.amberAccent),
+                  label: const Text('Create Character (AI Studio)'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 50),
+                    backgroundColor: Colors.purple[800],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: OutlinedButton.icon(
                   onPressed: _showAddCharacterDialog,
                   icon: const Icon(Icons.person_add),
-                  label: const Text('Add Character'),
-                  style: ElevatedButton.styleFrom(
+                  label: const Text('Manual'),
+                  style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 50),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _showRelationshipMapDialog,
-                  icon: const Icon(Icons.share),
-                  label: const Text('Relationships'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(0, 50),
-                  ),
-                ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: _showRelationshipMapDialog,
+                icon: const Icon(Icons.share),
+                tooltip: 'Relationships',
               ),
             ],
           ),
@@ -1404,6 +1420,19 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent),
+                                    tooltip: 'Visual Studio & Portrait',
+                                    onPressed: () async {
+                                      final res = await context.push('/character_image_studio', extra: {
+                                        'storyId': widget.storyId,
+                                        'existingCharacter': char,
+                                      });
+                                      if (res == true) {
+                                        _loadData();
+                                      }
+                                    },
+                                  ),
                                   IconButton(
                                     icon: const Icon(Icons.edit, color: Colors.amber),
                                     tooltip: 'Edit Character',
@@ -1691,6 +1720,39 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  InkWell(
+                    onTap: () async {
+                      Navigator.pop(context);
+                      final res = await context.push('/character_image_studio', extra: {
+                        'storyId': widget.storyId,
+                      });
+                      if (res == true) {
+                        _loadData();
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [Colors.purple[900]!, Colors.amber[900]!]),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Open AI Character Image Studio (Prompt, Regenerate & Details)',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 12),
+                        ],
+                      ),
+                    ),
+                  ),
                   if (base64Image != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16.0),

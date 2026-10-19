@@ -190,6 +190,24 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> suggestCharacterFromPrompt(String prompt, {String? storyId}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/suggest-from-prompt'),
+      headers: headers,
+      body: jsonEncode({
+        'image_prompt': prompt,
+        if (storyId != null) 'story_id': storyId,
+      }),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return (data['profile'] as Map<String, dynamic>?) ?? {};
+    } else {
+      throw Exception('Failed to suggest character profile');
+    }
+  }
+
   static Future<void> deleteCharacter(String storyId, String characterId) async {
     final headers = await _getHeaders();
     final response = await http.delete(

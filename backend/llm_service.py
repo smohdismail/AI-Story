@@ -2035,3 +2035,59 @@ Return strictly a JSON array:
 
 
 
+
+
+async def suggest_character_from_prompt(image_prompt: str, story_context: str = "") -> dict:
+    """Derive rich romance novel character details (name, role, personality, etc.) from an image prompt."""
+    prompt = f"""You are a master character architect and romance novel director.
+A writer has created an image/visual prompt for a character:
+\"\"\"{image_prompt}\"\"\"
+
+Optional Story Context:
+\"\"\"{story_context}\"\"\"
+
+Generate a rich, cohesive character profile inspired directly by this visual portrait.
+Return ONLY valid raw JSON with this exact structure (no markdown fences, no explanatory text):
+{{
+    "name": "Evocative character name fitting the aesthetic",
+    "role": "Character role (e.g., Protagonist, Love Interest, Rival, Dark Mafia Heir, Royal Bodyguard, Secret Protector)",
+    "gender": "Male, Female, Non-Binary, etc.",
+    "personality": "Intriguing traits, psychological depth, secrets, emotional flaws (e.g., Guarded, fiercely protective, razor-witted, hides vulnerability behind dry sarcasm)",
+    "appearance": "Detailed physical description based on the prompt (hair, eyes, build, clothing style, distinctive markings)",
+    "relationship_status": "Dynamic with user/lead (e.g., Simmering rival, unrequited devotion, forbidden attraction, fake fiancé)",
+    "dialogue_style": "How they speak (e.g., Low, velvety cadence, speaks with quiet authority and deliberate pauses, dry teasing smirk)"
+}}"""
+
+    messages = [
+        {"role": "system", "content": "You are an expert romance character creator. Output only raw valid JSON."},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.75,
+            max_tokens=600,
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error suggesting character profile from prompt: {e}")
+        is_female = any(w in image_prompt.lower() for w in ["woman", "girl", "female", "lady", "queen", "princess", "heiress", "heroine", "she", "her"])
+        is_dark = any(w in image_prompt.lower() for w in ["dark", "mafia", "vampire", "shadow", "prince", "brooding", "tattoo", "villain", "leather"])
+        name = "Julian Thorne" if not is_female else "Seraphina Vance"
+        role = "Enigmatic Love Interest" if is_dark else "Devoted Companion"
+        gender = "Female" if is_female else "Male"
+        return {
+            "name": name,
+            "role": role,
+            "gender": gender,
+            "personality": "Magnetic presence, guarded heart, fiercely loyal to those who earn trust.",
+            "appearance": image_prompt[:120] if image_prompt else "Striking features, intense gaze, effortless charisma.",
+            "relationship_status": "Simmering tension, unspoken attraction.",
+            "dialogue_style": "Smooth, deliberate cadence with hints of playful irony."
+        }

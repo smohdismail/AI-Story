@@ -2558,6 +2558,23 @@ async def get_red_thread_endpoint(story_id: uuid.UUID, db: AsyncSession = Depend
     )
     return {"status": "success", "crossings": crossings}
 
+class SuggestCharacterFromPromptRequest(BaseModel):
+    image_prompt: str
+    story_id: Optional[uuid.UUID] = None
+
+@app.post("/api/v1/characters/suggest-from-prompt")
+async def suggest_character_from_prompt_endpoint(
+    req: SuggestCharacterFromPromptRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    story_context = ""
+    if req.story_id:
+        story = await db.get(models.Story, req.story_id)
+        if story:
+            story_context = f"Story Title: {story.title}\nGenre: {story.genre}\nTone: {story.tone}\nSynopsis: {story.synopsis or ''}"
+    profile = await llm_service.suggest_character_from_prompt(req.image_prompt, story_context=story_context)
+    return {"status": "success", "profile": profile}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))

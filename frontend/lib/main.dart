@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'screens/dashboard.dart';
 import 'screens/creator.dart';
 import 'screens/director.dart';
 import 'screens/story_details.dart';
@@ -13,6 +12,7 @@ import 'screens/persona_screen.dart';
 import 'screens/visual_novel_reader.dart';
 import 'screens/community_feed_screen.dart';
 import 'screens/main_navigation_screen.dart';
+import 'screens/character_image_studio_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -149,6 +149,16 @@ void main() async {
       path: '/community',
       builder: (BuildContext context, GoRouterState state) {
         return const CommunityFeedScreen();
+      },
+    ),
+    GoRoute(
+      path: '/character_image_studio',
+      builder: (BuildContext context, GoRouterState state) {
+        final extra = (state.extra as Map<String, dynamic>?) ?? {};
+        return CharacterImageStudioScreen(
+          storyId: extra['storyId'] as String? ?? '',
+          existingCharacter: extra['existingCharacter'] as Map<String, dynamic>?,
+        );
       },
     ),
   ],
