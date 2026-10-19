@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../api.dart';
+import '../widgets/romance_features_dialogs.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -743,6 +744,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                 ),
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.mic, color: Colors.tealAccent),
+            tooltip: 'Midnight Voicemails',
+            onPressed: () => CharacterVoicemailsSheet.show(context, {
+              'id': widget.characterId,
+              'name': widget.characterName,
+            }),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),

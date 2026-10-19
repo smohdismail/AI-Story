@@ -31,6 +31,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
   List<dynamic> _characters = [];
   String? _selectedPovCharacter;
   String? _selectedNarrativeSpark;
+  int _tensionLevel = 2;
 
   @override
   void initState() {
@@ -78,6 +79,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
           selectedChoice: widget.selectedChoice,
           povCharacter: _selectedPovCharacter,
           narrativeSpark: _selectedNarrativeSpark,
+          tensionLevel: _tensionLevel,
       )) {
         if (!mounted || _stopRequested) break;
         setState(() {
@@ -548,6 +550,37 @@ class _DirectorScreenState extends State<DirectorScreen> {
                               setState(() {
                                 _selectedNarrativeSpark = selected ? sparkKey : null;
                               });
+                            },
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Text('🖤 Tension Dial: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.pinkAccent)),
+                      const SizedBox(width: 4),
+                      ...[
+                        {'lvl': 1, 'label': '🌸 Sweet'},
+                        {'lvl': 2, 'label': '🍷 Flirty'},
+                        {'lvl': 3, 'label': '⚡ Jealousy'},
+                        {'lvl': 4, 'label': '🔥 High Heat'},
+                        {'lvl': 5, 'label': '🖤 Dark Romance'},
+                      ].map((t) {
+                        final lvl = t['lvl'] as int;
+                        final isSelected = _tensionLevel == lvl;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(t['label'] as String, style: const TextStyle(fontSize: 11)),
+                            selected: isSelected,
+                            selectedColor: Colors.pinkAccent.shade700,
+                            onSelected: (selected) {
+                              if (selected) setState(() => _tensionLevel = lvl);
                             },
                           ),
                         );

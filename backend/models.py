@@ -56,6 +56,9 @@ class Story(Base):
     intimacy_level = Column(String, default="explicit")
     jealousy_trigger = Column(Boolean, default=False)
     pov_mode = Column(String, default="Standard")
+    tension_level = Column(Integer, default=2) # 1 to 5
+    active_prophecy = Column(Text, nullable=True) # Destiny Tarot prophecy
+    climax_keepsake_json = Column(Text, nullable=True) # Proposal & Grand Finale Keepsake
     
     # Story-specific user persona
     user_persona_name = Column(String, nullable=True)
@@ -90,7 +93,9 @@ class Character(Base):
     passion_level = Column(Integer, default=50)
     vulnerability_level = Column(Integer, default=30)
     romantic_status = Column(String, default="Guarded")
-
+    active_wardrobe = Column(Text, nullable=True) # Currently equipped attire description
+    wardrobe_json = Column(Text, default="[]") # JSON array of saved outfits
+ 
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")
 
@@ -234,3 +239,37 @@ class CharacterPostComment(Base):
 
     post = relationship("CharacterPost", back_populates="comments")
 
+
+
+class StoryNarrativeMemory(Base):
+    __tablename__ = "story_narrative_memories"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    source = Column(String)  # 'character_chat', 'group_chat', 'chapter'
+    character_name = Column(String, nullable=True)
+    event_summary = Column(Text)
+    emotional_impact = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterVoicemail(Base):
+    __tablename__ = "character_voicemails"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    title = Column(String)
+    timestamp_label = Column(String)  # e.g., '2:14 AM'
+    location_label = Column(String)   # e.g., 'Balcony in Paris'
+    ambient_sound = Column(String, default="Rain & Thunder")
+    transcript = Column(Text)
+    duration_seconds = Column(Integer, default=42)
+    is_listened = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ChapterReaction(Base):
+    __tablename__ = "chapter_reactions"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chapter_id = Column(Uuid(as_uuid=True), ForeignKey("chapters.id"))
+    paragraph_index = Column(Integer, default=0)
+    emoji = Column(String, default="🔥")
+    reaction_text = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

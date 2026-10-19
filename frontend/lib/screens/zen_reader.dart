@@ -115,6 +115,97 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   Map<String, dynamic>? _cachedDiary;
   bool _loadingDiary = false;
 
+  // Feature 7: 💬 Timed Reader Floating Reactions
+  List<dynamic> _chapterReactions = [];
+
+  Future<void> _loadReactions() async {
+    final cid = _currentChapterId ?? widget.chapterId;
+    if (cid == null) return;
+    try {
+      final list = await ApiService.getChapterReactions(cid);
+      if (mounted) setState(() => _chapterReactions = list);
+    } catch (_) {}
+  }
+
+  void _showReactDialog(int paraIndex, String previewText) {
+    final cid = _currentChapterId ?? widget.chapterId;
+    if (cid == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF181720),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) {
+        final textCtrl = TextEditingController();
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Drop Inline Reader Reaction', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              const SizedBox(height: 4),
+              Text(
+                '"$previewText"',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: ['🔥', '😭', '💀', '❤️‍🔥', '🫣', '👑'].map((emoji) {
+                  return InkWell(
+                    onTap: () async {
+                      Navigator.pop(context);
+                      HapticFeedback.lightImpact();
+                      await ApiService.addChapterReaction(cid, paragraphIndex: paraIndex, emoji: emoji);
+                      _loadReactions();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(emoji, style: const TextStyle(fontSize: 28)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: textCtrl,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Whisper a short reaction (e.g. "I can\'t breathe 😭")...',
+                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.amber),
+                    onPressed: () async {
+                      if (textCtrl.text.trim().isEmpty) return;
+                      Navigator.pop(context);
+                      await ApiService.addChapterReaction(
+                        cid,
+                        paragraphIndex: paraIndex,
+                        emoji: '💬',
+                        reactionText: textCtrl.text.trim(),
+                      );
+                      _loadReactions();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -128,6 +219,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
     _initTts();
     _loadChoices();
+    _loadReactions();
     _initCandleFlickerTimer();
   }
 
@@ -2481,21 +2573,76 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
             ),
           ),
 
-        // Paragraphs of Novel
-        ...paragraphs.map((para) {
+        // Paragraphs of Novel with Floating Reactions
+        ...paragraphs.asMap().entries.map((entry) {
+          final index = entry.key;
+          final para = entry.value;
           final trimmed = para.trim();
           if (trimmed.isEmpty) return const SizedBox.shrink();
 
           final isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
+          final paraReactions = _chapterReactions.where((r) => r['paragraph_index'] == index).toList();
 
           return Container(
             margin: EdgeInsets.only(bottom: _fontSize * 0.9),
-            child: SelectableText(
-              trimmed,
-              style: textStyle.copyWith(
-                color: isDialogue ? dialogueColor : textStyle.color,
-                fontStyle: isDialogue ? FontStyle.normal : FontStyle.normal,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        trimmed,
+                        style: textStyle.copyWith(
+                          color: isDialogue ? dialogueColor : textStyle.color,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_reaction_outlined, size: 14, color: Colors.white24),
+                      tooltip: 'Drop reaction',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showReactDialog(index, trimmed),
+                    ),
+                  ],
+                ),
+                if (paraReactions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: paraReactions.map((r) {
+                        final text = r['reaction_text'] as String?;
+                        final emoji = r['emoji'] ?? '🔥';
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(emoji, style: const TextStyle(fontSize: 12)),
+                              if (text != null && text.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  text,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontStyle: FontStyle.italic),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+              ],
             ),
           );
         }),

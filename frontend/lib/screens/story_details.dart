@@ -15,6 +15,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../services/audiobook_service.dart';
 import 'audiobook_player_screen.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../widgets/romance_features_dialogs.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -1351,6 +1352,68 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           ),
         ),
         Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => TensionDialSheet.show(context, widget.storyId),
+                  icon: const Icon(Icons.tune, size: 16, color: Colors.amber),
+                  label: const Text('Tension Dial 🖤', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.08),
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => DestinyTarotDialog.show(context, widget.storyId),
+                  icon: const Icon(Icons.auto_awesome, size: 16, color: Colors.purpleAccent),
+                  label: const Text('Destiny Tarot 🔮', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.08),
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => ClimaxMilestoneDialog.show(context, widget.storyId),
+                  icon: const Icon(Icons.ring_volume, size: 16, color: Colors.pinkAccent),
+                  label: const Text('Proposal Climax 💍', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pink[900]?.withValues(alpha: 0.7),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => NarrativeTimelineSheet.show(context, widget.storyId),
+                  icon: const Icon(Icons.link, size: 16, color: Colors.blueAccent),
+                  label: const Text('Story Timeline 🔗', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[900]?.withValues(alpha: 0.7),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
           child: TextField(
             decoration: const InputDecoration(
@@ -1437,6 +1500,16 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                     icon: const Icon(Icons.edit, color: Colors.amber),
                                     tooltip: 'Edit Character',
                                     onPressed: () => _showEditCharacterDialog(char),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.mic, color: Colors.tealAccent),
+                                    tooltip: 'Midnight Voicemails',
+                                    onPressed: () => CharacterVoicemailsSheet.show(context, char),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.checkroom, color: Colors.purpleAccent),
+                                    tooltip: 'Wardrobe Closet',
+                                    onPressed: () => WardrobeClosetSheet.show(context, char, onEquipped: _loadData),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.chat, color: Colors.blue),

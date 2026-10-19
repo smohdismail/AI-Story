@@ -4,7 +4,7 @@ from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete, or_, text
+from sqlalchemy import delete, or_, text, func
 from sqlalchemy.orm import selectinload
 from contextlib import asynccontextmanager
 import uuid
@@ -116,6 +116,17 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE group_chat_sessions ADD COLUMN title VARCHAR DEFAULT 'Tavern Group Chat';"))
         except Exception:
             pass
+        for alter_stmt in [
+            "ALTER TABLE stories ADD COLUMN tension_level INTEGER DEFAULT 2;",
+            "ALTER TABLE stories ADD COLUMN active_prophecy TEXT;",
+            "ALTER TABLE stories ADD COLUMN climax_keepsake_json TEXT;",
+            "ALTER TABLE characters ADD COLUMN active_wardrobe TEXT;",
+            "ALTER TABLE characters ADD COLUMN wardrobe_json TEXT DEFAULT '[]';",
+        ]:
+            try:
+                await conn.execute(text(alter_stmt))
+            except Exception:
+                pass
     yield
     # Shutdown
     pass
@@ -724,6 +735,8 @@ class GenerateRequest(BaseModel):
     selected_choice: str | None = None
     pov_character: str | None = None
     narrative_spark: str | None = None
+    tension_level: int | None = None
+    prophecy: str | None = None
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
@@ -787,9 +800,67 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
             characters = chars_result.scalars().all()
             if characters:
                 story_context += "\n--- STORY CHARACTERS ---\n"
+                wardrobe_notes = []
                 for c in characters:
                     story_context += f"Name: {c.name}, Role: {c.role}, Gender: {c.gender or 'N/A'}, Personality: {c.personality}, Appearance: {c.appearance}\n"
+                    if c.active_wardrobe:
+                        wardrobe_notes.append(f"• {c.name} is currently wearing: {c.active_wardrobe}")
                 story_context += "------------------------\n\n"
+                if wardrobe_notes:
+                    story_context += (
+                        "--- 👗 ACTIVE CHARACTER WARDROBE & ATTIRE ---\n"
+                        + "\n".join(wardrobe_notes) + "\n"
+                        "CRITICAL: Weave these exact clothing fabrics, colors, and accessories into scene descriptions.\n"
+                        "----------------------------------------------\n\n"
+                    )
+
+            # Tension & Jealousy Dial (Level 1 to 5)
+            active_tension = request.tension_level or (story.tension_level if story and story.tension_level else 2)
+            tension_guides = {
+                1: "LEVEL 1 - SWEET & GENTLE: Warm emotional comfort, tender glances, soft touches, blushing smiles, and wholesome devotion.",
+                2: "LEVEL 2 - TEASING & FLIRTY BANTER: Playful banter, witty push-and-pull, mischievous smiles, and light romantic tension.",
+                3: "LEVEL 3 - SIMMERING JEALOUSY & RIVALRY: A suitor, rival, or past flame stirs territorial instincts; sharp possessive looks, flared tempers, and heightened tension.",
+                4: "LEVEL 4 - HIGH-HEAT STANDOFF: Heavy romantic friction, breathless confrontations, pressed against walls, undeniable physical craving, and intense passion.",
+                5: "LEVEL 5 - PURE DARK ROMANCE & FORBIDDEN OBSESSION: Dangerous possessiveness, raw uncensored vows, ruthless protection, and overwhelming forbidden passion."
+            }
+            story_context += (
+                f"--- 🖤 TENSION & JEALOUSY DIAL ({active_tension}/5) ---\n"
+                f"{tension_guides.get(active_tension, tension_guides[2])}\n"
+                f"You MUST strictly tune the emotional temperature of character interactions to Level {active_tension}.\n"
+                f"----------------------------------------------------\n\n"
+            )
+
+            # Active Destiny Tarot Prophecy
+            active_prophecy = request.prophecy or (story.active_prophecy if story else None)
+            if active_prophecy:
+                story_context += (
+                    f"--- 🔮 DESTINY TAROT PROPHECY (ACTIVE PLOT TWIST) ---\n"
+                    f"The cards of fate have revealed this prophecy:\n"
+                    f"\"{active_prophecy}\"\n"
+                    f"You MUST organically weave this plot twist into the events of this chapter!\n"
+                    f"------------------------------------------------------\n\n"
+                )
+
+            # Unified Narrative Synchronization (Memories from 1-on-1 Chat and Tavern Group Chat)
+            mem_res = await db.execute(
+                select(models.StoryNarrativeMemory)
+                .where(models.StoryNarrativeMemory.story_id == request.story_id)
+                .order_by(models.StoryNarrativeMemory.created_at.desc())
+                .limit(6)
+            )
+            narrative_mems = mem_res.scalars().all()
+            if narrative_mems:
+                story_context += (
+                    "--- 🔗 UNIFIED NARRATIVE SYNCHRONIZATION (Events from Character & Tavern Chats) ---\n"
+                    "The following memorable interactions, confessions, and banter recently took place between the user and characters in private chats or the tavern:\n"
+                )
+                for m in reversed(narrative_mems):
+                    story_context += f"• [{m.source.upper()}] with {m.character_name or 'Lead'}: \"{m.event_summary}\" (Emotional tone: {m.emotional_impact or 'Chemistry'})\n"
+                story_context += (
+                    "CRITICAL CONTINUITY INSTRUCTION: You MUST naturally reference, acknowledge, or build upon these recent private chat/tavern developments in this chapter! "
+                    "Characters must remember what they whispered, argued about, or promised in conversation.\n"
+                    "-----------------------------------------------------------------------------------\n\n"
+                )
             
             # Fetch and inject world items
             world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == request.story_id))
@@ -2574,6 +2645,335 @@ async def suggest_character_from_prompt_endpoint(
             story_context = f"Story Title: {story.title}\nGenre: {story.genre}\nTone: {story.tone}\nSynopsis: {story.synopsis or ''}"
     profile = await llm_service.suggest_character_from_prompt(req.image_prompt, story_context=story_context)
     return {"status": "success", "profile": profile}
+
+# --- 1. UNIFIED NARRATIVE MEMORY & TIMELINE HUB ---
+class NarrativeMemoryCreateRequest(BaseModel):
+    source: str = "custom"
+    character_name: Optional[str] = None
+    event_summary: str
+    emotional_impact: Optional[str] = "High tension"
+
+@app.get("/api/v1/stories/{story_id}/narrative-memories")
+async def get_narrative_memories_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.StoryNarrativeMemory)
+        .where(models.StoryNarrativeMemory.story_id == story_id)
+        .order_by(models.StoryNarrativeMemory.created_at.desc())
+        .limit(30)
+    )
+    return res.scalars().all()
+
+@app.post("/api/v1/stories/{story_id}/narrative-memories")
+async def create_narrative_memory_endpoint(story_id: uuid.UUID, req: NarrativeMemoryCreateRequest, db: AsyncSession = Depends(get_db)):
+    mem = models.StoryNarrativeMemory(
+        story_id=story_id,
+        source=req.source,
+        character_name=req.character_name,
+        event_summary=req.event_summary,
+        emotional_impact=req.emotional_impact
+    )
+    db.add(mem)
+    await db.commit()
+    await db.refresh(mem)
+    return mem
+
+# --- 2. TENSION & JEALOUSY DIAL ---
+class TensionDialRequest(BaseModel):
+    tension_level: int
+
+@app.post("/api/v1/stories/{story_id}/tension-dial")
+async def update_tension_dial_endpoint(story_id: uuid.UUID, req: TensionDialRequest, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    story.tension_level = max(1, min(5, req.tension_level))
+    await db.commit()
+    return {"status": "success", "tension_level": story.tension_level}
+
+# --- 3. THE CLIMAX & PROPOSAL MILESTONE ---
+@app.get("/api/v1/stories/{story_id}/climax-milestone")
+async def get_climax_milestone_status_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    chaps_res = await db.execute(select(func.count(models.Chapter.id)).where(models.Chapter.story_id == story_id))
+    chap_count = chaps_res.scalar() or 0
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    max_passion = max([c.passion_level or 50 for c in chars], default=50)
+    is_unlocked = chap_count >= 2 or max_passion >= 75
+    keepsake = json.loads(story.climax_keepsake_json) if story.climax_keepsake_json else None
+    return {
+        "is_unlocked": is_unlocked,
+        "chapter_count": chap_count,
+        "max_passion": max_passion,
+        "has_completed": keepsake is not None,
+        "keepsake": keepsake
+    }
+
+class GenerateClimaxRequest(BaseModel):
+    lead_character_name: Optional[str] = None
+
+@app.post("/api/v1/stories/{story_id}/climax-milestone/generate")
+async def generate_climax_milestone_endpoint(story_id: uuid.UUID, req: GenerateClimaxRequest = None, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    lead_name = (req.lead_character_name if req and req.lead_character_name else None) or (chars[0].name if chars else "Alexander")
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    
+    climax_data = await llm_service.generate_climax_milestone(
+        story_title=story.title or "Novel",
+        synopsis=story.synopsis or "",
+        characters_summary=chars_str,
+        lead_name=lead_name
+    )
+    return {"status": "success", "climax_data": climax_data, "lead_name": lead_name}
+
+class SaveClimaxChoiceRequest(BaseModel):
+    selected_choice: str
+    lead_name: str
+    keepsake_vow: str
+    destiny_score: Optional[str] = "99% Infinite Soulbound"
+
+@app.post("/api/v1/stories/{story_id}/climax-milestone/save-choice")
+async def save_climax_choice_endpoint(story_id: uuid.UUID, req: SaveClimaxChoiceRequest, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    keepsake = {
+        "lead_name": req.lead_name,
+        "user_name": story.user_persona_name or "Beloved",
+        "selected_choice": req.selected_choice,
+        "keepsake_vow": req.keepsake_vow,
+        "destiny_score": req.destiny_score,
+        "completed_at": datetime.utcnow().strftime("%B %d, %Y at %I:%M %p")
+    }
+    story.climax_keepsake_json = json.dumps(keepsake)
+    mem = models.StoryNarrativeMemory(
+        story_id=story_id,
+        source="climax_milestone",
+        character_name=req.lead_name,
+        event_summary=f"ETERNAL CLIMAX VOW: With {req.lead_name}, chose: \"{req.selected_choice}\". Vow: \"{req.keepsake_vow}\"",
+        emotional_impact="Happily Ever After / Climactic Vow"
+    )
+    db.add(mem)
+    await db.commit()
+    return {"status": "success", "keepsake": keepsake}
+
+# --- 4. CHARACTER VOICEMAIL BOX & MIDNIGHT MEMOS ---
+@app.get("/api/v1/characters/{character_id}/voicemails")
+async def get_character_voicemails_endpoint(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterVoicemail)
+        .where(models.CharacterVoicemail.character_id == character_id)
+        .order_by(models.CharacterVoicemail.created_at.desc())
+    )
+    return res.scalars().all()
+
+@app.post("/api/v1/characters/{character_id}/voicemails/generate")
+async def generate_character_voicemail_endpoint(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    story = await db.get(models.Story, char.story_id)
+    latest_chap_res = await db.execute(
+        select(models.Chapter).where(models.Chapter.story_id == char.story_id).order_by(models.Chapter.chapter_number.desc()).limit(1)
+    )
+    latest_chap = latest_chap_res.scalars().first()
+    recent_context = f"Recent Chapter {latest_chap.chapter_number}: {latest_chap.title}" if latest_chap else ""
+
+    memo_data = await llm_service.generate_midnight_voicemail(
+        character_name=char.name,
+        character_role=char.role or "Love Interest",
+        personality=char.personality or "Passionate",
+        story_title=story.title if story else "Novel",
+        latest_events=recent_context
+    )
+
+    voicemail = models.CharacterVoicemail(
+        character_id=character_id,
+        story_id=char.story_id,
+        title=memo_data.get("title", f"Midnight Memo from {char.name}"),
+        timestamp_label=memo_data.get("timestamp_label", "2:14 AM"),
+        location_label=memo_data.get("location_label", "Balcony in Paris"),
+        ambient_sound=memo_data.get("ambient_sound", "Rain & Distant Thunder"),
+        transcript=memo_data.get("transcript", ""),
+        duration_seconds=memo_data.get("duration_seconds", 45),
+        is_listened=False
+    )
+    db.add(voicemail)
+    mem = models.StoryNarrativeMemory(
+        story_id=char.story_id,
+        source="character_voicemail",
+        character_name=char.name,
+        event_summary=f"{char.name} left a midnight voicemail: \"{voicemail.transcript[:130]}...\"",
+        emotional_impact="Late-night audio confession"
+    )
+    db.add(mem)
+    await db.commit()
+    await db.refresh(voicemail)
+    return {"status": "success", "voicemail": voicemail}
+
+@app.post("/api/v1/voicemails/{voicemail_id}/listen")
+async def listen_voicemail_endpoint(voicemail_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    vm = await db.get(models.CharacterVoicemail, voicemail_id)
+    if vm:
+        vm.is_listened = True
+        await db.commit()
+    return {"status": "success"}
+
+# --- 5. DESTINY TAROT & ROMANCE PROPHECIES ---
+@app.get("/api/v1/stories/{story_id}/tarot/draw")
+async def draw_romance_tarot_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = chars_res.scalars().all()
+    chars_str = ", ".join([f"{c.name} ({c.role})" for c in chars])
+    tarot_data = await llm_service.generate_romance_tarot_spread(
+        story_title=story.title or "Novel",
+        synopsis=story.synopsis or "",
+        characters_summary=chars_str
+    )
+    return {"status": "success", "tarot_data": tarot_data, "active_prophecy": story.active_prophecy}
+
+class InjectProphecyRequest(BaseModel):
+    prophecy_twist: str
+
+@app.post("/api/v1/stories/{story_id}/tarot/inject")
+async def inject_prophecy_endpoint(story_id: uuid.UUID, req: InjectProphecyRequest, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    story.active_prophecy = req.prophecy_twist
+    mem = models.StoryNarrativeMemory(
+        story_id=story_id,
+        source="tarot_prophecy",
+        character_name="Fate & Destiny",
+        event_summary=f"DESTINY PROPHECY ACTIVATED: {req.prophecy_twist}",
+        emotional_impact="Prophesied plot twist"
+    )
+    db.add(mem)
+    await db.commit()
+    return {"status": "success", "active_prophecy": story.active_prophecy}
+
+# --- 6. WARDROBE & EVENT STYLIST ---
+@app.get("/api/v1/characters/{character_id}/wardrobe")
+async def get_character_wardrobe_endpoint(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    try:
+        outfits = json.loads(char.wardrobe_json or "[]")
+    except Exception:
+        outfits = []
+    return {
+        "character_name": char.name,
+        "active_wardrobe": char.active_wardrobe,
+        "outfits": outfits
+    }
+
+class WardrobeGenerateRequest(BaseModel):
+    outfit_concept: str
+
+@app.post("/api/v1/characters/{character_id}/wardrobe/generate")
+async def generate_wardrobe_endpoint(character_id: uuid.UUID, req: WardrobeGenerateRequest, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    variant = await llm_service.generate_wardrobe_variant(
+        character_name=char.name,
+        outfit_concept=req.outfit_concept,
+        character_appearance=char.appearance or "Charismatic and attractive"
+    )
+    
+    image_prompt = variant.get("image_prompt", f"Portrait of {char.name} wearing {req.outfit_concept}")
+    b64_image = None
+    try:
+        gen_res = await generate_image(schemas.ImageGenRequest(prompt=image_prompt, style="photorealistic"))
+        b64_image = gen_res.get("base64_image")
+    except Exception as e:
+        print(f"Error generating wardrobe image: {e}")
+    
+    try:
+        outfits = json.loads(char.wardrobe_json or "[]")
+    except Exception:
+        outfits = []
+    
+    outfit_item = {
+        "id": str(uuid.uuid4()),
+        "name": variant.get("outfit_name", req.outfit_concept),
+        "concept": req.outfit_concept,
+        "fabric_and_cut": variant.get("fabric_and_cut", ""),
+        "accessories": variant.get("accessories", ""),
+        "description_snippet": variant.get("novel_description_snippet", ""),
+        "image_base64": b64_image,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    outfits.insert(0, outfit_item)
+    char.wardrobe_json = json.dumps(outfits)
+    char.active_wardrobe = f"{outfit_item['name']}: {outfit_item['fabric_and_cut']} ({outfit_item['accessories']})"
+    if b64_image:
+        char.avatar_base64 = b64_image
+    await db.commit()
+    return {"status": "success", "outfit": outfit_item, "active_wardrobe": char.active_wardrobe}
+
+class EquipWardrobeRequest(BaseModel):
+    outfit_id: str
+    set_as_avatar: bool = True
+
+@app.post("/api/v1/characters/{character_id}/wardrobe/equip")
+async def equip_wardrobe_endpoint(character_id: uuid.UUID, req: EquipWardrobeRequest, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    try:
+        outfits = json.loads(char.wardrobe_json or "[]")
+    except Exception:
+        outfits = []
+    target = next((o for o in outfits if o.get("id") == req.outfit_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Outfit not found")
+    
+    char.active_wardrobe = f"{target['name']}: {target.get('fabric_and_cut', '')} ({target.get('accessories', '')})"
+    if req.set_as_avatar and target.get("image_base64"):
+        char.avatar_base64 = target["image_base64"]
+    await db.commit()
+    return {"status": "success", "active_wardrobe": char.active_wardrobe}
+
+# --- 7. TIMED READER FLOATING REACTIONS ---
+@app.get("/api/v1/chapters/{chapter_id}/reactions")
+async def get_chapter_reactions_endpoint(chapter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.ChapterReaction)
+        .where(models.ChapterReaction.chapter_id == chapter_id)
+        .order_by(models.ChapterReaction.created_at.desc())
+        .limit(100)
+    )
+    return res.scalars().all()
+
+class AddReactionRequest(BaseModel):
+    paragraph_index: int = 0
+    emoji: str = "🔥"
+    reaction_text: Optional[str] = None
+
+@app.post("/api/v1/chapters/{chapter_id}/reactions")
+async def add_chapter_reaction_endpoint(chapter_id: uuid.UUID, req: AddReactionRequest, db: AsyncSession = Depends(get_db)):
+    reaction = models.ChapterReaction(
+        chapter_id=chapter_id,
+        paragraph_index=req.paragraph_index,
+        emoji=req.emoji,
+        reaction_text=req.reaction_text
+    )
+    db.add(reaction)
+    await db.commit()
+    await db.refresh(reaction)
+    return reaction
 
 if __name__ == "__main__":
     import uvicorn

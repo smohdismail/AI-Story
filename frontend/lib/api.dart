@@ -398,7 +398,14 @@ class ApiService {
     }
   }
 
-  static Stream<String> generateChapter(String storyId, String prompt, String context, {String globalCustomRules = '', String? selectedChoice, String? povCharacter, String? narrativeSpark}) async* {
+  static Stream<String> generateChapter(String storyId, String prompt, String context, {
+    String globalCustomRules = '',
+    String? selectedChoice,
+    String? povCharacter,
+    String? narrativeSpark,
+    int? tensionLevel,
+    String? prophecy,
+  }) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
     request.headers.addAll(headers);
@@ -410,6 +417,8 @@ class ApiService {
       if (selectedChoice != null && selectedChoice.isNotEmpty) 'selected_choice': selectedChoice,
       if (povCharacter != null && povCharacter.isNotEmpty) 'pov_character': povCharacter,
       if (narrativeSpark != null && narrativeSpark.isNotEmpty) 'narrative_spark': narrativeSpark,
+      if (tensionLevel != null) 'tension_level': tensionLevel,
+      if (prophecy != null && prophecy.isNotEmpty) 'prophecy': prophecy,
     });
 
     final client = http.Client();
@@ -1237,6 +1246,211 @@ class ApiService {
       return data['crossings'] ?? [];
     }
     return [];
+  }
+
+  // --- 1. UNIFIED NARRATIVE MEMORY & TIMELINE HUB ---
+  static Future<List<dynamic>> getStoryNarrativeMemories(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/narrative-memories'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> createNarrativeMemory(
+    String storyId, {
+    String source = "custom",
+    String? characterName,
+    required String eventSummary,
+    String? emotionalImpact,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/narrative-memories'),
+      headers: headers,
+      body: jsonEncode({
+        'source': source,
+        'character_name': characterName,
+        'event_summary': eventSummary,
+        'emotional_impact': emotionalImpact,
+      }),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to create narrative memory');
+  }
+
+  // --- 2. TENSION & JEALOUSY DIAL ---
+  static Future<void> updateTensionDial(String storyId, int tensionLevel) async {
+    final headers = await _getHeaders();
+    await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/tension-dial'),
+      headers: headers,
+      body: jsonEncode({'tension_level': tensionLevel}),
+    );
+  }
+
+  // --- 3. THE CLIMAX & PROPOSAL MILESTONE ---
+  static Future<Map<String, dynamic>> getClimaxMilestoneStatus(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/climax-milestone'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return {"is_unlocked": false, "has_completed": false};
+  }
+
+  static Future<Map<String, dynamic>> generateClimaxMilestone(String storyId, {String? leadCharacterName}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/climax-milestone/generate'),
+      headers: headers,
+      body: jsonEncode({'lead_character_name': leadCharacterName}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate climax milestone');
+  }
+
+  static Future<Map<String, dynamic>> saveClimaxChoice(
+    String storyId, {
+    required String selectedChoice,
+    required String leadName,
+    required String keepsakeVow,
+    String? destinyScore,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/climax-milestone/save-choice'),
+      headers: headers,
+      body: jsonEncode({
+        'selected_choice': selectedChoice,
+        'lead_name': leadName,
+        'keepsake_vow': keepsakeVow,
+        'destiny_score': destinyScore,
+      }),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to save climax choice');
+  }
+
+  // --- 4. CHARACTER VOICEMAIL BOX & MIDNIGHT MEMOS ---
+  static Future<List<dynamic>> getCharacterVoicemails(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/characters/$characterId/voicemails'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> generateCharacterVoicemail(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/voicemails/generate'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate character voicemail');
+  }
+
+  static Future<void> listenVoicemail(String voicemailId) async {
+    final headers = await _getHeaders();
+    await http.post(Uri.parse('$baseUrl/voicemails/$voicemailId/listen'), headers: headers);
+  }
+
+  // --- 5. DESTINY TAROT & ROMANCE PROPHECIES ---
+  static Future<Map<String, dynamic>> drawRomanceTarot(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/stories/$storyId/tarot/draw'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to draw romance tarot spread');
+  }
+
+  static Future<Map<String, dynamic>> injectProphecy(String storyId, String prophecyTwist) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/tarot/inject'),
+      headers: headers,
+      body: jsonEncode({'prophecy_twist': prophecyTwist}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to inject prophecy into story');
+  }
+
+  // --- 6. WARDROBE & EVENT STYLIST ---
+  static Future<Map<String, dynamic>> getCharacterWardrobe(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/characters/$characterId/wardrobe'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return {"outfits": []};
+  }
+
+  static Future<Map<String, dynamic>> generateWardrobe(String characterId, String outfitConcept) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/wardrobe/generate'),
+      headers: headers,
+      body: jsonEncode({'outfit_concept': outfitConcept}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate wardrobe outfit');
+  }
+
+  static Future<void> equipWardrobe(String characterId, String outfitId, {bool setAsAvatar = true}) async {
+    final headers = await _getHeaders();
+    await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/wardrobe/equip'),
+      headers: headers,
+      body: jsonEncode({'outfit_id': outfitId, 'set_as_avatar': setAsAvatar}),
+    );
+  }
+
+  // --- 7. TIMED READER FLOATING REACTIONS ---
+  static Future<List<dynamic>> getChapterReactions(String chapterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/reactions'), headers: headers);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>> addChapterReaction(
+    String chapterId, {
+    int paragraphIndex = 0,
+    String emoji = "🔥",
+    String? reactionText,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/chapters/$chapterId/reactions'),
+      headers: headers,
+      body: jsonEncode({
+        'paragraph_index': paragraphIndex,
+        'emoji': emoji,
+        'reaction_text': reactionText,
+      }),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to add chapter reaction');
   }
 }
 

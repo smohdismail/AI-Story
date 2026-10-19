@@ -2091,3 +2091,253 @@ Return ONLY valid raw JSON with this exact structure (no markdown fences, no exp
             "relationship_status": "Simmering tension, unspoken attraction.",
             "dialogue_style": "Smooth, deliberate cadence with hints of playful irony."
         }
+
+
+async def generate_climax_milestone(story_title: str, synopsis: str, characters_summary: str, lead_name: str = "Lead") -> dict:
+    """Generates an unforgettable, emotional romance climax, grand confession, and proposal milestone with choices and keepsakes."""
+    prompt = f"""You are a master romance novelist and cinematic director.
+Story: \"{story_title}\"
+Synopsis: \"{synopsis}\"
+Characters: \"{characters_summary}\"
+Main Lead: \"{lead_name}\"
+
+Write an emotional, heart-stopping CLIMAX & PROPOSAL MILESTONE where the romantic tension boils over in a dramatic grand gesture (e.g. airport chase, ballroom confession, rain-soaked confrontation, or kneeling proposal).
+Include high-stakes dialogue, breathless physical proximity, tears, and raw declarations.
+
+Return ONLY valid JSON with this exact structure (no markdown fences, no other text):
+{{
+    "title": "Title of the climax (e.g., Midnight Rain Confession & Vow)",
+    "milestone_type": "Proposal & Grand Gesture",
+    "dramatic_scene": "400-500 words of rich, emotionally charged novel prose detailing the grand gesture, the confrontation, and the breathtaking moment of proposal/confession.",
+    "lead_speech": "The exact unforgettable, vulnerable speech or vow spoken by the lead.",
+    "choices": [
+        "Say yes through breathless tears and run into his arms",
+        "Demand he swear he'll never walk away again before kissing him",
+        "Pull him close into the rain and whisper your own raw confession"
+    ],
+    "keepsake_vow": "Short eternal oath or vow to display on the couple's keepsake certificate.",
+    "destiny_score": "99% Infinite Soulbound",
+    "ambient_music": "Swell of cinematic strings and rain"
+}}"""
+
+    messages = [
+        {"role": "system", "content": "You are a master romance novelist. Output only raw valid JSON."},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=1000,
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating climax milestone: {e}")
+        return {
+            "title": f"The Midnight Rain Confession with {lead_name}",
+            "milestone_type": "Proposal & Grand Gesture",
+            "dramatic_scene": f"The rain soaked through his coat, but {lead_name} didn't move. His hand caught your wrist, gentle yet unbreakable. 'I spent three weeks trying to convince myself I could let you go,' he rasped, his eyes burning with raw devotion. 'I was a fool. Every breath without you felt like drowning. I am not letting you walk away again.' He dropped to one knee on the glistening pavement, fingers trembling as he held up a silver ring.",
+            "lead_speech": f"'Take my name, my life, every single beat of my heart. Just never walk away from me again.'",
+            "choices": [
+                "Say yes through breathless tears and pull him up to kiss him",
+                "Make him swear under the rain that you are his one and only",
+                "Fall to your knees beside him and take the ring"
+            ],
+            "keepsake_vow": f"I was yours before I even knew your name, and I will be yours until the stars burn out.",
+            "destiny_score": "99% Infinite Soulbound",
+            "ambient_music": "Swell of cinematic strings and rain"
+        }
+
+
+async def generate_midnight_voicemail(character_name: str, character_role: str, personality: str, story_title: str, latest_events: str = "") -> dict:
+    """Generates an intimate, realistic late-night audio voicemail memo from a character to the user."""
+    prompt = f"""You are writing a private late-night voice memo left on an answering machine by romance novel lead \"{character_name}\" ({character_role}).
+Personality: {personality}
+Novel: {story_title}
+Recent Story Context: {latest_events or 'Intense romantic tension after a near-miss encounter.'}
+
+Write an intimate, realistic late-night voice message. Include authentic micro-sounds in *asterisks* (*sighs*, *low chuckle*, *sheet rustle*, *throat clear*, *distant rain against glass*).
+The cadence must feel like someone speaking softly into their phone in the dark at 2:00 AM, hesitant, vulnerable, and deeply passionate.
+
+Return ONLY valid JSON (no markdown fences):
+{{
+    "title": "Short title (e.g., 2:14 AM from the Balcony)",
+    "timestamp_label": "2:14 AM",
+    "location_label": "Rain-swept hotel terrace in Paris",
+    "ambient_sound": "Soft rain drumming against glass & distant thunder",
+    "transcript": "The spoken voice message text with *micro-sounds* and natural pauses...",
+    "duration_seconds": 45,
+    "emotional_summary": "He couldn't sleep because the scent of your perfume was still on his pillow."
+}}"""
+
+    messages = [
+        {"role": "system", "content": "You are a master romance audio director. Output only raw valid JSON."},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.85,
+            max_tokens=600,
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating midnight voicemail: {e}")
+        return {
+            "title": f"2:18 AM — {character_name}'s Unsent Memo",
+            "timestamp_label": "2:18 AM",
+            "location_label": "Dimly lit study with open balcony",
+            "ambient_sound": "Rain drumming against glass & quiet jazz",
+            "transcript": f"*sighs softly* *sound of ice shifting in a glass* Hey... I know you're probably asleep, and I told myself I wouldn't call. *low, self-deprecating chuckle* But I'm sitting here in the dark, and I can't get that look you gave me out of my head. The way your pulse jumped when my fingers brushed your hand... *breath catches* You're driving me insane. Sweet dreams. I'll see you tomorrow.",
+            "duration_seconds": 42,
+            "emotional_summary": "He couldn't sleep because thoughts of you kept him awake."
+        }
+
+
+async def generate_romance_tarot_spread(story_title: str, synopsis: str, characters_summary: str) -> dict:
+    """Generates a 3-card daily romance tarot reading customized for the story with an injectable plot prophecy twist."""
+    prompt = f"""You are a mystical romance oracle and tarot reader.
+Story: \"{story_title}\"
+Synopsis: \"{synopsis}\"
+Characters: \"{characters_summary}\"
+
+Draw a 3-card Romance Tarot spread (e.g. The Lovers, The Two of Cups, The Shadow, The Tower of Secrets, The Star of Devotion).
+Analyze what the cards reveal about the lovers' immediate future, their hidden desires, and upcoming dramatic crossroads.
+Create an exciting, dramatic \"prophecy_twist\" that the reader can inject into the upcoming chapter.
+
+Return ONLY valid JSON (no markdown fences):
+{{
+    "spread_theme": "Theme of the reading (e.g., The Burning Crossroads & Unspoken Vows)",
+    "cards": [
+        {{
+            "name": "Card 1 Name (e.g., The Two of Cups)",
+            "position": "Past / Root of Attraction",
+            "symbol": "🍷",
+            "meaning": "Deep soulbound chemistry sparked by a fateful encounter",
+            "story_reading": "How this card reflects the characters' connection in this specific book."
+        }},
+        {{
+            "name": "Card 2 Name (e.g., The Moon / Hidden Veil)",
+            "position": "Present / The Obstacle",
+            "symbol": "🌙",
+            "meaning": "Secrets, simmering jealousy, or an unrevealed past",
+            "story_reading": "What one character is secretly hiding from the other."
+        }},
+        {{
+            "name": "Card 3 Name (e.g., The Tower / Fateful Reckoning)",
+            "position": "Future / The Destiny",
+            "symbol": "⚡",
+            "meaning": "A dramatic confrontation where all masks fall away",
+            "story_reading": "The unavoidable passionate collision awaiting them."
+        }}
+    ],
+    "overall_prophecy": "A 2-paragraph poetic, mysterious reading describing their romantic fate.",
+    "prophecy_twist": "A concrete dramatic twist ready to be woven into the next chapter (e.g., A masked rival delivers a letter proving the lead sacrificed his fortune to protect her)."
+}}"""
+
+    messages = [
+        {"role": "system", "content": "You are an expert romance tarot oracle. Output only raw valid JSON."},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=800,
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating tarot spread: {e}")
+        return {
+            "spread_theme": "The Crimson Thread & The Unspoken Vow",
+            "cards": [
+                {
+                    "name": "The Two of Cups",
+                    "position": "Past / The Spark",
+                    "symbol": "🍷",
+                    "meaning": "Immediate, magnetic soul-recognition",
+                    "story_reading": "From the very first moment your eyes locked, a bond was forged that neither could shake."
+                },
+                {
+                    "name": "The High Priestess",
+                    "position": "Present / The Secret",
+                    "symbol": "🗝️",
+                    "meaning": "Secrets kept out of desperate protection",
+                    "story_reading": "The lead is harboring a dangerous truth they believe will drive you away."
+                },
+                {
+                    "name": "The Star of Devotion",
+                    "position": "Future / The Reckoning",
+                    "symbol": "✨",
+                    "meaning": "Total vulnerability and surrendered love",
+                    "story_reading": "A crisis will force both leads to discard all pride and confess everything."
+                }
+            ],
+            "overall_prophecy": "The cards reveal a love forged in quiet resistance. While the present is clouded by guarded glances and unspoken fears, your stars are inextricably aligned.",
+            "prophecy_twist": "A sudden rainstorm traps the leads together in a secluded cottage or room, forcing a confrontation where all secrets are laid bare."
+        }
+
+
+async def generate_wardrobe_variant(character_name: str, outfit_concept: str, character_appearance: str) -> dict:
+    """Generates a stylish romance novel wardrobe profile and image prompt for a character outfit."""
+    prompt = f"""You are a luxury fashion stylist and visual novel director.
+Character: \"{character_name}\"
+Appearance: \"{character_appearance}\"
+Outfit Concept: \"{outfit_concept}\" (e.g. Midnight Masquerade Ball Gown, Rainy Leather Jacket & Bike, Lazy Morning Silk Robe, Royal Gala Tuxedo)
+
+Generate a detailed haute couture romance outfit profile.
+Return ONLY valid JSON (no markdown fences):
+{{
+    "outfit_name": "Evocative name (e.g., Midnight Masquerade Velvet Gown)",
+    "aesthetic_category": "Formal / Dark Elegance / Intimate / Casual / Royal",
+    "fabric_and_cut": "Details of the fabrics, drape, textures, tailored silhouette",
+    "accessories": "Jewelry, scent notes, distinctive rings or masks",
+    "image_prompt": "A vivid 8K character portrait prompt showing {character_name} wearing this exact outfit with cinematic lighting and fine art detail.",
+    "novel_description_snippet": "A rich sentence describing the outfit ready to be inserted into a novel chapter."
+}}"""
+
+    messages = [
+        {"role": "system", "content": "You are a luxury fashion stylist. Output only raw valid JSON."},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.75,
+            max_tokens=600,
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating wardrobe variant: {e}")
+        return {
+            "outfit_name": f"{outfit_concept.title()} Silhouette",
+            "aesthetic_category": "Haute Romance",
+            "fabric_and_cut": "Midnight-toned rich fabrics with tailored lines, dramatic draping, and effortless elegance.",
+            "accessories": "Vintage silver signet ring, subtle fragrance of amber and rain.",
+            "image_prompt": f"Portrait of {character_name}, {character_appearance}, dressed in {outfit_concept}, luxurious fabric, cinematic dramatic lighting, masterpiece 8k.",
+            "novel_description_snippet": f"{character_name} wore {outfit_concept}, every fold of fabric cut to accentuate their effortless, commanding grace."
+        }
