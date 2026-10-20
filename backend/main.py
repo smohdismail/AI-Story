@@ -1171,6 +1171,20 @@ async def branch_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return new_story
 
+def extract_and_apply_intimacy(text: str, char: models.Character) -> str:
+    pattern = re.compile(r'\[\s*(?:S|SYSTEM\s*)?INTIMACY\s*:\s*([+-]?\d+)\s*\]', re.IGNORECASE)
+    match = pattern.search(text)
+    if match:
+        try:
+            delta = int(match.group(1))
+            current = char.intimacy_score or 0
+            char.intimacy_score = min(100, max(0, current + delta))
+        except Exception:
+            pass
+    cleaned = pattern.sub('', text)
+    cleaned = re.sub(r'\[[^\]]*INTIMACY[^\]*\]', '', cleaned, flags=re.IGNORECASE).strip()
+    return cleaned
+
 @app.post("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
 async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(models.Character).where(models.Character.id == character_id))
@@ -1245,12 +1259,8 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
         chapter_chronicle=chapter_chronicle
     )
     
-    # Parse intimacy delta
-    intimacy_match = re.search(r'\[INTIMACY:([+-]?\d+)\]', ai_reply)
-    if intimacy_match:
-        delta = int(intimacy_match.group(1))
-        char.intimacy_score = (char.intimacy_score or 0) + delta
-        ai_reply = re.sub(r'\[INTIMACY:[+-]?\d+\]', '', ai_reply).strip()
+    # Parse intimacy delta and sanitize text
+    ai_reply = extract_and_apply_intimacy(ai_reply, char)
     
     # Save AI message
     ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=True)
@@ -1345,6 +1355,7 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
         chapter_chronicle=chapter_chronicle
     )
     
+    ai_msg = extract_and_apply_intimacy(ai_msg, char)
     chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
     db.add(chat_ai)
     await db.commit()

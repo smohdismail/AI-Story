@@ -152,8 +152,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     });
     try {
       final msgs = await ApiService.continueChat(widget.characterId);
+      final charInfo = await ApiService.getCharacter(widget.characterId);
       setState(() {
         _messages = msgs;
+        _intimacyScore = charInfo['intimacy_score'] ?? 0;
         _isSending = false;
       });
       _scrollToBottom();
@@ -172,8 +174,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     });
     try {
       final msgs = await ApiService.getCharacterThought(widget.characterId);
+      final charInfo = await ApiService.getCharacter(widget.characterId);
       setState(() {
         _messages = msgs;
+        _intimacyScore = charInfo['intimacy_score'] ?? 0;
         _isSending = false;
       });
       _scrollToBottom();
@@ -192,8 +196,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     });
     try {
       final msgs = await ApiService.regenerateChat(widget.characterId);
+      final charInfo = await ApiService.getCharacter(widget.characterId);
       setState(() {
         _messages = msgs;
+        _intimacyScore = charInfo['intimacy_score'] ?? 0;
         _isSending = false;
       });
       _scrollToBottom();
@@ -284,8 +290,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     
     try {
       final msgs = await ApiService.regenerateChat(widget.characterId);
+      final charInfo = await ApiService.getCharacter(widget.characterId);
       setState(() {
         _messages = msgs;
+        _intimacyScore = charInfo['intimacy_score'] ?? 0;
         _isSending = false;
       });
       _scrollToBottom();
@@ -713,6 +721,11 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  String _sanitizeDisplayMessage(dynamic raw) {
+    if (raw == null) return '';
+    return raw.toString().replaceAll(RegExp(r'\[.*?INTIMACY.*?\]', caseSensitive: false), '').trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -732,7 +745,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4.0),
           child: LinearProgressIndicator(
-            value: (_intimacyScore >= 100) ? 1.0 : (_intimacyScore % 25) / 25.0,
+            value: (_intimacyScore >= 100) ? 1.0 : (_intimacyScore / 100.0),
             backgroundColor: Colors.white24,
             valueColor: AlwaysStoppedAnimation<Color>(
                _intimacyScore < 25 ? Colors.lightBlue : _intimacyScore < 50 ? Colors.green : _intimacyScore < 75 ? Colors.orange : Colors.pink,
@@ -962,7 +975,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                               ),
                                               const SizedBox(height: 8),
                                               MarkdownBody(
-                                                data: msg['message'],
+                                                data: _sanitizeDisplayMessage(msg['message']),
                                                 styleSheet: MarkdownStyleSheet(
                                                   p: const TextStyle(color: Colors.white, fontSize: 15),
                                                   em: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
@@ -971,7 +984,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                             ],
                                           )
                                         : MarkdownBody(
-                                            data: msg['message'],
+                                            data: _sanitizeDisplayMessage(msg['message']),
                                             styleSheet: MarkdownStyleSheet(
                                               p: const TextStyle(
                                                 color: Colors.white,
