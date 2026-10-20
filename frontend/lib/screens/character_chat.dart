@@ -704,14 +704,25 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  Color get _headerColor {
+    switch (_currentTheme) {
+      case 'Cyberpunk': return const Color(0xFF131322);
+      case 'Fantasy': return const Color(0xFF281E12);
+      case 'Romance': return const Color(0xFF38141F);
+      default: return const Color(0xFF14141E);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
       backgroundColor: _bgColor,
       appBar: _isImmersionMode ? null : AppBar(
-        backgroundColor: Colors.black.withOpacity(0.5),
-        elevation: 0,
+        backgroundColor: _headerColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 2,
+        shadowColor: Colors.black54,
         iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           widget.characterName,
