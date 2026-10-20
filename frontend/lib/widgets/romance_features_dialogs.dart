@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../api.dart';
 
 // ==========================================
@@ -1510,6 +1511,453 @@ class _NarrativeTimelineSheetState extends State<NarrativeTimelineSheet> {
                     ),
                   );
                 }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+
+// ==========================================
+// 7. 24-HOUR CHARACTER LIVE ROUTINE & CHECK-INS
+// ==========================================
+class LiveRoutineSheet extends StatefulWidget {
+  final Map<String, dynamic> character;
+  final VoidCallback? onInteraction;
+
+  const LiveRoutineSheet({super.key, required this.character, this.onInteraction});
+
+  static void show(BuildContext context, Map<String, dynamic> character, {VoidCallback? onInteraction}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF110E1A),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => LiveRoutineSheet(character: character, onInteraction: onInteraction),
+    );
+  }
+
+  @override
+  State<LiveRoutineSheet> createState() => _LiveRoutineSheetState();
+}
+
+class _LiveRoutineSheetState extends State<LiveRoutineSheet> {
+  bool _isLoading = true;
+  bool _isSending = false;
+  Map<String, dynamic>? _routine;
+  Map<String, dynamic>? _distractionResult;
+  final TextEditingController _msgController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoutine();
+  }
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadRoutine({bool force = false}) async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await ApiService.getCharacterLiveRoutine(
+        widget.character['id'].toString(),
+        forceRefresh: force,
+      );
+      if (mounted) {
+        setState(() {
+          _routine = res;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading routine: $e')));
+      }
+    }
+  }
+
+  Future<void> _sendDistraction(String text) async {
+    final msg = text.trim();
+    if (msg.isEmpty || _routine == null) return;
+    setState(() => _isSending = true);
+    HapticFeedback.mediumImpact();
+    try {
+      final res = await ApiService.distractCharacterRoutine(
+        widget.character['id'].toString(),
+        message: msg,
+        currentActivity: _routine!['current_activity'],
+        location: _routine!['location'],
+        innerThought: _routine!['inner_thought'],
+      );
+      if (mounted) {
+        setState(() {
+          _distractionResult = res;
+          _isSending = false;
+        });
+        _msgController.clear();
+        if (widget.onInteraction != null) widget.onInteraction!();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSending = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.character['name'] ?? 'Character';
+    final avatar = widget.character['avatar_base64'];
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.8,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Header
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.purple.withValues(alpha: 0.3),
+                    backgroundImage: (avatar != null && avatar.toString().isNotEmpty)
+                        ? (avatar.toString().startsWith('http')
+                            ? NetworkImage(avatar.toString())
+                            : MemoryImage(base64Decode(avatar.toString()))) as ImageProvider
+                        : null,
+                    child: (avatar == null || avatar.toString().isEmpty)
+                        ? const Icon(Icons.person, color: Colors.white)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "$name's Live Routine",
+                          style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Ambient Life Sim • Active Now',
+                              style: TextStyle(color: Colors.white60, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, color: Colors.amberAccent),
+                    tooltip: 'Refresh Routine',
+                    onPressed: _isLoading ? null : () => _loadRoutine(force: true),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white60),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.white12, height: 24),
+
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_routine != null) ...[
+                // Time & Location Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.purple.withValues(alpha: 0.18),
+                        Colors.blue.withValues(alpha: 0.10),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.35)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(_routine!['status_emoji'] ?? '🌙', style: const TextStyle(fontSize: 22)),
+                          const SizedBox(width: 10),
+                          Text(
+                            '${_routine!['time_label'] ?? ''} • ${_routine!['time_period'] ?? ''}',
+                            style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              _routine!['mood'] ?? 'Brooding',
+                              style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.location_on, size: 16, color: Colors.pinkAccent),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _routine!['location'] ?? 'Private Quarters',
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _routine!['current_activity'] ?? '',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Secret Inner Thought
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.psychology, size: 16, color: Colors.purpleAccent),
+                          SizedBox(width: 6),
+                          Text(
+                            'Private Inner Thought',
+                            style: TextStyle(color: Colors.purpleAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '"${_routine!['inner_thought'] ?? ''}"',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Distraction Result (if just sent)
+                if (_distractionResult != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.teal[900]?.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.flash_on, color: Colors.amberAccent, size: 18),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Interruption Caught Him Off-Guard!',
+                              style: TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '+${_distractionResult!['intimacy_delta'] ?? 2} Intimacy',
+                              style: const TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        if (_distractionResult!['heart_rate_spike'] != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.favorite, color: Colors.redAccent, size: 14),
+                              const SizedBox(width: 6),
+                              Text(
+                                _distractionResult!['heart_rate_spike'].toString(),
+                                style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const Divider(color: Colors.white12, height: 16),
+                        Text(
+                          _distractionResult!['reaction'] ?? '',
+                          style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              GoRouter.of(context).push('/character_chat', extra: {
+                                'characterId': widget.character['id'],
+                                'characterName': widget.character['name'] ?? 'Character',
+                                'backgroundImage': widget.character['avatar_base64'],
+                              });
+                            },
+                            icon: const Icon(Icons.chat, size: 16),
+                            label: const Text('Continue Chat with Him'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal[700],
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
+                // Interrupt him section
+                const Text(
+                  '⚡ Interrupt His Routine',
+                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Send a spontaneous whisper right now. He will be startled in the middle of his activity and react immediately.',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                const SizedBox(height: 10),
+
+                // Quick suggestions chips
+                if (_routine!['distraction_prompt_suggestion'] != null) ...[
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ActionChip(
+                        avatar: const Icon(Icons.touch_app, size: 14, color: Colors.amber),
+                        label: Text(
+                          _routine!['distraction_prompt_suggestion'],
+                          style: const TextStyle(fontSize: 11, color: Colors.white),
+                        ),
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        onPressed: () {
+                          _msgController.text = _routine!['distraction_prompt_suggestion'];
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.nightlight, size: 14, color: Colors.purpleAccent),
+                        label: const Text('Can\'t sleep either?', style: TextStyle(fontSize: 11, color: Colors.white)),
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        onPressed: () => _msgController.text = "Can't sleep either?",
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.favorite, size: 14, color: Colors.pinkAccent),
+                        label: const Text('Thinking of you...', style: TextStyle(fontSize: 11, color: Colors.white)),
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        onPressed: () => _msgController.text = "Thinking of you...",
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                // Input box
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _msgController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Whisper a distraction to him...',
+                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.06),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.white12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.purpleAccent),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _isSending ? null : () => _sendDistraction(_msgController.text),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple[700],
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _isSending
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.send, color: Colors.white, size: 18),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         );

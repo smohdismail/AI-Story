@@ -1490,6 +1490,52 @@ class ApiService {
     }
     throw Exception('Failed to add chapter reaction');
   }
+
+  // --- 8. 24-HOUR CHARACTER LIVE ROUTINE & CHECK-INS ---
+  static Future<Map<String, dynamic>> getCharacterLiveRoutine(
+    String characterId, {
+    int? hour,
+    int? minute,
+    bool forceRefresh = false,
+  }) async {
+    final headers = await _getHeaders();
+    final now = DateTime.now();
+    final h = hour ?? now.hour;
+    final m = minute ?? now.minute;
+    final url = '$baseUrl/characters/$characterId/routine?hour=$h&minute=$m&force_refresh=$forceRefresh';
+    final response = await http.get(Uri.parse(url), headers: headers);
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['routine'] ?? {};
+    }
+    throw Exception('Failed to load character live routine');
+  }
+
+  static Future<Map<String, dynamic>> distractCharacterRoutine(
+    String characterId, {
+    required String message,
+    String? currentActivity,
+    String? location,
+    String? innerThought,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/routine/distract'),
+      headers: headers,
+      body: jsonEncode({
+        'message': message,
+        'current_activity': currentActivity,
+        'location': location,
+        'inner_thought': innerThought,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to send routine distraction');
+  }
 }
 
 

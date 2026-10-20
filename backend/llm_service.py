@@ -2458,3 +2458,118 @@ Return JSON with:
     except Exception:
         return {"event_summary": None, "emotional_impact": None}
 
+
+
+async def generate_character_live_routine(
+    character_name: str,
+    character_info: str,
+    story_context: str,
+    time_of_day: str,
+    time_label: str,
+    intimacy_score: int,
+    active_wardrobe: str = None
+) -> dict:
+    prompt = f"""You are the director of a living romance fiction ambient life simulator.
+Generate what {character_name} is doing RIGHT NOW based on real-world local time.
+
+TIME PERIOD: {time_of_day} ({time_label})
+CHARACTER INFO:
+{character_info}
+CURRENT ATTIRE: {active_wardrobe or 'Signature tailored attire'}
+INTIMACY SCORE: {intimacy_score}/100
+STORY CONTEXT: {story_context[:800]}
+
+Generate a vivid, ultra-realistic snapshot of their present moment.
+Return valid JSON with:
+{{
+  "time_period": "{time_of_day}",
+  "time_label": "{time_label}",
+  "location": "Specific immersive location (e.g. Penthouse Balcony in the rain, Dimly lit boardroom, Dimly lit boxing gym at night)",
+  "current_activity": "2 vivid sentences describing what they are physically doing right now (e.g. Loosening their tie, reviewing documents, pacing the floor, listening to music).",
+  "inner_thought": "1-2 sentences of their raw, private thoughts about the user (e.g. wondering if you are asleep, wishing you were there, holding back the urge to text you).",
+  "mood": "e.g. Restless & Brooding, Softly Yearning, Lethal & Focused, Playfully Distracted",
+  "status_emoji": "e.g. 🍷, 🌧️, ☕, ⚡, 🌙, 🥀",
+  "distraction_prompt_suggestion": "Short suggested text the user can send to interrupt them (e.g. 'Can\'t sleep either?', 'Thinking about me?', 'Working too late again.')"
+}} """
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.75,
+            max_tokens=450,
+        )
+        content = response.choices[0].message.content.strip()
+        m = re.search(r'\{.*\}', content, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating character routine: {e}")
+        return {
+            "time_period": time_of_day,
+            "time_label": time_label,
+            "location": "Private Quarters",
+            "current_activity": f"{character_name} is leaning against the window, watching the city lights and lost in deep thought.",
+            "inner_thought": "I can't seem to get them out of my head no matter how hard I try.",
+            "mood": "Brooding & Distracted",
+            "status_emoji": "🍷",
+            "distraction_prompt_suggestion": "Thinking of you..."
+        }
+
+async def generate_routine_distraction_response(
+    character_name: str,
+    character_info: str,
+    story_context: str,
+    current_activity: str,
+    location: str,
+    inner_thought: str,
+    user_distraction_message: str,
+    intimacy_score: int
+) -> dict:
+    prompt = f"""You are roleplaying {character_name}.
+You were just caught completely off-guard in the middle of your daily routine by a sudden text from the user!
+
+YOUR SITUATION RIGHT NOW:
+Location: {location}
+What you were doing: {current_activity}
+What you were secretly thinking: {inner_thought}
+Intimacy Score: {intimacy_score}/100
+
+THE USER JUST INTERRUPTED YOU WITH THIS MESSAGE:
+"{user_distraction_message}"
+
+CHARACTER PERSONALITY:
+{character_info}
+
+Write your immediate, startled/breathless/surprised response.
+RULES:
+1. React authentically to being caught in the act or interrupted (e.g. *nearly drops his glass*, *chuckles into the empty room*, *a slow smirk breaks his cold expression*).
+2. Tease or confess that they had uncanny timing.
+3. Keep it between 50 and 110 words with visceral micro-expressions inside *asterisks*.
+4. Return valid JSON with:
+{{
+  "reaction": "Character's spoken reply and actions with *asterisks*",
+  "intimacy_delta": 2,
+  "heart_rate_spike": "e.g. Jumped from 68 BPM to 118 BPM",
+  "memory_summary": "1-sentence summary of this spontaneous interruption"
+}} """
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=400,
+        )
+        content = response.choices[0].message.content.strip()
+        m = re.search(r'\{.*\}', content, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating distraction response: {e}")
+        return {
+            "reaction": f"*stares down at the glowing screen in utter surprise, a quiet breathless chuckle escaping his lips* \"You have dangerous timing... I was literally just standing here thinking about you.\"",
+            "intimacy_delta": 2,
+            "heart_rate_spike": "Pulse skipped a beat",
+            "memory_summary": f"User interrupted {character_name} while they were lost in thought."
+        }

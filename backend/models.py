@@ -95,6 +95,8 @@ class Character(Base):
     romantic_status = Column(String, default="Guarded")
     active_wardrobe = Column(Text, nullable=True) # Currently equipped attire description
     wardrobe_json = Column(Text, default="[]") # JSON array of saved outfits
+    cached_routine_json = Column(Text, nullable=True) # 24-Hour live ambient routine snapshot
+    routine_updated_at = Column(DateTime, nullable=True)
  
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")

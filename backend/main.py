@@ -3210,6 +3210,134 @@ async def add_chapter_reaction_endpoint(chapter_id: uuid.UUID, req: AddReactionR
     await db.refresh(reaction)
     return reaction
 
+# --- 8. 24-HOUR CHARACTER LIVE ROUTINE & CHECK-INS ---
+class RoutineDistractionRequest(BaseModel):
+    message: str
+    current_activity: Optional[str] = None
+    location: Optional[str] = None
+    inner_thought: Optional[str] = None
+
+@app.get("/api/v1/characters/{character_id}/routine")
+async def get_character_live_routine_endpoint(
+    character_id: uuid.UUID,
+    hour: Optional[int] = None,
+    minute: Optional[int] = None,
+    force_refresh: bool = False,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    story = await db.get(models.Story, char.story_id)
+    story_summary = story.story_summary if story else ""
+
+    import datetime as dt
+    now = dt.datetime.now()
+    cur_hour = hour if hour is not None else now.hour
+    cur_minute = minute if minute is not None else now.minute
+
+    am_pm = "AM" if cur_hour < 12 else "PM"
+    display_hour = cur_hour % 12
+    if display_hour == 0:
+        display_hour = 12
+    time_label = f"{display_hour}:{cur_minute:02d} {am_pm}"
+
+    if 5 <= cur_hour < 8:
+        time_period = "Early Dawn"
+    elif 8 <= cur_hour < 12:
+        time_period = "Morning"
+    elif 12 <= cur_hour < 17:
+        time_period = "Afternoon"
+    elif 17 <= cur_hour < 21:
+        time_period = "Evening"
+    elif 21 <= cur_hour < 24:
+        time_period = "Late Night"
+    else:
+        time_period = "Midnight / Witching Hour"
+
+    if not force_refresh and char.cached_routine_json and char.routine_updated_at:
+        age_seconds = (dt.datetime.utcnow() - char.routine_updated_at).total_seconds()
+        if age_seconds < 1200:
+            try:
+                cached = json.loads(char.cached_routine_json)
+                if cached.get("time_period") == time_period:
+                    cached["time_label"] = time_label
+                    return {"routine": cached, "is_cached": True}
+            except Exception:
+                pass
+
+    char_info = f"Name: {char.name}, Role: {char.role}, Personality: {char.personality}, Status: {char.relationship_status}"
+    routine = await llm_service.generate_character_live_routine(
+        character_name=char.name,
+        character_info=char_info,
+        story_context=story_summary,
+        time_of_day=time_period,
+        time_label=time_label,
+        intimacy_score=char.intimacy_score or 0,
+        active_wardrobe=char.active_wardrobe
+    )
+    routine["time_label"] = time_label
+
+    char.cached_routine_json = json.dumps(routine)
+    char.routine_updated_at = dt.datetime.utcnow()
+    await db.commit()
+
+    return {"routine": routine, "is_cached": False}
+
+@app.post("/api/v1/characters/{character_id}/routine/distract")
+async def distract_character_routine_endpoint(
+    character_id: uuid.UUID,
+    req: RoutineDistractionRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    story = await db.get(models.Story, char.story_id)
+    story_summary = story.story_summary if story else ""
+    char_info = f"Name: {char.name}, Role: {char.role}, Personality: {char.personality}"
+
+    result = await llm_service.generate_routine_distraction_response(
+        character_name=char.name,
+        character_info=char_info,
+        story_context=story_summary,
+        current_activity=req.current_activity or "Lost in thought alone",
+        location=req.location or "Private Chambers",
+        inner_thought=req.inner_thought or f"Wishing to hear from user",
+        user_distraction_message=req.message,
+        intimacy_score=char.intimacy_score or 0
+    )
+
+    user_msg = models.CharacterChat(character_id=character_id, message=f"[⚡ Interrupted Routine]: {req.message}", is_ai=False)
+    db.add(user_msg)
+
+    ai_msg = models.CharacterChat(character_id=character_id, message=result.get("reaction", "*smiles*"), is_ai=True)
+    db.add(ai_msg)
+
+    delta = result.get("intimacy_delta", 2)
+    char.intimacy_score = (char.intimacy_score or 0) + delta
+
+    mem = models.StoryNarrativeMemory(
+        story_id=char.story_id,
+        source="character_chat",
+        character_name=char.name,
+        event_summary=f"Interrupted {char.name}'s routine ({req.location or 'balcony'}). {result.get('memory_summary', '')}",
+        emotional_impact="Spontaneous Spark"
+    )
+    db.add(mem)
+
+    await db.commit()
+
+    return {
+        "reaction": result.get("reaction"),
+        "intimacy_delta": delta,
+        "new_intimacy_score": char.intimacy_score,
+        "heart_rate_spike": result.get("heart_rate_spike", "Pulse jumped 30 BPM"),
+        "memory_summary": result.get("memory_summary")
+    }
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))

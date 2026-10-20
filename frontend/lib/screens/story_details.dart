@@ -1435,103 +1435,155 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   itemBuilder: (context, index) {
                     final filteredChars = characters.where((c) => (c['name'] ?? '').toLowerCase().contains(charSearchQuery.toLowerCase())).toList();
                     final char = filteredChars[index];
+                    final avatar = char['avatar_base64'];
+                    final charName = char['name'] ?? 'Unknown Character';
+                    final role = char['role'] ?? 'Lead';
+                    final gender = char['gender'] ?? 'N/A';
+                    final relationship = char['relationship_status'];
+                    final activeWardrobe = char['active_wardrobe'];
+
                     return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      color: const Color(0xFF161522),
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: const EdgeInsets.all(16.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: GestureDetector(
-                                onTap: () async {
-                                  final picker = ImagePicker();
+                            // 1. TOP HEADER: Large Avatar + Name + Badges + PopupMenu
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                GestureDetector(
+                                  onTap: () async {
+                                    final picker = ImagePicker();
                                     final pickedFile = await picker.pickImage(
                                       source: ImageSource.gallery,
                                       imageQuality: 90,
                                       maxWidth: 1080,
                                       maxHeight: 1080,
                                     );
-                                  if (pickedFile != null) {
-                                    final bytes = await pickedFile.readAsBytes();
-                                    final base64Image = base64Encode(bytes);
-                                    await ApiService.updateCharacter(
-                                      widget.storyId,
-                                      char['id'],
-                                      {'avatar_base64': base64Image},
-                                    );
-                                    _loadData();
-                                  }
-                                },
-                                child: CircleAvatar(
-                                  radius: 25,
-                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                                  backgroundImage: (char['avatar_base64'] != null && char['avatar_base64'].isNotEmpty)
-                                      ? (char['avatar_base64'].startsWith('http')
-                                          ? NetworkImage(char['avatar_base64'])
-                                          : MemoryImage(base64Decode(char['avatar_base64']))) as ImageProvider
-                                      : null,
-                                  child: (char['avatar_base64'] == null || char['avatar_base64'].isEmpty)
-                                      ? const Icon(Icons.person, color: Colors.white)
-                                      : null,
+                                    if (pickedFile != null) {
+                                      final bytes = await pickedFile.readAsBytes();
+                                      final base64Image = base64Encode(bytes);
+                                      await ApiService.updateCharacter(
+                                        widget.storyId,
+                                        char['id'],
+                                        {'avatar_base64': base64Image},
+                                      );
+                                      _loadData();
+                                    }
+                                  },
+                                  child: Container(
+                                    width: 58,
+                                    height: 58,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.6), width: 2),
+                                      image: (avatar != null && avatar.toString().isNotEmpty)
+                                          ? DecorationImage(
+                                              image: (avatar.toString().startsWith('http')
+                                                  ? NetworkImage(avatar.toString())
+                                                  : MemoryImage(base64Decode(avatar.toString()))) as ImageProvider,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null,
+                                      color: Colors.purple[900]?.withValues(alpha: 0.4),
+                                    ),
+                                    child: (avatar == null || avatar.toString().isEmpty)
+                                        ? const Icon(Icons.person, color: Colors.white70, size: 30)
+                                        : null,
+                                  ),
                                 ),
-                              ),
-                              title: Text(char['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                              subtitle: Text('${char['gender'] ?? 'N/A'} • ${char['role'] ?? 'N/A'}', style: TextStyle(color: Colors.grey[400])),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent),
-                                    tooltip: 'Visual Studio & Portrait',
-                                    onPressed: () async {
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        charName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 19,
+                                          color: Colors.white,
+                                          letterSpacing: 0.2,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 4,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blueAccent.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
+                                            ),
+                                            child: Text(
+                                              role,
+                                              style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.08),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              gender,
+                                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                            ),
+                                          ),
+                                          if (relationship != null && relationship.toString().isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                              decoration: BoxDecoration(
+                                                color: Colors.pink.withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.35)),
+                                              ),
+                                              child: Text(
+                                                relationship.toString(),
+                                                style: const TextStyle(color: Colors.pinkAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert, color: Colors.white60),
+                                  color: const Color(0xFF221F33),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  onSelected: (val) async {
+                                    if (val == 'studio') {
                                       final res = await context.push('/character_image_studio', extra: {
                                         'storyId': widget.storyId,
                                         'existingCharacter': char,
                                       });
-                                      if (res == true) {
-                                        _loadData();
-                                      }
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.amber),
-                                    tooltip: 'Edit Character',
-                                    onPressed: () => _showEditCharacterDialog(char),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.mic, color: Colors.tealAccent),
-                                    tooltip: 'Midnight Voicemails',
-                                    onPressed: () => CharacterVoicemailsSheet.show(context, char),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.checkroom, color: Colors.purpleAccent),
-                                    tooltip: 'Wardrobe Closet',
-                                    onPressed: () => WardrobeClosetSheet.show(context, char, onEquipped: _loadData),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.chat, color: Colors.blue),
-                                    onPressed: () {
-                                      context.push('/character_chat', extra: {
-                                        'characterId': char['id'],
-                                        'characterName': char['name'] ?? 'Unknown',
-                                        'backgroundImage': char['avatar_base64'],
-                                      });
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                    onPressed: () async {
+                                      if (res == true) _loadData();
+                                    } else if (val == 'edit') {
+                                      _showEditCharacterDialog(char);
+                                    } else if (val == 'delete') {
                                       bool confirm = await showDialog(
                                         context: context,
                                         builder: (c) => AlertDialog(
                                           title: const Text('Delete Character'),
-                                          content: const Text('Are you sure?'),
+                                          content: Text('Are you sure you want to delete $charName?'),
                                           actions: [
                                             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-                                            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+                                            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete', style: TextStyle(color: Colors.redAccent))),
                                           ],
                                         ),
                                       ) ?? false;
@@ -1539,25 +1591,143 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                         await ApiService.deleteCharacter(widget.storyId, char['id']);
                                         _loadData();
                                       }
-                                    },
-                                  ),
-                                ],
-                              ),
+                                    }
+                                  },
+                                  itemBuilder: (c) => [
+                                    const PopupMenuItem(
+                                      value: 'studio',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('AI Image Studio'),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit, color: Colors.amber, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Edit Details'),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuDivider(),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete, color: Colors.redAccent, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Delete', style: TextStyle(color: Colors.redAccent)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            const Divider(),
-                            const SizedBox(height: 8),
-                            if (char['relationship_status'] != null && char['relationship_status'].toString().isNotEmpty) ...[
-                              Text('Relationship: ${char['relationship_status']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
-                              const SizedBox(height: 6),
+
+                            const SizedBox(height: 14),
+
+                            // 2. ACTION BUTTONS ROW (Chat, Routine, Voicemails, Wardrobe)
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      context.push('/character_chat', extra: {
+                                        'characterId': char['id'],
+                                        'characterName': charName,
+                                        'backgroundImage': char['avatar_base64'],
+                                      });
+                                    },
+                                    icon: const Icon(Icons.chat_bubble_outline, size: 15),
+                                    label: const Text('Chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue[700],
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 3,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => LiveRoutineSheet.show(context, char, onInteraction: _loadData),
+                                    icon: const Icon(Icons.access_time, size: 15, color: Colors.amberAccent),
+                                    label: const Text('Routine ☕', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.amber[900]?.withValues(alpha: 0.6),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filledTonal(
+                                  onPressed: () => CharacterVoicemailsSheet.show(context, char),
+                                  icon: const Icon(Icons.mic, color: Colors.tealAccent, size: 18),
+                                  tooltip: 'Midnight Voicemails',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.teal.withValues(alpha: 0.15),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton.filledTonal(
+                                  onPressed: () => WardrobeClosetSheet.show(context, char, onEquipped: _loadData),
+                                  icon: const Icon(Icons.checkroom, color: Colors.purpleAccent, size: 18),
+                                  tooltip: 'Wardrobe Closet',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.purple.withValues(alpha: 0.15),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // 3. Active Wardrobe tag (if equipped)
+                            if (activeWardrobe != null && activeWardrobe.toString().isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.checkroom, size: 14, color: Colors.purpleAccent),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Attire: $activeWardrobe',
+                                        style: const TextStyle(fontSize: 11, color: Colors.white70, fontStyle: FontStyle.italic),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
-                            // Dynamic Character Passion & Vulnerability Gauge
+
+                            const SizedBox(height: 12),
+
+                            // 4. Dynamic Chemistry & Passion Gauge
                             Container(
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1B1B28),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.3)),
+                                color: const Color(0xFF1C1929),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.25)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1567,15 +1737,15 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                     children: [
                                       const Row(
                                         children: [
-                                          Icon(Icons.favorite, color: Colors.pinkAccent, size: 16),
+                                          Icon(Icons.favorite, color: Colors.pinkAccent, size: 15),
                                           SizedBox(width: 6),
-                                          Text('Chemistry Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                          Text('Chemistry & Bond Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                                         ],
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(6)),
-                                        child: Text(char['romantic_status'] ?? 'Guarded', style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                        decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(6)),
+                                        child: Text(char['romantic_status'] ?? 'Guarded', style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                       ),
                                     ],
                                   ),
@@ -1594,10 +1764,10 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                       value: ((char['passion_level'] ?? 50) as int) / 100.0,
                                       backgroundColor: Colors.white12,
                                       valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
-                                      minHeight: 6,
+                                      minHeight: 5,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   Row(
                                     children: [
                                       const Text('🥀 Vulnerability', style: TextStyle(fontSize: 11, color: Colors.white70)),
@@ -1612,20 +1782,74 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                       value: ((char['vulnerability_level'] ?? 30) as int) / 100.0,
                                       backgroundColor: Colors.white12,
                                       valueColor: const AlwaysStoppedAnimation<Color>(Colors.pinkAccent),
-                                      minHeight: 6,
+                                      minHeight: 5,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            const Text('Personality', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
-                            const SizedBox(height: 4),
-                            Text(char['personality'] ?? 'N/A', textAlign: TextAlign.justify, style: const TextStyle(height: 1.4, fontSize: 15)),
+
                             const SizedBox(height: 12),
-                            const Text('Appearance', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
-                            const SizedBox(height: 4),
-                            Text(char['appearance'] ?? 'N/A', textAlign: TextAlign.justify, style: const TextStyle(height: 1.4, fontSize: 15)),
+
+                            // 5. Personality & Appearance details
+                            if (char['personality'] != null && char['personality'].toString().isNotEmpty) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.03),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.white10),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.psychology, size: 14, color: Colors.amberAccent),
+                                        SizedBox(width: 5),
+                                        Text('Personality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amberAccent)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      char['personality'] ?? 'N/A',
+                                      style: const TextStyle(height: 1.35, fontSize: 13, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+
+                            if (char['appearance'] != null && char['appearance'].toString().isNotEmpty) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.03),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.white10),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.face, size: 14, color: Colors.cyanAccent),
+                                        SizedBox(width: 5),
+                                        Text('Appearance & Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.cyanAccent)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      char['appearance'] ?? 'N/A',
+                                      style: const TextStyle(height: 1.35, fontSize: 13, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
