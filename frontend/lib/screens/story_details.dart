@@ -16,6 +16,7 @@ import '../services/audiobook_service.dart';
 import 'audiobook_player_screen.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../widgets/romance_features_dialogs.dart';
+import '../widgets/audio_drama_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -1069,7 +1070,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     avatar: const Icon(Icons.timer, size: 16),
                     label: Text('~ $readTimeMinutes min read'),
                   ),
-                  if (chapters.isNotEmpty)
+                  if (chapters.isNotEmpty) ...[
                     ActionChip(
                       avatar: const Icon(Icons.headphones, size: 16, color: Colors.amber),
                       label: const Text('Play Audio 🎧', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
@@ -1085,6 +1086,25 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                         AudiobookPlayerScreen.show(context);
                       },
                     ),
+                    ActionChip(
+                      avatar: const Icon(Icons.theater_comedy, size: 16, color: Colors.purpleAccent),
+                      label: const Text('Audio Drama 🎙️', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.purple.withValues(alpha: 0.15),
+                      side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
+                      onPressed: () {
+                        final firstChap = chapters.first;
+                        AudioDramaSheet.show(
+                          context,
+                          rawContent: firstChap['content'] ?? '',
+                          chapterTitle: firstChap['title'] ?? 'Chapter 1',
+                          chapterNumber: firstChap['chapter_number'] ?? 1,
+                          storyTitle: story?['title'],
+                          coverUrl: story?['cover_image_url'],
+                          characters: characters,
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -1151,6 +1171,17 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert),
                         onSelected: (action) {
+                          if (action == 'drama') {
+                            AudioDramaSheet.show(
+                              context,
+                              rawContent: chapter['content'] ?? '',
+                              chapterTitle: chapter['title'] ?? 'Chapter ${chapter['chapter_number']}',
+                              chapterNumber: chapter['chapter_number'],
+                              storyTitle: story?['title'],
+                              coverUrl: story?['cover_image_url'],
+                              characters: characters,
+                            );
+                          }
                           if (action == 'read') _openZenReader(chapter);
                           if (action == 'edit') _editChapter(chapter);
                           if (action == 'manga') _showMangaComicDialog(chapter);

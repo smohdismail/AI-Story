@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../services/ambient_sound_service.dart';
+import '../widgets/audio_drama_sheet.dart';
 import '../api.dart';
 
 enum ReaderTheme {
@@ -2936,6 +2937,21 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   icon: const Icon(Icons.record_voice_over, color: Colors.pinkAccent),
                   tooltip: '💬 Mid-Scene Dialogue Whisper',
                   onPressed: _showWhisperDialog,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.spatial_audio_off_outlined, color: Colors.purpleAccent),
+                  tooltip: 'Full-Cast Audio Drama 🎙️',
+                  onPressed: () {
+                    flutterTts.stop();
+                    AudioDramaSheet.show(
+                      context,
+                      rawContent: _currentContent,
+                      chapterTitle: _currentTitle,
+                      chapterNumber: widget.currentIndex != null ? widget.currentIndex! + 1 : 1,
+                      storyTitle: _currentTitle,
+                      coverUrl: widget.backgroundImage,
+                    );
+                  },
                 ),
                 IconButton(
                   icon: Icon(_isPlaying ? Icons.stop_circle : Icons.headphones, color: _isPlaying ? Colors.redAccent : textColor),

@@ -2027,7 +2027,15 @@ async def get_community_feed(db: AsyncSession = Depends(get_db)):
         .where(models.Story.is_published == True)
         .order_by(models.Story.created_at.desc())
     )
-    return result.scalars().all()
+    stories = result.scalars().all()
+    if not stories:
+        fallback_res = await db.execute(
+            select(models.Story)
+            .order_by(models.Story.created_at.desc())
+            .limit(25)
+        )
+        stories = fallback_res.scalars().all()
+    return stories
 
 @app.post("/api/v1/stories/{story_id}/like")
 async def like_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -2333,29 +2341,41 @@ async def update_story_character_chemistry(story_id: uuid.UUID, db: AsyncSession
 async def get_all_user_characters(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     stories_res = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
     stories = stories_res.scalars().all()
-    if not stories:
-        # Fallback to all stories if user has not tied them
-        stories_res = await db.execute(select(models.Story).limit(50))
-        stories = stories_res.scalars().all()
-        if not stories:
-            return []
-            
-    story_ids = [s.id for s in stories]
-    story_title_map = {str(s.id): s.title for s in stories}
-    chars_res = await db.execute(select(models.Character).where(models.Character.story_id.in_(story_ids)))
-    chars = chars_res.scalars().all()
+    story_ids = [s.id for s in stories] if stories else []
+    
+    chars = []
+    if story_ids:
+        chars_res = await db.execute(select(models.Character).where(models.Character.story_id.in_(story_ids)))
+        chars = chars_res.scalars().all()
+        
+    # If user has no characters tied directly, fallback to all characters so Lounge is lively
+    if not chars:
+        all_chars_res = await db.execute(select(models.Character).limit(100))
+        chars = all_chars_res.scalars().all()
+
+    # Map story titles
+    all_story_ids = list({c.story_id for c in chars if c.story_id})
+    story_title_map = {}
+    if all_story_ids:
+        s_res = await db.execute(select(models.Story).where(models.Story.id.in_(all_story_ids)))
+        story_title_map = {str(s.id): s.title for s in s_res.scalars().all()}
+
     out = []
     for c in chars:
+        avatar = getattr(c, "avatar_base64", None)
         out.append({
             "id": str(c.id),
             "name": c.name,
             "role": c.role or "Lead Character",
             "personality": c.personality or "",
             "appearance": c.appearance or "",
-            "avatar_url": c.avatar_url,
-            "passion_level": c.passion_level or 50,
-            "vulnerability_level": c.vulnerability_level or 30,
-            "romantic_status": c.romantic_status or "Guarded",
+            "avatar_url": avatar,
+            "avatar_base64": avatar,
+            "passion_level": getattr(c, "passion_level", 50) or 50,
+            "vulnerability_level": getattr(c, "vulnerability_level", 30) or 30,
+            "romantic_status": getattr(c, "romantic_status", "Guarded") or "Guarded",
+            "active_wardrobe": getattr(c, "active_wardrobe", None),
+            "intimacy_score": getattr(c, "intimacy_score", 0) or 0,
             "story_id": str(c.story_id),
             "story_title": story_title_map.get(str(c.story_id), "Novel")
         })

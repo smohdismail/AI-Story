@@ -108,6 +108,24 @@ class AmbientSoundService {
     }
   }
 
+  Future<void> pause() async {
+    try {
+      await _player.pause();
+      _isPlaying = false;
+    } catch (e) {
+      debugPrint('Error pausing ambient sound: $e');
+    }
+  }
+
+  Future<void> resume() async {
+    try {
+      await _player.resume();
+      _isPlaying = true;
+    } catch (e) {
+      debugPrint('Error resuming ambient sound: $e');
+    }
+  }
+
   Future<void> setVolume(double val) async {
     _volume = val.clamp(0.0, 1.0);
     if (_isPlaying) {
