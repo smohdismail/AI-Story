@@ -33,7 +33,8 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading feed: $e')));
+        final rawMsg = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(rawMsg)));
       }
     }
   }

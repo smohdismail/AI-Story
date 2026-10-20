@@ -863,7 +863,7 @@ class ApiService {
     final headers = await _getHeaders();
     final response = await http.get(Uri.parse('$baseUrl/community/feed'), headers: headers);
     if (response.statusCode == 200) return jsonDecode(response.body);
-    throw Exception('Failed to load community feed');
+    throw Exception(extractErrorMessage(response.body, 'Failed to load community feed'));
   }
 
   static Future<Map<String, dynamic>> likeStory(String storyId) async {

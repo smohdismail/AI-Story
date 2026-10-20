@@ -216,27 +216,39 @@ async def bg_summarize_group_chat(session_id: uuid.UUID, story_id: uuid.UUID):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        print(f"Metadata create_all: {e}")
+
+    safe_alters = [
+        "ALTER TABLE group_chat_sessions ADD COLUMN IF NOT EXISTS member_ids TEXT DEFAULT '[]';",
+        "ALTER TABLE group_chat_sessions ADD COLUMN IF NOT EXISTS title VARCHAR DEFAULT 'Tavern Group Chat';",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS tension_level INTEGER DEFAULT 2;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS active_prophecy TEXT;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS climax_keepsake_json TEXT;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS user_persona_name VARCHAR;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS user_persona_age INTEGER;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS user_persona_appearance TEXT;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS user_persona_personality TEXT;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS user_persona_backstory TEXT;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS nsfw_preferences TEXT DEFAULT '';",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS intimacy_level VARCHAR DEFAULT 'explicit';",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS jealousy_trigger BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE stories ADD COLUMN IF NOT EXISTS pov_mode VARCHAR DEFAULT 'Standard';",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS active_wardrobe TEXT;",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS wardrobe_json TEXT DEFAULT '[]';",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS passion_level INTEGER DEFAULT 50;",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS vulnerability_level INTEGER DEFAULT 30;",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS romantic_status VARCHAR DEFAULT 'Guarded';",
+    ]
+    for alter_stmt in safe_alters:
         try:
-            await conn.execute(text("ALTER TABLE group_chat_sessions ADD COLUMN member_ids TEXT DEFAULT '[]';"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE group_chat_sessions ADD COLUMN title VARCHAR DEFAULT 'Tavern Group Chat';"))
-        except Exception:
-            pass
-        for alter_stmt in [
-            "ALTER TABLE stories ADD COLUMN tension_level INTEGER DEFAULT 2;",
-            "ALTER TABLE stories ADD COLUMN active_prophecy TEXT;",
-            "ALTER TABLE stories ADD COLUMN climax_keepsake_json TEXT;",
-            "ALTER TABLE characters ADD COLUMN active_wardrobe TEXT;",
-            "ALTER TABLE characters ADD COLUMN wardrobe_json TEXT DEFAULT '[]';",
-        ]:
-            try:
+            async with engine.begin() as conn:
                 await conn.execute(text(alter_stmt))
-            except Exception:
-                pass
+        except Exception:
+            pass
     yield
     # Shutdown
     pass
