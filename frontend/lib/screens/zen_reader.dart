@@ -2879,28 +2879,23 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
               backgroundColor: bgColor,
               foregroundColor: textColor,
               elevation: 0,
-              title: Text(_currentTitle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+              titleSpacing: 4,
+              title: Text(
+                _currentTitle,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               actions: [
+                // 1. After-Hours Spicy/Clean Cut
                 IconButton(
-                  icon: _loadingPovFlip
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent),
-                        )
-                      : Icon(
-                          _isPovFlipped ? Icons.sync_alt : Icons.switch_account_outlined,
-                          color: _isPovFlipped ? Colors.cyanAccent : textColor,
-                        ),
-                  tooltip: _isPovFlipped ? 'Switch Back to Main POV' : '🔄 POV Flip (His Perspective)',
-                  onPressed: _loadingPovFlip ? null : _togglePovFlip,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.drive_file_rename_outline, color: Colors.amberAccent),
-                  tooltip: '✍️ Margin Scribble (Steer Scene)',
-                  onPressed: () => _showMarginScribbleDialog(),
-                ),
-                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   icon: _isLoadingAfterHours
                       ? const SizedBox(
                           width: 18,
@@ -2911,21 +2906,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                           _isAfterHours ? Icons.local_fire_department : Icons.local_fire_department_outlined,
                           color: _isAfterHours ? Colors.deepOrangeAccent : Colors.pinkAccent,
                         ),
-                  tooltip: _isAfterHours ? '🔥 After-Hours Active (Tap for Standard)' : '🔥 Switch to After-Hours Cut',
+                  tooltip: _isAfterHours ? '🔥 After-Hours Active' : '🔥 Switch to After-Hours Cut',
                   onPressed: _isLoadingAfterHours ? null : _toggleAfterHours,
                 ),
+
+                // 2. Sensory Ambient Soundscapes
                 IconButton(
-                  icon: _loadingSubconscious
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent),
-                        )
-                      : const Icon(Icons.remove_red_eye_outlined, color: Colors.amberAccent),
-                  tooltip: '🧠 Mind Reader (Character Subconscious)',
-                  onPressed: _loadingSubconscious ? null : _showSubconsciousSheet,
-                ),
-                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   icon: Icon(
                     _ambientService.isPlaying ? Icons.music_note : Icons.music_note_outlined,
                     color: _ambientService.isPlaying ? Colors.tealAccent : textColor,
@@ -2933,56 +2921,152 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   tooltip: _ambientService.isPlaying ? 'Sensory Ambient (Playing)' : 'Sensory Ambient Soundscapes',
                   onPressed: _showAmbientSoundSheet,
                 ),
+
+                // 3. Audiobook Reader
                 IconButton(
-                  icon: const Icon(Icons.record_voice_over, color: Colors.pinkAccent),
-                  tooltip: '💬 Mid-Scene Dialogue Whisper',
-                  onPressed: _showWhisperDialog,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.spatial_audio_off_outlined, color: Colors.purpleAccent),
-                  tooltip: 'Full-Cast Audio Drama 🎙️',
-                  onPressed: () {
-                    flutterTts.stop();
-                    AudioDramaSheet.show(
-                      context,
-                      rawContent: _currentContent,
-                      chapterTitle: _currentTitle,
-                      chapterNumber: widget.currentIndex != null ? widget.currentIndex! + 1 : 1,
-                      storyTitle: _currentTitle,
-                      coverUrl: widget.backgroundImage,
-                    );
-                  },
-                ),
-                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   icon: Icon(_isPlaying ? Icons.stop_circle : Icons.headphones, color: _isPlaying ? Colors.redAccent : textColor),
-                  tooltip: 'Audiobook Reader',
+                  tooltip: _isPlaying ? 'Stop Audiobook' : 'Audiobook Reader',
                   onPressed: _togglePlayback,
                 ),
+
+                // 4. Text & Theme Appearance
                 IconButton(
-                  icon: Icon(Icons.tune, color: textColor),
-                  tooltip: 'Voice Settings',
-                  onPressed: _showTtsSettings,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.theater_comedy, color: Colors.purpleAccent),
-                  tooltip: 'Visual Novel Mode',
-                  onPressed: () {
-                    context.push('/visual_novel', extra: {
-                      'title': _currentTitle,
-                      'content': _currentContent,
-                      'backgroundImage': widget.backgroundImage,
-                    });
-                  },
-                ),
-                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   icon: Icon(Icons.format_size, color: textColor),
                   tooltip: 'Text & Theme Appearance',
                   onPressed: _showAppearanceSettings,
                 ),
-                IconButton(
-                  icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: textColor),
-                  tooltip: 'Toggle Fullscreen',
-                  onPressed: () => setState(() => _fullscreen = !_fullscreen),
+
+                // 5. Overflow Menu: All specialized tools & reading modes
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: textColor),
+                  tooltip: 'More Reader Tools',
+                  color: const Color(0xFF1E1C24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  onSelected: (val) {
+                    if (val == 'pov_flip') {
+                      if (!_loadingPovFlip) _togglePovFlip();
+                    } else if (val == 'margin_scribble') {
+                      _showMarginScribbleDialog();
+                    } else if (val == 'subconscious') {
+                      if (!_loadingSubconscious) _showSubconsciousSheet();
+                    } else if (val == 'whisper') {
+                      _showWhisperDialog();
+                    } else if (val == 'audio_drama') {
+                      flutterTts.stop();
+                      AudioDramaSheet.show(
+                        context,
+                        rawContent: _currentContent,
+                        chapterTitle: _currentTitle,
+                        chapterNumber: widget.currentIndex != null ? widget.currentIndex! + 1 : 1,
+                        storyTitle: _currentTitle,
+                        coverUrl: widget.backgroundImage,
+                      );
+                    } else if (val == 'visual_novel') {
+                      context.push('/visual_novel', extra: {
+                        'title': _currentTitle,
+                        'content': _currentContent,
+                        'backgroundImage': widget.backgroundImage,
+                      });
+                    } else if (val == 'tts_settings') {
+                      _showTtsSettings();
+                    } else if (val == 'fullscreen') {
+                      setState(() => _fullscreen = !_fullscreen);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'pov_flip',
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isPovFlipped ? Icons.sync_alt : Icons.switch_account_outlined,
+                            color: Colors.cyanAccent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _isPovFlipped ? 'Switch Back to Main POV' : '🔄 POV Flip (His Perspective)',
+                            style: const TextStyle(fontSize: 13, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'margin_scribble',
+                      child: Row(
+                        children: [
+                          Icon(Icons.drive_file_rename_outline, color: Colors.amberAccent, size: 20),
+                          SizedBox(width: 10),
+                          Text('✍️ Margin Scribble (Steer Scene)', style: TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'subconscious',
+                      child: Row(
+                        children: [
+                          Icon(Icons.remove_red_eye_outlined, color: Colors.amberAccent, size: 20),
+                          SizedBox(width: 10),
+                          Text('🧠 Mind Reader (Subconscious)', style: TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'whisper',
+                      child: Row(
+                        children: [
+                          Icon(Icons.record_voice_over, color: Colors.pinkAccent, size: 20),
+                          SizedBox(width: 10),
+                          Text('💬 Mid-Scene Dialogue Whisper', style: TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'audio_drama',
+                      child: Row(
+                        children: [
+                          Icon(Icons.spatial_audio_off_outlined, color: Colors.purpleAccent, size: 20),
+                          SizedBox(width: 10),
+                          Text('🎙️ Full-Cast Audio Drama', style: TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'visual_novel',
+                      child: Row(
+                        children: [
+                          Icon(Icons.theater_comedy, color: Colors.purpleAccent, size: 20),
+                          SizedBox(width: 10),
+                          Text('🎭 Visual Novel Mode', style: TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'tts_settings',
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune, color: textColor, size: 20),
+                          const SizedBox(width: 10),
+                          const Text('⚙️ Voice & Speech Settings', style: TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'fullscreen',
+                      child: Row(
+                        children: [
+                          Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: textColor, size: 20),
+                          const SizedBox(width: 10),
+                          Text(_fullscreen ? 'Exit Fullscreen' : '⛶ Fullscreen Mode', style: const TextStyle(fontSize: 13, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
