@@ -11,6 +11,9 @@ import 'package:http/http.dart' as http;
 import '../api.dart';
 import '../widgets/romance_features_dialogs.dart';
 import '../widgets/character_memory_vault_sheet.dart';
+import '../widgets/vintage_mailbox_sheet.dart';
+import '../widgets/shared_dream_sheet.dart';
+import '../widgets/domestic_bliss_sheet.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -771,6 +774,26 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.markunread_mailbox, color: Colors.amber),
+            tooltip: 'Vintage Mailbox 📬',
+            onPressed: () => VintageMailboxSheet.show(
+              context,
+              characterId: widget.characterId,
+              characterName: widget.characterName,
+              avatarBase64: widget.backgroundImage,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.nightlight_round, color: Colors.purpleAccent),
+            tooltip: 'Shared Dreamworld 🌙',
+            onPressed: () => SharedDreamSheet.show(
+              context,
+              characterId: widget.characterId,
+              characterName: widget.characterName,
+              avatarBase64: widget.backgroundImage,
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.psychology, color: Colors.cyanAccent),
             tooltip: 'Memory Vault & Feelings',
             onPressed: () => CharacterMemoryVaultSheet.show(
@@ -792,7 +815,28 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             icon: const Icon(Icons.more_vert, color: Colors.white),
             tooltip: 'More options',
             onSelected: (String choice) {
-              if (choice == 'Memory Vault') {
+              if (choice == 'Mailbox') {
+                VintageMailboxSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Dreamworld') {
+                SharedDreamSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Domestic Bliss') {
+                DomesticBlissSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Memory Vault') {
                 CharacterMemoryVaultSheet.show(
                   context,
                   characterId: widget.characterId,
@@ -815,6 +859,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             },
             itemBuilder: (BuildContext context) {
               return [
+                const PopupMenuItem(value: 'Mailbox', child: Row(children: [Icon(Icons.markunread_mailbox, color: Colors.amber), SizedBox(width: 8), Text('Vintage Mailbox 📬')])),
+                const PopupMenuItem(value: 'Dreamworld', child: Row(children: [Icon(Icons.nightlight_round, color: Colors.purpleAccent), SizedBox(width: 8), Text('Shared Dreamworld 🌙')])),
+                const PopupMenuItem(value: 'Domestic Bliss', child: Row(children: [Icon(Icons.cottage, color: Colors.orangeAccent), SizedBox(width: 8), Text('Domestic Bliss 🏡')])),
                 const PopupMenuItem(value: 'Memory Vault', child: Row(children: [Icon(Icons.psychology, color: Colors.cyanAccent), SizedBox(width: 8), Text('Memory Vault & Feelings')])),
                 const PopupMenuItem(value: 'Intimacy Unlocks', child: Row(children: [Icon(Icons.stars, color: Colors.pinkAccent), SizedBox(width: 8), Text('Intimacy Unlocks')])),
                 PopupMenuItem(value: 'Toggle Audio', child: Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')),

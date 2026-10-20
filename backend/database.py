@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from dotenv import load_dotenv
 
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 load_dotenv()
 
 # We will use aiosqlite for local dev to make it easy to run immediately without postgres setup,

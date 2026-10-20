@@ -19,6 +19,10 @@ import '../widgets/romance_features_dialogs.dart';
 import '../widgets/audio_drama_sheet.dart';
 import '../widgets/private_whispers_sheet.dart';
 import '../widgets/character_memory_vault_sheet.dart';
+import '../widgets/vintage_mailbox_sheet.dart';
+import '../widgets/shared_dream_sheet.dart';
+import '../widgets/jealousy_rivalry_dialog.dart';
+import '../widgets/domestic_bliss_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -1400,6 +1404,24 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+          child: ElevatedButton.icon(
+            onPressed: () => JealousyRivalryDialog.show(
+              context,
+              storyId: widget.storyId,
+              storyTitle: story?['title'] ?? 'Story',
+            ),
+            icon: const Icon(Icons.flash_on, color: Colors.redAccent, size: 18),
+            label: const Text('Jealousy & Rivalry Confrontation Drama 🎭⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              backgroundColor: const Color(0xFF3B101D),
+              foregroundColor: Colors.redAccent,
+              side: const BorderSide(color: Colors.redAccent, width: 1.2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
           child: Row(
             children: [
               Expanded(
@@ -1766,6 +1788,65 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                   tooltip: 'Character Memory Vault & Feelings',
                                   style: IconButton.styleFrom(
                                     backgroundColor: Colors.cyan.withValues(alpha: 0.15),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Keepsakes & Epilogue Row: Mailbox, Dream, Domestic Bliss
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => VintageMailboxSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    icon: const Icon(Icons.markunread_mailbox, size: 14, color: Colors.amber),
+                                    label: const Text('Mailbox 📬', style: TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => SharedDreamSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    icon: const Icon(Icons.nightlight_round, size: 14, color: Colors.purpleAccent),
+                                    label: const Text('Dream 🌙', style: TextStyle(fontSize: 11, color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => DomesticBlissSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    icon: const Icon(Icons.cottage, size: 14, color: Colors.orangeAccent),
+                                    label: const Text('Bliss 🏡', style: TextStyle(fontSize: 11, color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.orangeAccent.withValues(alpha: 0.4)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
                                   ),
                                 ),
                               ],

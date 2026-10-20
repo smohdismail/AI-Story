@@ -3638,7 +3638,553 @@ async def delete_memory_endpoint(memory_id: uuid.UUID, db: AsyncSession = Depend
     return {"status": "success", "deleted_id": str(memory_id)}
 
 
+
+
+# ==========================================
+# 💌 1. VINTAGE HANDWRITTEN LETTERS & POLAROID MAILBOX
+# ==========================================
+class MailboxReplyRequest(BaseModel):
+    user_reply: str
+    reply_crest: Optional[str] = "Golden Rose"
+    reply_stationery: Optional[str] = "Vintage Cream"
+
+@app.get("/api/v1/characters/{character_id}/mailbox")
+async def get_character_mailbox(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    letters_res = await db.execute(
+        select(models.CharacterMailboxLetter)
+        .where(models.CharacterMailboxLetter.character_id == character_id)
+        .order_by(models.CharacterMailboxLetter.created_at.desc())
+    )
+    letters = list(letters_res.scalars().all())
+
+    if not letters:
+        story = None
+        story_summary = ""
+        if char.story_id:
+            story = await db.get(models.Story, char.story_id)
+            if story:
+                story_summary = story.story_summary or ""
+
+        chats_res = await db.execute(
+            select(models.ChatMessage)
+            .where(models.ChatMessage.character_id == character_id)
+            .order_by(models.ChatMessage.created_at.desc())
+            .limit(10)
+        )
+        recent_chats_list = list(chats_res.scalars().all())
+        recent_chats_list.reverse()
+        recent_chats_text = "\n".join([f"{'User' if m.is_user else char.name}: {m.message}" for m in recent_chats_list])
+
+        data = await llm_service.generate_vintage_mailbox_letter(
+            character_name=char.name,
+            persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+            relationship=char.relationship_status or "Close",
+            intimacy_score=char.intimacy_score or 0,
+            story_summary=story_summary,
+            recent_chats=recent_chats_text
+        )
+
+        new_letter = models.CharacterMailboxLetter(
+            story_id=char.story_id,
+            character_id=char.id,
+            sender_name=char.name,
+            parchment_style=data.get("parchment_style", "vintage_cream"),
+            wax_seal_color=data.get("wax_seal_color", "crimson"),
+            letter_content=data.get("letter_content", ""),
+            clipped_keepsake=data.get("clipped_keepsake", "A pressed white jasmine flower"),
+            polaroid_caption=data.get("polaroid_caption", "Thinking of you"),
+            polaroid_image=getattr(char, "avatar_base64", None),
+            is_opened=False
+        )
+        db.add(new_letter)
+        await db.commit()
+        await db.refresh(new_letter)
+        letters = [new_letter]
+
+    return [
+        {
+            "id": str(l.id),
+            "story_id": str(l.story_id) if l.story_id else None,
+            "character_id": str(l.character_id),
+            "sender_name": l.sender_name,
+            "parchment_style": l.parchment_style,
+            "wax_seal_color": l.wax_seal_color,
+            "letter_content": l.letter_content,
+            "clipped_keepsake": l.clipped_keepsake,
+            "polaroid_caption": l.polaroid_caption,
+            "polaroid_image": l.polaroid_image,
+            "is_opened": l.is_opened,
+            "user_reply": l.user_reply,
+            "reply_crest": l.reply_crest,
+            "reply_stationery": l.reply_stationery,
+            "character_reply_reaction": l.character_reply_reaction,
+            "created_at": l.created_at.strftime("%b %d, %Y - %I:%M %p") if l.created_at else ""
+        }
+        for l in letters
+    ]
+
+@app.post("/api/v1/characters/{character_id}/mailbox/generate")
+async def generate_new_mailbox_letter(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    story = None
+    story_summary = ""
+    if char.story_id:
+        story = await db.get(models.Story, char.story_id)
+        if story:
+            story_summary = story.story_summary or ""
+
+    chats_res = await db.execute(
+        select(models.ChatMessage)
+        .where(models.ChatMessage.character_id == character_id)
+        .order_by(models.ChatMessage.created_at.desc())
+        .limit(10)
+    )
+    recent_chats_list = list(chats_res.scalars().all())
+    recent_chats_list.reverse()
+    recent_chats_text = "\n".join([f"{'User' if m.is_user else char.name}: {m.message}" for m in recent_chats_list])
+
+    data = await llm_service.generate_vintage_mailbox_letter(
+        character_name=char.name,
+        persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+        relationship=char.relationship_status or "Close",
+        intimacy_score=char.intimacy_score or 0,
+        story_summary=story_summary,
+        recent_chats=recent_chats_text
+    )
+
+    new_letter = models.CharacterMailboxLetter(
+        story_id=char.story_id,
+        character_id=char.id,
+        sender_name=char.name,
+        parchment_style=data.get("parchment_style", "vintage_cream"),
+        wax_seal_color=data.get("wax_seal_color", "crimson"),
+        letter_content=data.get("letter_content", ""),
+        clipped_keepsake=data.get("clipped_keepsake", "A pressed white jasmine flower"),
+        polaroid_caption=data.get("polaroid_caption", "Thinking of you"),
+        polaroid_image=getattr(char, "avatar_base64", None),
+        is_opened=False
+    )
+    db.add(new_letter)
+    await db.commit()
+    await db.refresh(new_letter)
+
+    return {
+        "status": "success",
+        "letter": {
+            "id": str(new_letter.id),
+            "story_id": str(new_letter.story_id) if new_letter.story_id else None,
+            "character_id": str(new_letter.character_id),
+            "sender_name": new_letter.sender_name,
+            "parchment_style": new_letter.parchment_style,
+            "wax_seal_color": new_letter.wax_seal_color,
+            "letter_content": new_letter.letter_content,
+            "clipped_keepsake": new_letter.clipped_keepsake,
+            "polaroid_caption": new_letter.polaroid_caption,
+            "polaroid_image": new_letter.polaroid_image,
+            "is_opened": new_letter.is_opened,
+            "created_at": new_letter.created_at.strftime("%b %d, %Y - %I:%M %p") if new_letter.created_at else ""
+        }
+    }
+
+@app.post("/api/v1/mailbox/{letter_id}/open")
+async def open_mailbox_letter(letter_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    letter = await db.get(models.CharacterMailboxLetter, letter_id)
+    if not letter:
+        raise HTTPException(status_code=404, detail="Letter not found")
+    letter.is_opened = True
+    await db.commit()
+    return {"status": "success", "is_opened": True}
+
+@app.post("/api/v1/mailbox/{letter_id}/reply")
+async def reply_mailbox_letter(letter_id: uuid.UUID, req: MailboxReplyRequest, db: AsyncSession = Depends(get_db)):
+    letter = await db.get(models.CharacterMailboxLetter, letter_id)
+    if not letter:
+        raise HTTPException(status_code=404, detail="Letter not found")
+    
+    char = await db.get(models.Character, letter.character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    reaction = await llm_service.generate_mailbox_reply_reaction(
+        character_name=char.name,
+        persona=f"{char.role}. {char.personality}",
+        original_letter=letter.letter_content,
+        user_reply=req.user_reply,
+        reply_crest=req.reply_crest or "Golden Rose",
+        reply_stationery=req.reply_stationery or "Vintage Cream"
+    )
+
+    letter.user_reply = req.user_reply
+    letter.reply_crest = req.reply_crest
+    letter.reply_stationery = req.reply_stationery
+    letter.character_reply_reaction = reaction
+    await db.commit()
+
+    return {
+        "status": "success",
+        "character_reply_reaction": reaction
+    }
+
+
+# ==========================================
+# 🌙 2. LATE-NIGHT SHARED DREAMS & ASTRAL REVERIE
+# ==========================================
+@app.get("/api/v1/characters/{character_id}/shared-dreams")
+async def get_character_shared_dreams(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterSharedDream)
+        .where(models.CharacterSharedDream.character_id == character_id)
+        .order_by(models.CharacterSharedDream.created_at.desc())
+    )
+    dreams = res.scalars().all()
+    return [
+        {
+            "id": str(d.id),
+            "character_id": str(d.character_id),
+            "dream_realm_title": d.dream_realm_title,
+            "surreal_atmosphere": d.surreal_atmosphere,
+            "dream_narrative": d.dream_narrative,
+            "shared_secret_unlocked": d.shared_secret_unlocked,
+            "morning_after_message": d.morning_after_message,
+            "created_at": d.created_at.strftime("%b %d, %Y - %I:%M %p") if d.created_at else ""
+        }
+        for d in dreams
+    ]
+
+@app.post("/api/v1/characters/{character_id}/dream-together")
+async def dream_together_endpoint(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    story = None
+    story_summary = ""
+    if char.story_id:
+        story = await db.get(models.Story, char.story_id)
+        if story:
+            story_summary = story.story_summary or ""
+
+    chats_res = await db.execute(
+        select(models.ChatMessage)
+        .where(models.ChatMessage.character_id == character_id)
+        .order_by(models.ChatMessage.created_at.desc())
+        .limit(10)
+    )
+    recent_chats_list = list(chats_res.scalars().all())
+    recent_chats_list.reverse()
+    recent_chats_text = "\n".join([f"{'User' if m.is_user else char.name}: {m.message}" for m in recent_chats_list])
+
+    dream_data = await llm_service.generate_shared_dream(
+        character_name=char.name,
+        persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+        intimacy_score=char.intimacy_score or 0,
+        story_summary=story_summary,
+        recent_chats=recent_chats_text
+    )
+
+    new_dream = models.CharacterSharedDream(
+        story_id=char.story_id,
+        character_id=char.id,
+        dream_realm_title=dream_data.get("dream_realm_title", "The Starfall Ocean"),
+        surreal_atmosphere=dream_data.get("surreal_atmosphere", "Weightless galaxy tides"),
+        dream_narrative=dream_data.get("dream_narrative", ""),
+        shared_secret_unlocked=dream_data.get("shared_secret_unlocked", ""),
+        morning_after_message=dream_data.get("morning_after_message", "")
+    )
+    db.add(new_dream)
+
+    if char.story_id:
+        mem = models.StoryNarrativeMemory(
+            story_id=char.story_id,
+            character_id=char.id,
+            source="shared_dream",
+            character_name=char.name,
+            event_summary=f"[SHARED DREAM: {new_dream.dream_realm_title}] Unlocked secret: {new_dream.shared_secret_unlocked}",
+            emotional_impact="Deepened subconscious soul bond and mutual vulnerability",
+            is_pinned=True
+        )
+        db.add(mem)
+
+    await db.commit()
+    await db.refresh(new_dream)
+
+    return {
+        "status": "success",
+        "dream": {
+            "id": str(new_dream.id),
+            "character_id": str(new_dream.character_id),
+            "character_name": char.name,
+            "dream_realm_title": new_dream.dream_realm_title,
+            "surreal_atmosphere": new_dream.surreal_atmosphere,
+            "dream_narrative": new_dream.dream_narrative,
+            "shared_secret_unlocked": new_dream.shared_secret_unlocked,
+            "morning_after_message": new_dream.morning_after_message,
+            "created_at": new_dream.created_at.strftime("%b %d, %Y - %I:%M %p") if new_dream.created_at else ""
+        }
+    }
+
+
+# ==========================================
+# 🎭 3. JEALOUSY & RIVALRY CONFRONTATION DRAMA
+# ==========================================
+class ResolveConfrontationRequest(BaseModel):
+    choice_key: str
+    choice_action: str
+
+@app.get("/api/v1/stories/{story_id}/jealousy-heatmap")
+async def get_story_jealousy_heatmap(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = list(chars_res.scalars().all())
+    if len(chars) < 2:
+        return {
+            "characters_count": len(chars),
+            "message": "Need at least 2 characters in the story for rivalry dynamics.",
+            "tension_heatmap": [],
+            "recent_confrontations": []
+        }
+
+    conf_res = await db.execute(
+        select(models.StoryRivalryConfrontation)
+        .where(models.StoryRivalryConfrontation.story_id == story_id)
+        .order_by(models.StoryRivalryConfrontation.created_at.desc())
+        .limit(5)
+    )
+    confs = list(conf_res.scalars().all())
+
+    heatmap = []
+    for i in range(len(chars)):
+        for j in range(i + 1, len(chars)):
+            c1, c2 = chars[i], chars[j]
+            diff = abs((c1.intimacy_score or 50) - (c2.intimacy_score or 50))
+            tension = min(95, max(45, 60 + diff // 2))
+            heatmap.append({
+                "char1": c1.name,
+                "char2": c2.name,
+                "tension_score": tension,
+                "dynamic": "Unspoken Attention Rivalry" if diff > 15 else "Protective Longing & Watching Eyes",
+                "reason": f"{c2.name} is acutely aware of the time and promises given to {c1.name}."
+            })
+
+    return {
+        "characters_count": len(chars),
+        "tension_heatmap": heatmap,
+        "recent_confrontations": [
+            {
+                "id": str(c.id),
+                "event_title": c.event_title,
+                "tension_score": c.tension_score,
+                "opening_situation": c.opening_situation,
+                "resolved_choice": c.resolved_choice,
+                "resolution_narrative": c.resolution_narrative,
+                "created_at": c.created_at.strftime("%b %d, %I:%M %p") if c.created_at else ""
+            }
+            for c in confs
+        ]
+    }
+
+@app.post("/api/v1/stories/{story_id}/jealousy-confrontation")
+async def trigger_jealousy_confrontation(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars = list(chars_res.scalars().all())
+    if len(chars) < 2:
+        raise HTTPException(status_code=400, detail="Story must have at least 2 characters for confrontation drama")
+
+    chars_data = [
+        {
+            "id": str(c.id),
+            "name": c.name,
+            "role": c.role,
+            "personality": c.personality,
+            "intimacy_score": c.intimacy_score or 50,
+            "relationship_status": c.relationship_status or "Close"
+        }
+        for c in chars
+    ]
+
+    conf_data = await llm_service.generate_jealousy_rivalry_confrontation(
+        story_title=story.title,
+        story_summary=story.story_summary or "",
+        characters=chars_data
+    )
+
+    primary_name = conf_data.get("primary_character_name", chars[0].name)
+    rival_name = conf_data.get("rival_character_name", chars[1].name)
+    primary_char = next((c for c in chars if c.name.lower() in primary_name.lower()), chars[0])
+    rival_char = next((c for c in chars if c.name.lower() in rival_name.lower()), chars[1])
+
+    new_conf = models.StoryRivalryConfrontation(
+        story_id=story_id,
+        primary_character_id=primary_char.id,
+        rival_character_id=rival_char.id,
+        event_title=conf_data.get("event_title", "Tension in the Hallway"),
+        tension_score=conf_data.get("tension_score", 80),
+        opening_situation=conf_data.get("opening_situation", ""),
+        dialogue_turns_json=json.dumps(conf_data.get("dialogue_turns", [])),
+        choices_json=json.dumps(conf_data.get("choices", []))
+    )
+    db.add(new_conf)
+    await db.commit()
+    await db.refresh(new_conf)
+
+    return {
+        "status": "success",
+        "confrontation": {
+            "id": str(new_conf.id),
+            "event_title": new_conf.event_title,
+            "tension_score": new_conf.tension_score,
+            "primary_character_name": primary_char.name,
+            "rival_character_name": rival_char.name,
+            "primary_avatar": getattr(primary_char, "avatar_base64", None),
+            "rival_avatar": getattr(rival_char, "avatar_base64", None),
+            "opening_situation": new_conf.opening_situation,
+            "dialogue_turns": json.loads(new_conf.dialogue_turns_json),
+            "choices": json.loads(new_conf.choices_json),
+            "created_at": new_conf.created_at.strftime("%b %d, %I:%M %p") if new_conf.created_at else ""
+        }
+    }
+
+@app.post("/api/v1/confrontations/{confrontation_id}/resolve")
+async def resolve_confrontation_endpoint(confrontation_id: uuid.UUID, req: ResolveConfrontationRequest, db: AsyncSession = Depends(get_db)):
+    conf = await db.get(models.StoryRivalryConfrontation, confrontation_id)
+    if not conf:
+        raise HTTPException(status_code=404, detail="Confrontation not found")
+    
+    primary_char = await db.get(models.Character, conf.primary_character_id) if conf.primary_character_id else None
+    rival_char = await db.get(models.Character, conf.rival_character_id) if conf.rival_character_id else None
+    primary_name = primary_char.name if primary_char else "Primary Character"
+    rival_name = rival_char.name if rival_char else "Rival Character"
+
+    resolution = await llm_service.resolve_jealousy_confrontation(
+        user_choice_key=req.choice_key,
+        user_choice_action=req.choice_action,
+        primary_char=primary_name,
+        rival_char=rival_name,
+        event_data={
+            "event_title": conf.event_title,
+            "opening_situation": conf.opening_situation
+        }
+    )
+
+    conf.resolved_choice = f"[{req.choice_key}] {req.choice_action}"
+    conf.resolution_narrative = resolution
+
+    mem = models.StoryNarrativeMemory(
+        story_id=conf.story_id,
+        character_id=conf.primary_character_id,
+        source="confrontation_resolution",
+        character_name=f"{primary_name} & {rival_name}",
+        event_summary=f"[CONFRONTATION: {conf.event_title}] Navigated jealousy drama between {primary_name} and {rival_name}. Choice made: {req.choice_action}",
+        emotional_impact="Reaffirmed mutual trust and diffused unspoken rivalry",
+        is_pinned=True
+    )
+    db.add(mem)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "resolved_choice": conf.resolved_choice,
+        "resolution_narrative": resolution
+    }
+
+
+# ==========================================
+# 🏡 4. DOMESTIC BLISS & LIFE AFTER THE STORY
+# ==========================================
+class DomesticBlissGenerateRequest(BaseModel):
+    category: Optional[str] = "morning_kitchen"
+
+@app.get("/api/v1/characters/{character_id}/domestic-bliss")
+async def get_character_domestic_bliss(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterDomesticBlissVignette)
+        .where(models.CharacterDomesticBlissVignette.character_id == character_id)
+        .order_by(models.CharacterDomesticBlissVignette.created_at.desc())
+    )
+    vignettes = res.scalars().all()
+    return [
+        {
+            "id": str(v.id),
+            "character_id": str(v.character_id),
+            "category": v.category,
+            "vignette_title": v.vignette_title,
+            "story_narrative": v.story_narrative,
+            "sweet_dialogue": v.sweet_dialogue,
+            "interactive_activity": v.interactive_activity,
+            "bliss_sentiment": v.bliss_sentiment,
+            "created_at": v.created_at.strftime("%b %d, %Y - %I:%M %p") if v.created_at else ""
+        }
+        for v in vignettes
+    ]
+
+@app.post("/api/v1/characters/{character_id}/domestic-bliss/generate")
+async def generate_character_domestic_bliss(character_id: uuid.UUID, req: DomesticBlissGenerateRequest, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    story = None
+    story_summary = ""
+    if char.story_id:
+        story = await db.get(models.Story, char.story_id)
+        if story:
+            story_summary = story.story_summary or ""
+
+    category = req.category or "morning_kitchen"
+    data = await llm_service.generate_domestic_bliss_vignette(
+        character_name=char.name,
+        persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+        category=category,
+        intimacy_score=char.intimacy_score or 80,
+        story_summary=story_summary
+    )
+
+    new_v = models.CharacterDomesticBlissVignette(
+        character_id=char.id,
+        story_id=char.story_id,
+        category=category,
+        vignette_title=data.get("vignette_title", "Morning Sunlight"),
+        story_narrative=data.get("story_narrative", ""),
+        sweet_dialogue=data.get("sweet_dialogue", ""),
+        interactive_activity=data.get("interactive_activity", ""),
+        bliss_sentiment=data.get("bliss_sentiment", "Domestic sweetness")
+    )
+    db.add(new_v)
+    await db.commit()
+    await db.refresh(new_v)
+
+    return {
+        "status": "success",
+        "vignette": {
+            "id": str(new_v.id),
+            "character_id": str(new_v.character_id),
+            "category": new_v.category,
+            "vignette_title": new_v.vignette_title,
+            "story_narrative": new_v.story_narrative,
+            "sweet_dialogue": new_v.sweet_dialogue,
+            "interactive_activity": new_v.interactive_activity,
+            "bliss_sentiment": new_v.bliss_sentiment,
+            "created_at": new_v.created_at.strftime("%b %d, %Y - %I:%M %p") if new_v.created_at else ""
+        }
+    }
+
+
 if __name__ == "__main__":
+
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

@@ -6,6 +6,9 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../api.dart';
 import '../widgets/private_whispers_sheet.dart';
 import '../widgets/character_memory_vault_sheet.dart';
+import '../widgets/vintage_mailbox_sheet.dart';
+import '../widgets/shared_dream_sheet.dart';
+import '../widgets/domestic_bliss_sheet.dart';
 
 class CharacterLoungeScreen extends StatefulWidget {
   const CharacterLoungeScreen({super.key});
@@ -425,6 +428,68 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
                     ),
                   ),
                 ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Action Button Row 5: Mailbox, Dreamworld & Domestic Bliss
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => VintageMailboxSheet.show(
+                      context,
+                      characterId: char['id'].toString(),
+                      characterName: name,
+                      avatarBase64: char['avatar_base64']?.toString(),
+                    ),
+                    icon: const Icon(Icons.markunread_mailbox, size: 14, color: Colors.amber),
+                    label: const Text('📬 Mailbox', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber.shade900.withValues(alpha: 0.25),
+                      side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => SharedDreamSheet.show(
+                      context,
+                      characterId: char['id'].toString(),
+                      characterName: name,
+                      avatarBase64: char['avatar_base64']?.toString(),
+                    ),
+                    icon: const Icon(Icons.nightlight_round, size: 14, color: Colors.purpleAccent),
+                    label: const Text('🌙 Dream', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple.shade900.withValues(alpha: 0.25),
+                      side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => DomesticBlissSheet.show(
+                      context,
+                      characterId: char['id'].toString(),
+                      characterName: name,
+                      avatarBase64: char['avatar_base64']?.toString(),
+                    ),
+                    icon: const Icon(Icons.cottage, size: 14, color: Colors.orangeAccent),
+                    label: const Text('🏡 Bliss', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepOrange.shade900.withValues(alpha: 0.25),
+                      side: BorderSide(color: Colors.orangeAccent.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
               ],
             ),
           ],

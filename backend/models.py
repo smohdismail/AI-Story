@@ -279,3 +279,62 @@ class ChapterReaction(Base):
     emoji = Column(String, default="🔥")
     reaction_text = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterMailboxLetter(Base):
+    __tablename__ = "character_mailbox_letters"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    sender_name = Column(String)
+    parchment_style = Column(String, default="vintage_cream")
+    wax_seal_color = Column(String, default="crimson")
+    letter_content = Column(Text)
+    clipped_keepsake = Column(String, nullable=True)
+    polaroid_caption = Column(String, nullable=True)
+    polaroid_image = Column(Text, nullable=True)
+    is_opened = Column(Boolean, default=False)
+    user_reply = Column(Text, nullable=True)
+    reply_crest = Column(String, nullable=True)
+    reply_stationery = Column(String, nullable=True)
+    character_reply_reaction = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterSharedDream(Base):
+    __tablename__ = "character_shared_dreams"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    dream_realm_title = Column(String)
+    surreal_atmosphere = Column(Text)
+    dream_narrative = Column(Text)
+    shared_secret_unlocked = Column(Text)
+    morning_after_message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class StoryRivalryConfrontation(Base):
+    __tablename__ = "story_rivalry_confrontations"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    primary_character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True)
+    rival_character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True)
+    event_title = Column(String)
+    tension_score = Column(Integer, default=50)
+    opening_situation = Column(Text)
+    dialogue_turns_json = Column(Text)
+    choices_json = Column(Text)
+    resolved_choice = Column(Text, nullable=True)
+    resolution_narrative = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterDomesticBlissVignette(Base):
+    __tablename__ = "character_domestic_bliss_vignettes"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    category = Column(String)
+    vignette_title = Column(String)
+    story_narrative = Column(Text)
+    sweet_dialogue = Column(Text)
+    interactive_activity = Column(String, nullable=True)
+    bliss_sentiment = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

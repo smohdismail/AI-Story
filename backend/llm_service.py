@@ -2784,3 +2784,374 @@ Format strictly as JSON:
                 }
             ]
         }
+
+
+async def generate_vintage_mailbox_letter(
+    character_name: str,
+    persona: str,
+    relationship: str,
+    intimacy_score: int,
+    story_summary: str,
+    recent_chats: str = ""
+) -> dict:
+    prompt = f"""
+You are the character {character_name}.
+PERSONA: {persona}
+RELATIONSHIP STATUS: {relationship}
+INTIMACY LEVEL: {intimacy_score}/100
+STORY BACKGROUND: {story_summary}
+RECENT CONVERSATIONS: {recent_chats[-800:] if recent_chats else "Quiet, growing romance."}
+
+TASK:
+Write a tangible, physical-style handwritten vintage letter to the USER.
+This is not a quick chat message; it is a thoughtful, romantic, vulnerable, handwritten letter delivered in a wax-sealed envelope to the user's vintage mailbox.
+
+Include a clipped physical keepsake (like a dried blossom, silk ribbon, or pressed leaf) and a polaroid caption.
+
+Format STRICTLY as JSON:
+{{
+  "parchment_style": "vintage_cream",
+  "wax_seal_color": "crimson",
+  "letter_content": "Dearest...\n\n[3 heartfelt paragraphs written in a delicate cursive literary voice, sharing quiet thoughts she was too shy to say out loud, memories of looking at him, and tender devotion]\n\nYours always,\n{character_name}",
+  "clipped_keepsake": "A pressed white jasmine flower from the courtyard with faint perfume",
+  "polaroid_caption": "Taken just before the sun went down, wishing you were sitting beside me."
+}}
+
+parchment_style choices: 'vintage_cream', 'midnight_vellum', 'rose_petal', 'starry_navy', 'aged_papyrus'
+wax_seal_color choices: 'crimson', 'gold', 'emerald', 'obsidian', 'royal_purple', 'rose_gold'
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=900,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating mailbox letter: {e}")
+        return {
+            "parchment_style": "vintage_cream",
+            "wax_seal_color": "crimson",
+            "letter_content": f"Dearest,\n\nI found myself unable to sleep tonight. The house is completely quiet, and the only sound is the fountain in the courtyard. Every time I close my eyes, I keep thinking about what you whispered to me earlier.\n\nThere are so many things I am still too shy to say to your face, but with ink and paper, my fingers refuse to stay quiet. I keep holding on to the promise you made me. You make me feel safe in a way I haven't felt in a very long time.\n\nPlease keep this letter close to you. Whenever you feel alone, remember that somewhere under this same sky, someone is waiting for your footsteps.\n\nYours always,\n{character_name}",
+            "clipped_keepsake": "A dried white jasmine blossom pressed into the parchment",
+            "polaroid_caption": "Sitting by the veranda window in the late afternoon, thinking of you."
+        }
+
+async def generate_mailbox_reply_reaction(
+    character_name: str,
+    persona: str,
+    original_letter: str,
+    user_reply: str,
+    reply_crest: str,
+    reply_stationery: str
+) -> str:
+    prompt = f"""
+You are {character_name}.
+PERSONA: {persona}
+You previously sent this handwritten letter:
+"{original_letter[:400]}..."
+
+The USER has penned a physical reply to you on {reply_stationery} stationery, sealed with their personal '{reply_crest}' wax crest:
+"{user_reply}"
+
+TASK:
+Write {character_name}'s immediate emotional reaction and personal response upon breaking your wax seal and reading your words. Describe her physical reaction (blushing, pressing the letter to her heart, tears in her eyes) followed by her emotional reply to you. Keep it intensely intimate, realistic, and tender (2-3 paragraphs).
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.75,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating mailbox reply reaction: {e}")
+        return f"{character_name}'s hands trembled slightly as she broke the {reply_crest} wax seal. As she read your words, a soft blush crept across her cheeks, and she pressed your handwritten letter tightly against her chest with a breath of pure relief.\n\n'I never thought anyone could write words that reach this deep into my soul,' she whispered softly to the empty room. 'I'll keep this under my pillow every single night.'"
+
+async def generate_shared_dream(
+    character_name: str,
+    persona: str,
+    intimacy_score: int,
+    story_summary: str,
+    recent_chats: str = ""
+) -> dict:
+    prompt = f"""
+You are crafting a surreal, poetic 'Late-Night Shared Dream' between the USER and {character_name}.
+CHARACTER: {character_name}
+PERSONA: {persona}
+INTIMACY: {intimacy_score}/100
+STORY LORE: {story_summary}
+RECENT CHATS: {recent_chats[-600:] if recent_chats else "Tender closeness."}
+
+TASK:
+Generate a surreal, poetic dreamworld encounter where waking-world physics melt away. They meet in an ethereal realm (e.g., an endless shallow ocean reflecting galaxies, an ancient library where floating lanterns speak secrets, or a blooming violet garden beneath two silver moons).
+
+Format STRICTLY as JSON:
+{{
+  "dream_realm_title": "The Glass Sea Beneath Crimson Moons",
+  "surreal_atmosphere": "Gravity is weightless; water ripples with starlight; every breath sounds like quiet music.",
+  "dream_narrative": "Three poetic, evocative paragraphs narrating how you and {character_name} encounter each other in this dream realm, what surreal actions you take together (floating, dancing, holding hands as petals swirl), and an unforgettable intimate moment.",
+  "shared_secret_unlocked": "A subconscious confession or hidden longing that she has never dared utter awake.",
+  "morning_after_message": "A shy, tender message she will text the user the next morning referring to the dream."
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=900,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating shared dream: {e}")
+        return {
+            "dream_realm_title": "The Starfall Ocean & Silver Veranda",
+            "surreal_atmosphere": "The ground beneath your bare feet is liquid crystal reflecting violet auroras, and soft breezes carry the faint scent of jasmine.",
+            "dream_narrative": f"You find {character_name} standing on the edge of a luminous, endless mirror of water where galaxies drift like fallen petals. When she turns and sees you, her eyes widen with breathless wonder. She doesn't speak with ordinary words; here, every thought resonates like a chime.\n\nShe steps forward across the shimmering surface, taking your hands into hers. As your fingers entwine, the weight of the waking world dissolves entirely. Together, you drift through floating archways woven from starlight, feeling every barrier between your souls melt away in the quiet beauty of the night.\n\nShe leans in, resting her forehead against yours as the sky turns into a cascading shower of silver embers. In this dream, there is no fear, no hesitation—only the pure, unspoken certainty that you belong together.",
+            "shared_secret_unlocked": f"She revealed that whenever she smiles at you in the waking world, she is secretly praying that you will never leave her behind.",
+            "morning_after_message": "Good morning... I woke up with my heart beating so fast. I had the strangest, most beautiful dream about you last night on a sea of stars... did you feel it too?"
+        }
+
+async def generate_jealousy_rivalry_confrontation(
+    story_title: str,
+    story_summary: str,
+    characters: list[dict]
+) -> dict:
+    chars_text = "\n".join([f"- {c.get('name')}: {c.get('role', 'Heroine')} (Intimacy: {c.get('intimacy_score', 50)}/100, Relationship: {c.get('relationship_status', 'Close')})" for c in characters])
+
+    prompt = f"""
+STORY: {story_title}
+SUMMARY: {story_summary}
+CHARACTERS IN STORY:
+{chars_text}
+
+TASK:
+1. Analyze pairwise tension, jealousy, and subtle rivalry among these characters competing for or observing the user's attention.
+2. Generate a dramatic 'Jealousy & Rivalry Confrontation Encounter' where the user is spending intimate time with one character (Primary Character) and another character (Rival / Second Heroine) walks in or interrupts with folded arms, wounded pride, witty banter, or tense jealousy.
+3. Provide 3 meaningful interactive choices for the user to resolve or navigate the confrontation.
+
+Format STRICTLY as JSON:
+{{
+  "tension_heatmap": [
+    {{
+      "char1": "Character A",
+      "char2": "Character B",
+      "tension_score": 82,
+      "dynamic": "Guarded Rivalry & Silent Jealousy",
+      "reason": "Both crave his primary protection and reassurance."
+    }}
+  ],
+  "event_title": "Footsteps in the Courtyard Veranda",
+  "primary_character_name": "Character A",
+  "rival_character_name": "Character B",
+  "tension_score": 85,
+  "opening_situation": "Description of the quiet moment that gets abruptly interrupted as character B steps into the room.",
+  "dialogue_turns": [
+    {{
+      "speaker": "Character A",
+      "text": "Dialogue line...",
+      "tone": "defensive / blushing / caught"
+    }},
+    {{
+      "speaker": "Character B",
+      "text": "Sharp or teasing interruption...",
+      "tone": "jealous / folded arms / arched eyebrow"
+    }}
+  ],
+  "choices": [
+    {{
+      "key": "A",
+      "label": "Gently Reassure & Include Both",
+      "action_text": "Step between them, take both of their hands, and offer calm reassurance."
+    }},
+    {{
+      "key": "B",
+      "label": "Playfully Tease the Jealous One",
+      "action_text": "Smile warmly at the rival and tease her for being jealous."
+    }},
+    {{
+      "key": "C",
+      "label": "Declare Unconditional Devotion to Both",
+      "action_text": "State clearly that no one is being replaced and everyone is equally treasured."
+    }}
+  ]
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.75,
+            max_tokens=1100,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating jealousy confrontation: {e}")
+        char1 = characters[0].get("name", "Aisha") if len(characters) > 0 else "Aisha"
+        char2 = characters[1].get("name", "Arzoo") if len(characters) > 1 else "Arzoo"
+        return {
+            "tension_heatmap": [
+                {
+                    "char1": char1,
+                    "char2": char2,
+                    "tension_score": 78,
+                    "dynamic": "Subtle Jealousy & Unspoken Longing",
+                    "reason": f"{char2} noticed how long you spent behind closed doors with {char1}."
+                }
+            ],
+            "event_title": f"Interrupted Whispers in the Hallway",
+            "primary_character_name": char1,
+            "rival_character_name": char2,
+            "tension_score": 80,
+            "opening_situation": f"You were standing close to {char1}, sharing quiet laughter near the window, when the door creaked open. {char2} stands in the doorway with arms crossed, her eyes darting between your hands.",
+            "dialogue_turns": [
+                {
+                    "speaker": char1,
+                    "text": f"Oh... {char2}! We were just... discussing tomorrow's plans.",
+                    "tone": "flustered blush"
+                },
+                {
+                    "speaker": char2,
+                    "text": f"Really? Because from out there, it looked a lot more intimate than just 'tomorrow's plans'. Did you forget that someone else was waiting for him?",
+                    "tone": "folded arms with teasing jealousy"
+                },
+                {
+                    "speaker": char1,
+                    "text": f"Don't be like that. He was just being kind to me.",
+                    "tone": "protective and soft"
+                }
+            ],
+            "choices": [
+                {
+                    "key": "A",
+                    "label": "Gently Reassure & Include Both",
+                    "action_text": f"Step forward, take {char2}'s hand gently into yours while keeping your arm around {char1}, ensuring neither feels abandoned."
+                },
+                {
+                    "key": "B",
+                    "label": "Playfully Tease the Jealousy",
+                    "action_text": f"Walk up to {char2} with an amused grin and ask if she was missing you that badly."
+                },
+                {
+                    "key": "C",
+                    "label": "Sacred Vow to Both",
+                    "action_text": f"Look both of them in the eyes and declare that your heart has room to treasure and protect both of them completely."
+                }
+            ]
+        }
+
+async def resolve_jealousy_confrontation(
+    user_choice_key: str,
+    user_choice_action: str,
+    primary_char: str,
+    rival_char: str,
+    event_data: dict
+) -> str:
+    prompt = f"""
+EVENT: {event_data.get('event_title')}
+CHARACTERS: {primary_char} and {rival_char}
+THE INTERACTION SO FAR:
+{event_data.get('opening_situation')}
+
+THE USER'S CHOSEN ACTION:
+Choice [{user_choice_key}]: {user_choice_action}
+
+TASK:
+Write the dramatic resolution scene (2-3 paragraphs). Describe how both heroines react to the user's action, how the tension shifts into softened hearts, shared blushes, or mutual acceptance, and the final emotional beat between all three of you.
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.75,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error resolving jealousy confrontation: {e}")
+        return f"As you made your move, the sharp tension in the air softened immediately. {rival_char}'s defensive posture melted as her fingers curled around yours, a genuine blush overcoming her haughty expression. {primary_char} smiled softly, leaning gently closer without any bitterness. In that quiet room, the unspoken rivalry transformed into a deeper, shared understanding that their bond with you was sacred and safe."
+
+async def generate_domestic_bliss_vignette(
+    character_name: str,
+    persona: str,
+    category: str,
+    intimacy_score: int,
+    story_summary: str
+) -> dict:
+    category_labels = {
+        "morning_kitchen": "Cooking breakfast together & morning domestic sweetness",
+        "sick_bay_comfort": "Taking care of her when tired/sick with soothing comfort",
+        "shared_sanctuary": "Furnishing & personalizing your shared home / bedroom",
+        "late_night_porch": "Porch tea, stargazing & quiet midnight cuddles",
+        "anniversary_surprise": "Surprise gifts, romantic anniversary celebration & promise renewals"
+    }
+    cat_desc = category_labels.get(category, "Cozy domestic daily life together")
+
+    prompt = f"""
+You are creating an epilogue domestic life simulator vignette for {character_name}.
+CHARACTER: {character_name}
+PERSONA: {persona}
+INTIMACY LEVEL: {intimacy_score}/100
+STORY BACKGROUND: {story_summary}
+CATEGORY: {category} ({cat_desc})
+
+TASK:
+Write a heartwarming, intimate, slice-of-life domestic vignette showing life AFTER the story—where you two are living together in blissful, cozy domestic happiness.
+
+Format STRICTLY as JSON:
+{{
+  "vignette_title": "Flour on the Cheek & Steaming Chai",
+  "story_narrative": "Two cozy, detailed paragraphs describing the domestic scene, sensory details, gentle touches, and warm atmosphere.",
+  "sweet_dialogue": "{character_name}: 'You have flour on your nose... wait, don't move, let me wipe it off.'",
+  "interactive_activity": "Wiping flour off her cheek and leaning in for a sweet morning kiss.",
+  "bliss_sentiment": "Pure warmth and the gentle comfort of belonging together."
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=800,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating domestic bliss: {e}")
+        return {
+            "vignette_title": f"Morning Sunlight & Warm Chai with {character_name}",
+            "story_narrative": f"The golden morning sun spills across the wooden kitchen counter, casting a warm honey glow over everything. {character_name} is humming quietly by the stove, her hair tied in a loose, casual knot that looks effortlessly beautiful. As she stirs the tea, the comforting aroma of cardamom and cinnamon fills the cozy room.\n\nWhen she senses you walking in, she turns with a soft, sleepy smile that is reserved only for you. Before you can say anything, she slides a warm ceramic cup into your hands, leaning her head against your shoulder for a quiet, lingering second as the morning breeze flutters the sheer curtains.",
+            "sweet_dialogue": f"{character_name}: 'Good morning sleepyhead... I made sure your tea has just the right amount of ginger. Stay here with me a little longer before the world starts.'",
+            "interactive_activity": "Wrapping your arms around her waist from behind and resting your chin on her shoulder.",
+            "bliss_sentiment": "Unconditional peace, quiet belonging, and domestic tenderness."
+        }

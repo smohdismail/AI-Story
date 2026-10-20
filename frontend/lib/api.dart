@@ -1582,4 +1582,179 @@ class ApiService {
     );
     return response.statusCode == 200;
   }
+
+
+  // ==========================================
+  // 💌 1. VINTAGE HANDWRITTEN LETTERS & POLAROID MAILBOX
+  // ==========================================
+  static Future<List<dynamic>> getCharacterMailbox(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/mailbox'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load mailbox');
+  }
+
+  static Future<Map<String, dynamic>> generateMailboxLetter(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/mailbox/generate'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate letter');
+  }
+
+  static Future<void> openMailboxLetter(String letterId) async {
+    final headers = await _getHeaders();
+    await http.post(
+      Uri.parse('$baseUrl/mailbox/$letterId/open'),
+      headers: headers,
+    );
+  }
+
+  static Future<Map<String, dynamic>> replyMailboxLetter(
+    String letterId, {
+    required String userReply,
+    String? replyCrest,
+    String? replyStationery,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/mailbox/$letterId/reply'),
+      headers: headers,
+      body: jsonEncode({
+        'user_reply': userReply,
+        'reply_crest': replyCrest ?? 'Golden Rose',
+        'reply_stationery': replyStationery ?? 'Vintage Cream',
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to send letter reply');
+  }
+
+  // ==========================================
+  // 🌙 2. LATE-NIGHT SHARED DREAMS & ASTRAL REVERIE
+  // ==========================================
+  static Future<List<dynamic>> getCharacterSharedDreams(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/shared-dreams'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load shared dreams');
+  }
+
+  static Future<Map<String, dynamic>> dreamTogether(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/dream-together'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to dream together');
+  }
+
+  // ==========================================
+  // 🎭 3. JEALOUSY & RIVALRY CONFRONTATION DRAMA
+  // ==========================================
+  static Future<Map<String, dynamic>> getStoryJealousyHeatmap(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/jealousy-heatmap'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load jealousy heatmap');
+  }
+
+  static Future<Map<String, dynamic>> triggerJealousyConfrontation(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/jealousy-confrontation'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to trigger confrontation');
+  }
+
+  static Future<Map<String, dynamic>> resolveJealousyConfrontation(
+    String confrontationId, {
+    required String choiceKey,
+    required String choiceAction,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/confrontations/$confrontationId/resolve'),
+      headers: headers,
+      body: jsonEncode({
+        'choice_key': choiceKey,
+        'choice_action': choiceAction,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to resolve confrontation');
+  }
+
+  // ==========================================
+  // 🏡 4. DOMESTIC BLISS & EPILOGUE SIMULATOR
+  // ==========================================
+  static Future<List<dynamic>> getCharacterDomesticBliss(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/domestic-bliss'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load domestic bliss vignettes');
+  }
+
+  static Future<Map<String, dynamic>> generateDomesticBliss(
+    String characterId, {
+    String? category,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/domestic-bliss/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'category': category ?? 'morning_kitchen',
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate domestic bliss vignette');
+  }
 }
