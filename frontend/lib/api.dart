@@ -65,42 +65,67 @@ class ApiService {
     return null;
   }
 
+  static String extractErrorMessage(String responseBody, String defaultMsg) {
+    try {
+      final decoded = jsonDecode(responseBody);
+      if (decoded is Map && decoded['detail'] != null) {
+        if (decoded['detail'] is List) {
+          return (decoded['detail'] as List).map((e) => e['msg'] ?? e.toString()).join(', ');
+        }
+        return decoded['detail'].toString();
+      }
+    } catch (_) {}
+    return defaultMsg;
+  }
+
   static Future<Map<String, dynamic>> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {'username': username, 'password': password},
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to login: ${response.body}');
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/login'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {'username': username, 'password': password},
+      ).timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(extractErrorMessage(response.body, 'Failed to login (${response.statusCode})'));
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Network error: ${e.message}. If the server was sleeping, please wait a moment and retry.');
     }
   }
 
   static Future<Map<String, dynamic>> loginWithGoogle(String idToken) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/google'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'id_token': idToken}),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to login with Google: ${response.body}');
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/google'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_token': idToken}),
+      ).timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(extractErrorMessage(response.body, 'Failed to login with Google (${response.statusCode})'));
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Network error: ${e.message}. If the server was sleeping, please wait a moment and retry.');
     }
   }
 
   static Future<Map<String, dynamic>> register(String username, String email, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'email': email, 'password': password}),
-    );
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to register: ${response.body}');
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'email': email, 'password': password}),
+      ).timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(extractErrorMessage(response.body, 'Failed to register (${response.statusCode})'));
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Network error: ${e.message}. If the server was sleeping, please wait a moment and retry.');
     }
   }
 

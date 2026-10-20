@@ -20,27 +20,66 @@ class _AuthScreenState extends State<AuthScreen> {
   final _passwordController = TextEditingController();
 
   Future<void> _submit() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+    final email = _emailController.text.trim();
+
+    if (username.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter both your username and password.')),
+      );
+      return;
+    }
+    if (!_isLogin && email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email to register.')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
-        final data = await ApiService.login(
-          _usernameController.text.trim(),
-          _passwordController.text,
-        );
+        final data = await ApiService.login(username, password);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', data['access_token']);
         if (mounted) context.go('/');
       } else {
-        await ApiService.register(
-          _usernameController.text.trim(),
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registration successful! Please log in.')));
-        setState(() => _isLogin = true);
+        await ApiService.register(username, email, password);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! Please log in with your credentials.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          setState(() => _isLogin = true);
+        }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        final rawMsg = e.toString().replaceFirst('Exception: ', '');
+        if (rawMsg.contains('User account not found')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Account not found. Would you like to register?'),
+              backgroundColor: Colors.orange.shade800,
+              action: SnackBarAction(
+                label: 'Register',
+                textColor: Colors.white,
+                onPressed: () => setState(() => _isLogin = false),
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(rawMsg),
+              backgroundColor: Colors.redAccent.shade700,
+            ),
+          );
+        }
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -127,8 +166,22 @@ class _AuthScreenState extends State<AuthScreen> {
                 ElevatedButton(
                   onPressed: _isLoading ? null : _submit,
                   style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
-                  child: _isLoading ? const CircularProgressIndicator() : Text(_isLogin ? 'Login' : 'Register'),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        )
+                      : Text(_isLogin ? 'Login' : 'Register'),
                 ),
+                if (_isLoading) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Connecting to server...\n(If server was asleep, Render free tier takes ~30s on first request)',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.white60),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () => setState(() => _isLogin = !_isLogin),
