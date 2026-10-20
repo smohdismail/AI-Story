@@ -3452,6 +3452,192 @@ async def distract_character_routine_endpoint(
         "memory_summary": result.get("memory_summary")
     }
 
+
+# ==============================================================
+# PRIVATE WHISPERS (EAVESDROP MODE) & CHARACTER MEMORY VAULT
+# ==============================================================
+
+@app.post("/api/v1/stories/{story_id}/private-whispers")
+async def get_private_whispers_endpoint(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    characters = chars_res.scalars().all()
+    if len(characters) < 2:
+        # Fallback: find any other characters in user stories
+        extra_res = await db.execute(select(models.Character).limit(4))
+        characters = extra_res.scalars().all()
+
+    char_dicts = []
+    for c in characters:
+        char_dicts.append({
+            "name": c.name,
+            "role": c.role or "Lead",
+            "personality": c.personality or "Warm & expressive",
+            "relationship_status": c.relationship_status or "Close to you",
+            "avatar_base64": getattr(c, "avatar_base64", None)
+        })
+
+    # Recent story context from latest chapter or recent chats
+    recent_context = ""
+    latest_chap_res = await db.execute(
+        select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.desc()).limit(1)
+    )
+    latest_chap = latest_chap_res.scalars().first()
+    if latest_chap:
+        recent_context = f"Latest Chapter {latest_chap.chapter_number} ({latest_chap.title}): {latest_chap.summary or (latest_chap.content[:300] if latest_chap.content else '')}"
+
+    whispers = await llm_service.generate_private_whispers(
+        story_title=story.title,
+        characters=char_dicts,
+        recent_context=recent_context,
+        user_name=current_user.username if current_user and current_user.username else "you"
+    )
+
+    # Attach avatar matching
+    dialogue_list = whispers.get("dialogue", [])
+    avatar_map = {c["name"].strip().lower(): c["avatar_base64"] for c in char_dicts if c["name"]}
+    for d in dialogue_list:
+        spk = d.get("speaker", "").strip().lower()
+        d["avatar_base64"] = avatar_map.get(spk)
+
+    return whispers
+
+
+@app.get("/api/v1/characters/{character_id}/memory-vault")
+async def get_character_memory_vault_endpoint(
+    character_id: uuid.UUID,
+    force_refresh: bool = False,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    story = await db.get(models.Story, char.story_id)
+    story_summary = story.story_summary if story else ""
+
+    # Fetch real recorded memories
+    mems_res = await db.execute(
+        select(models.StoryNarrativeMemory)
+        .where(
+            (models.StoryNarrativeMemory.story_id == char.story_id) | 
+            (models.StoryNarrativeMemory.character_id == character_id)
+        )
+        .order_by(models.StoryNarrativeMemory.is_pinned.desc(), models.StoryNarrativeMemory.created_at.desc())
+        .limit(25)
+    )
+    raw_mems = mems_res.scalars().all()
+    mem_texts = [f"[{m.source}] {m.event_summary} (Impact: {m.emotional_impact or 'Meaningful'})" for m in raw_mems]
+
+    # Fetch recent chat history
+    hist_res = await db.execute(
+        select(models.CharacterChat)
+        .where(models.CharacterChat.character_id == character_id)
+        .order_by(models.CharacterChat.created_at.desc())
+        .limit(10)
+    )
+    chat_turns = list(reversed(hist_res.scalars().all()))
+    chat_str = "\n".join([f"{char.name if m.is_ai else 'User'}: {m.message}" for m in chat_turns])
+
+    import datetime as dt
+    if not force_refresh and char.cached_vault_json and char.vault_updated_at:
+        age_seconds = (dt.datetime.utcnow() - char.vault_updated_at).total_seconds()
+        if age_seconds < 7200: # 2 hours
+            try:
+                cached_analysis = json.loads(char.cached_vault_json)
+                return {
+                    "character": {
+                        "id": str(char.id),
+                        "name": char.name,
+                        "role": char.role,
+                        "avatar_base64": getattr(char, "avatar_base64", None),
+                        "intimacy_score": char.intimacy_score or 0,
+                        "passion_level": char.passion_level or 50,
+                        "vulnerability_level": char.vulnerability_level or 30,
+                        "romantic_status": char.romantic_status or "Guarded"
+                    },
+                    "analysis": cached_analysis,
+                    "memories": [
+                        {
+                            "id": str(m.id),
+                            "event_summary": m.event_summary,
+                            "emotional_impact": m.emotional_impact,
+                            "source": m.source,
+                            "is_pinned": bool(m.is_pinned),
+                            "created_at": m.created_at.strftime("%b %d, %I:%M %p") if m.created_at else ""
+                        } for m in raw_mems
+                    ]
+                }
+            except Exception:
+                pass
+
+    char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}\nRelationship status: {char.relationship_status}"
+
+    analysis = await llm_service.analyze_character_memory_vault(
+        character_name=char.name,
+        character_info=char_info,
+        story_summary=story_summary,
+        chat_history=chat_str,
+        intimacy_score=char.intimacy_score or 0,
+        memories=mem_texts
+    )
+
+    char.cached_vault_json = json.dumps(analysis)
+    char.vault_updated_at = dt.datetime.utcnow()
+    await db.commit()
+
+    return {
+        "character": {
+            "id": str(char.id),
+            "name": char.name,
+            "role": char.role,
+            "avatar_base64": getattr(char, "avatar_base64", None),
+            "intimacy_score": char.intimacy_score or 0,
+            "passion_level": char.passion_level or 50,
+            "vulnerability_level": char.vulnerability_level or 30,
+            "romantic_status": char.romantic_status or "Guarded"
+        },
+        "analysis": analysis,
+        "memories": [
+            {
+                "id": str(m.id),
+                "event_summary": m.event_summary,
+                "emotional_impact": m.emotional_impact,
+                "source": m.source,
+                "is_pinned": bool(m.is_pinned),
+                "created_at": m.created_at.strftime("%b %d, %I:%M %p") if m.created_at else ""
+            } for m in raw_mems
+        ]
+    }
+
+
+@app.post("/api/v1/memories/{memory_id}/pin")
+async def pin_memory_endpoint(memory_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    mem = await db.get(models.StoryNarrativeMemory, memory_id)
+    if not mem:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    mem.is_pinned = not bool(mem.is_pinned)
+    await db.commit()
+    return {"status": "success", "is_pinned": mem.is_pinned}
+
+
+@app.delete("/api/v1/memories/{memory_id}")
+async def delete_memory_endpoint(memory_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    mem = await db.get(models.StoryNarrativeMemory, memory_id)
+    if not mem:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    await db.delete(mem)
+    await db.commit()
+    return {"status": "success", "deleted_id": str(memory_id)}
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))

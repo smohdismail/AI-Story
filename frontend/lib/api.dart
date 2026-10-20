@@ -1536,8 +1536,50 @@ class ApiService {
     }
     throw Exception('Failed to send routine distraction');
   }
+
+  static Future<Map<String, dynamic>> getPrivateWhispers(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/private-whispers'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load private whispers');
+  }
+
+  static Future<Map<String, dynamic>> getCharacterMemoryVault(String characterId, {bool forceRefresh = false}) async {
+    final headers = await _getHeaders();
+    final uri = Uri.parse('$baseUrl/characters/$characterId/memory-vault?force_refresh=$forceRefresh');
+    final response = await http.get(uri, headers: headers);
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load character memory vault');
+  }
+
+  static Future<bool> togglePinMemory(String memoryId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/memories/$memoryId/pin'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['is_pinned'] == true;
+    }
+    return false;
+  }
+
+  static Future<bool> deleteMemory(String memoryId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/memories/$memoryId'),
+      headers: headers,
+    );
+    return response.statusCode == 200;
+  }
 }
-
-
-
-

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../api.dart';
+import '../widgets/private_whispers_sheet.dart';
+import '../widgets/character_memory_vault_sheet.dart';
 
 class CharacterLoungeScreen extends StatefulWidget {
   const CharacterLoungeScreen({super.key});
@@ -388,6 +390,42 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
+            ),
+            const SizedBox(height: 8),
+            // Action Button Row 4: Memory Vault & Feelings + Private Whispers
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => CharacterMemoryVaultSheet.show(
+                      context,
+                      characterId: char['id'].toString(),
+                      characterName: name,
+                      avatarBase64: char['avatar_base64']?.toString(),
+                      storyId: char['story_id']?.toString(),
+                    ),
+                    icon: const Icon(Icons.psychology, size: 16, color: Colors.cyanAccent),
+                    label: const Text('🧠 Memory Vault & Feelings', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D2538),
+                      side: const BorderSide(color: Colors.cyanAccent, width: 1.0),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                if (char['story_id'] != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: () => PrivateWhispersSheet.show(context, char['story_id'].toString()),
+                    icon: const Icon(Icons.record_voice_over, color: Colors.purpleAccent, size: 18),
+                    tooltip: 'Eavesdrop Whispers',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.purple.withValues(alpha: 0.18),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

@@ -97,6 +97,8 @@ class Character(Base):
     wardrobe_json = Column(Text, default="[]") # JSON array of saved outfits
     cached_routine_json = Column(Text, nullable=True) # 24-Hour live ambient routine snapshot
     routine_updated_at = Column(DateTime, nullable=True)
+    cached_vault_json = Column(Text, nullable=True) # Memory Vault & Relationship analysis cache
+    vault_updated_at = Column(DateTime, nullable=True)
  
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")
@@ -247,10 +249,12 @@ class StoryNarrativeMemory(Base):
     __tablename__ = "story_narrative_memories"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"))
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True)
     source = Column(String)  # 'character_chat', 'group_chat', 'chapter'
     character_name = Column(String, nullable=True)
     event_summary = Column(Text)
     emotional_impact = Column(String, nullable=True)
+    is_pinned = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class CharacterVoicemail(Base):

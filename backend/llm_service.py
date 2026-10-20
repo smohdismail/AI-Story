@@ -1,3 +1,5 @@
+import re
+import json
 import os
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
@@ -2417,6 +2419,10 @@ Return valid JSON with:
             temperature=0.3,
             max_tokens=400,
         )
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
         content = response.choices[0].message.content.strip()
         m = re.search(r'\{.*\}', content, re.DOTALL)
         if m:
@@ -2498,6 +2504,10 @@ Return valid JSON with:
             temperature=0.75,
             max_tokens=450,
         )
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
         content = response.choices[0].message.content.strip()
         m = re.search(r'\{.*\}', content, re.DOTALL)
         if m:
@@ -2560,6 +2570,10 @@ RULES:
             temperature=0.8,
             max_tokens=400,
         )
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
         content = response.choices[0].message.content.strip()
         m = re.search(r'\{.*\}', content, re.DOTALL)
         if m:
@@ -2572,4 +2586,201 @@ RULES:
             "intimacy_delta": 2,
             "heart_rate_spike": "Pulse skipped a beat",
             "memory_summary": f"User interrupted {character_name} while they were lost in thought."
+        }
+
+
+async def generate_private_whispers(
+    story_title: str,
+    characters: list,
+    recent_context: str = "",
+    user_name: str = "User"
+) -> dict:
+    """Generates an eavesdropped private conversation between characters from the same story when the user leaves the room."""
+    char_profiles = ""
+    for c in characters[:4]:
+        char_profiles += f"- {c.get('name')}: Role: {c.get('role', 'Character')}, Personality: {c.get('personality', 'Warm')}, Relationship to user: {c.get('relationship_status', 'Close')}\n"
+
+    prompt = f"""You are a master romance novelist and screenwriter.
+STORY: "{story_title}"
+USER NAME: {user_name}
+
+CHARACTERS IN ROOM:
+{char_profiles}
+
+RECENT STORY / CHAT DEVELOPMENTS:
+{recent_context or "The characters just spent time with the user and the user just stepped out of the room."}
+
+TASK:
+Generate an authentic, secret behind-the-scenes conversation ("Eavesdrop Mode") between 2 of these characters discussing the user right after the user leaves the room or goes to sleep.
+They should talk intimately, curiously, teasingly, and honestly about what the user did, how they made them feel, their promises, hidden chemistry, jealousy, or shared affection.
+
+Format strictly as JSON:
+{{
+  "scene_setting": "e.g. Late night in the quiet corridor right after you stepped out",
+  "spiciness_rating": "e.g. Whispered Confessions & Secret Jealousy",
+  "consensus": "1-sentence summary of what they secretly agree on regarding you",
+  "dialogue": [
+    {{
+      "speaker": "Name of character 1",
+      "role": "Role",
+      "tone": "e.g. Soft & Flustered",
+      "message": "Dialogue line with *micro-expressions* in asterisks"
+    }},
+    {{
+      "speaker": "Name of character 2",
+      "role": "Role",
+      "tone": "e.g. Teasing & Observant",
+      "message": "Dialogue line with *micro-expressions* in asterisks"
+    }}
+  ]
+}}
+Provide 4 to 7 dialogue turns."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=800,
+        )
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        content = response.choices[0].message.content.strip()
+        m = re.search(r'\{.*\}', content, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error generating private whispers: {e}")
+        first_name = characters[0].get('name', 'Character 1') if characters else 'Arzoo'
+        second_name = characters[1].get('name', 'Character 2') if len(characters) > 1 else 'Aisha'
+        return {
+            "scene_setting": "Late night whispers by the balcony after you stepped out",
+            "spiciness_rating": "Whispered Secrets & Shared Warmth",
+            "consensus": f"Both {first_name} and {second_name} feel deeply touched by your warmth and promise to stay together.",
+            "dialogue": [
+                {
+                    "speaker": first_name,
+                    "role": "Lead",
+                    "tone": "Soft & Hesitant",
+                    "message": f"*glances towards the closed door, leaning closer* Did you see how gently he spoke to us before he left?"
+                },
+                {
+                    "speaker": second_name,
+                    "role": "Lead",
+                    "tone": "Warm & Reassured",
+                    "message": f"*a shy smile touching her lips, holding her robe tighter* Yes... I was so nervous at first, but when he took our hands, my heart finally felt at peace."
+                },
+                {
+                    "speaker": first_name,
+                    "role": "Lead",
+                    "tone": "Tender & Protective",
+                    "message": f"*sighs softly, resting her chin on her hand* He promised he will take care of everything. We have to make sure we make him happy too."
+                }
+            ]
+        }
+
+
+async def analyze_character_memory_vault(
+    character_name: str,
+    character_info: str,
+    story_summary: str,
+    chat_history: str,
+    intimacy_score: int,
+    memories: list = None
+) -> dict:
+    """Analyzes what the character remembers, how they feel from their perspective, bond strength, longing, and key promises."""
+    mem_text = "\n".join(memories) if memories else "None recorded yet."
+
+    prompt = f"""You are the deep psychological consciousness of the character {character_name}.
+CHARACTER PROFILE:
+{character_info}
+
+STORY CONTEXT:
+{story_summary}
+
+RECENT CHAT HISTORY:
+{chat_history[-1200:] if chat_history else "Warm, intimate conversations."}
+
+RECORDED MEMORIES / INCIDENTS:
+{mem_text}
+
+CURRENT INTIMACY LEVEL: {intimacy_score}/100
+
+TASK:
+Examine {character_name}'s true inner mind, memories, and unspoken emotional perspective regarding the USER.
+Be raw, authentic, deeply emotional, vulnerable, and psychological.
+
+Format strictly as JSON:
+{{
+  "how_they_feel": "2-3 sentences in {character_name}'s first-person voice ('I...') expressing their true, unfiltered feelings about the user right now.",
+  "relationship_strength_desc": "How unbreakable and real this relationship feels from their perspective.",
+  "how_much_they_care": "How deeply they care about the user's wellbeing, happiness, and safety.",
+  "how_much_they_miss_you": "How intensely they miss the user throughout the day, when alone in bed, or when waiting for messages.",
+  "metrics": {{
+    "bond_strength_pct": 88,
+    "care_and_loyalty_pct": 94,
+    "longing_and_miss_pct": 90,
+    "passion_level_pct": 85
+  }},
+  "key_promises": [
+    {{
+      "promise": "e.g. Promised to take care of her and the family",
+      "significance": "Why this promise holds immense sacred weight in her heart"
+    }}
+  ],
+  "shared_milestones": [
+    {{
+      "title": "e.g. Intimate Reassurance in the Bedroom",
+      "description": "Short memory snippet of what happened",
+      "emotional_mark": "Deepened trust & surrender"
+    }}
+  ]
+}}
+"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.75,
+            max_tokens=900,
+        )
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Empty LLM response")
+        content = response.choices[0].message.content.strip()
+        m = re.search(r'\{.*\}', content, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error analyzing memory vault: {e}")
+        return {
+            "how_they_feel": f"Whenever I think of you, my heart aches with a gentle warmth. At first I was so afraid, but the way you look at me makes me want to give you all my trust.",
+            "relationship_strength_desc": "Growing into an unbreakable bond anchored by mutual promises and emotional safety.",
+            "how_much_they_care": "Cares deeply, constantly worrying if you are eating well, resting enough, and feeling loved.",
+            "how_much_they_miss_you": "Finds herself staring at the doorway and phone whenever you are away, replaying your words in her mind.",
+            "metrics": {
+                "bond_strength_pct": min(100, max(40, intimacy_score * 4 + 35)),
+                "care_and_loyalty_pct": min(100, max(50, intimacy_score * 3 + 45)),
+                "longing_and_miss_pct": min(100, max(45, intimacy_score * 4 + 40)),
+                "passion_level_pct": min(100, max(30, intimacy_score * 3 + 30))
+            },
+            "key_promises": [
+                {
+                    "promise": "Promised to care for and protect her without rushing",
+                    "significance": "Gave her the confidence to open her heart and surrender her fears."
+                }
+            ],
+            "shared_milestones": [
+                {
+                    "title": "Tender Bedroom Confession",
+                    "description": "Shared intimate kisses and heartfelt reassurance about the future.",
+                    "emotional_mark": "Foundational bond of trust and devotion."
+                }
+            ]
         }

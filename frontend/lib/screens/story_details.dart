@@ -17,6 +17,8 @@ import 'audiobook_player_screen.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../widgets/romance_features_dialogs.dart';
 import '../widgets/audio_drama_sheet.dart';
+import '../widgets/private_whispers_sheet.dart';
+import '../widgets/character_memory_vault_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -1384,6 +1386,20 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+          child: ElevatedButton.icon(
+            onPressed: () => PrivateWhispersSheet.show(context, widget.storyId),
+            icon: const Icon(Icons.record_voice_over, color: Colors.purpleAccent, size: 18),
+            label: const Text('Eavesdrop: Private Whispers Behind Your Back 🤫', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              backgroundColor: const Color(0xFF2E1A47),
+              foregroundColor: Colors.purpleAccent,
+              side: const BorderSide(color: Colors.purpleAccent, width: 1.2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
           child: Row(
             children: [
               Expanded(
@@ -1598,7 +1614,15 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                   color: const Color(0xFF221F33),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   onSelected: (val) async {
-                                    if (val == 'studio') {
+                                    if (val == 'vault') {
+                                      CharacterMemoryVaultSheet.show(
+                                        context,
+                                        characterId: char['id'].toString(),
+                                        characterName: charName,
+                                        avatarBase64: avatar?.toString(),
+                                        storyId: widget.storyId,
+                                      );
+                                    } else if (val == 'studio') {
                                       final res = await context.push('/character_image_studio', extra: {
                                         'storyId': widget.storyId,
                                         'existingCharacter': char,
@@ -1625,6 +1649,16 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                     }
                                   },
                                   itemBuilder: (c) => [
+                                    const PopupMenuItem(
+                                      value: 'vault',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.psychology, color: Colors.cyanAccent, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Memory Vault & Feelings'),
+                                        ],
+                                      ),
+                                    ),
                                     const PopupMenuItem(
                                       value: 'studio',
                                       child: Row(
@@ -1717,6 +1751,21 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                   tooltip: 'Wardrobe Closet',
                                   style: IconButton.styleFrom(
                                     backgroundColor: Colors.purple.withValues(alpha: 0.15),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton.filledTonal(
+                                  onPressed: () => CharacterMemoryVaultSheet.show(
+                                    context,
+                                    characterId: char['id'].toString(),
+                                    characterName: charName,
+                                    avatarBase64: avatar?.toString(),
+                                    storyId: widget.storyId,
+                                  ),
+                                  icon: const Icon(Icons.psychology, color: Colors.cyanAccent, size: 18),
+                                  tooltip: 'Character Memory Vault & Feelings',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.cyan.withValues(alpha: 0.15),
                                   ),
                                 ),
                               ],

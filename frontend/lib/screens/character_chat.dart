@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../api.dart';
 import '../widgets/romance_features_dialogs.dart';
+import '../widgets/character_memory_vault_sheet.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -770,6 +771,16 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.psychology, color: Colors.cyanAccent),
+            tooltip: 'Memory Vault & Feelings',
+            onPressed: () => CharacterMemoryVaultSheet.show(
+              context,
+              characterId: widget.characterId,
+              characterName: widget.characterName,
+              avatarBase64: widget.backgroundImage,
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.mic, color: Colors.tealAccent),
             tooltip: 'Midnight Voicemails',
             onPressed: () => CharacterVoicemailsSheet.show(context, {
@@ -781,7 +792,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             icon: const Icon(Icons.more_vert, color: Colors.white),
             tooltip: 'More options',
             onSelected: (String choice) {
-              if (choice == 'Intimacy Unlocks') {
+              if (choice == 'Memory Vault') {
+                CharacterMemoryVaultSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Intimacy Unlocks') {
                 _showIntimacyMilestones();
               } else if (choice == 'Toggle Audio') {
                 _toggleAudio();
@@ -797,6 +815,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             },
             itemBuilder: (BuildContext context) {
               return [
+                const PopupMenuItem(value: 'Memory Vault', child: Row(children: [Icon(Icons.psychology, color: Colors.cyanAccent), SizedBox(width: 8), Text('Memory Vault & Feelings')])),
                 const PopupMenuItem(value: 'Intimacy Unlocks', child: Row(children: [Icon(Icons.stars, color: Colors.pinkAccent), SizedBox(width: 8), Text('Intimacy Unlocks')])),
                 PopupMenuItem(value: 'Toggle Audio', child: Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')),
                 PopupMenuItem(value: 'Toggle Background', child: Text(_showBackgroundImage ? 'Hide Background' : 'Show Background')),
