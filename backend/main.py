@@ -1171,6 +1171,16 @@ async def branch_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return new_story
 
+def get_intimacy_tier_prompt(score: int) -> str:
+    if score < 25:
+        return "You are currently NEUTRAL towards the user. Be polite but guarded."
+    elif score < 50:
+        return "You are FRIENDLY towards the user. Be warm and open."
+    elif score < 75:
+        return "You are ROMANTIC towards the user. Be flirtatious and affectionate."
+    else:
+        return "You are DEVOTED/OBSESSED with the user. Be intensely loyal and deeply in love."
+
 def extract_and_apply_intimacy(text: str, char: models.Character) -> str:
     pattern = re.compile(r'\[\s*(?:S|SYSTEM\s*)?INTIMACY\s*:\s*([+-]?\d+)\s*\]', re.IGNORECASE)
     match = pattern.search(text)
@@ -1182,7 +1192,7 @@ def extract_and_apply_intimacy(text: str, char: models.Character) -> str:
         except Exception:
             pass
     cleaned = pattern.sub('', text)
-    cleaned = re.sub(r'\[[^\]]*INTIMACY[^\]*\]', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'\[.*?INTIMACY.*?\]', '', cleaned, flags=re.IGNORECASE).strip()
     return cleaned
 
 @app.post("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
@@ -1332,9 +1342,11 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
     for msg in chat_history:
         history_str += f"{char.name if msg.is_ai else 'User'}: {msg.message}\n"
         
+    world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == char.story_id))
+    world_items = world_result.scalars().all()
     world_info = "None"
-    if getattr(char.story, 'world_items', None):
-        world_info = "\n".join([f"{w.name} ({w.category}): {w.description}" for w in char.story.world_items])
+    if world_items:
+        world_info = "\n".join([f"{w.name} ({w.category}): {w.description}" for w in world_items])
         
     chapter_chronicle = await get_story_chapter_chronicle(char.story_id, db)
     persistent_mems = await get_story_persistent_memories(char.story_id, db, limit=12)
@@ -1395,12 +1407,16 @@ async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Dep
     for msg in chat_history:
         history_str += f"{char.name if msg.is_ai else 'User'}: {msg.message}\n"
         
+    story_summary = ""
+    if char.story:
+        story_summary = getattr(char.story, 'story_summary', '') or getattr(char.story, 'synopsis', '') or ''
+
     ai_msg = await llm_service.generate_character_thought(
         character_info=f"Name: {char.name}\nPersonality: {char.personality}",
-        story_summary=char.story.synopsis,
+        story_summary=story_summary,
         chat_history=history_str
     )
-    
+    ai_msg = extract_and_apply_intimacy(ai_msg, char)
     chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
     db.add(chat_ai)
     await db.commit()
@@ -1409,20 +1425,87 @@ async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Dep
     return final_res.scalars().all()
 
 @app.post("/api/v1/characters/{character_id}/chat/regenerate", response_model=list[schemas.ChatMessage])
-async def regenerate_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def regenerate_character_chat(character_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
     
-    # Delete the last AI message
     hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()))
-    last_msg = hist_res.scalars().first()
-    if last_msg and last_msg.is_ai:
+    all_msgs = hist_res.scalars().all()
+    if not all_msgs:
+        return []
+        
+    last_msg = all_msgs[0]
+    
+    # If the last message is an AI message, delete it to regenerate
+    if last_msg.is_ai:
         await db.delete(last_msg)
         await db.commit()
-    
-    # Then continue chat
-    return await continue_character_chat(character_id, BackgroundTasks(), db)
+        remaining_msgs = all_msgs[1:]
+    else:
+        remaining_msgs = all_msgs
+        
+    # Find the user message to regenerate a response for
+    last_user_msg = None
+    for m in remaining_msgs:
+        if not m.is_ai:
+            last_user_msg = m
+            break
+            
+    if last_user_msg:
+        story_res = await db.execute(select(models.Story).where(models.Story.id == char.story_id))
+        story = story_res.scalars().first()
+        story_summary = story.story_summary if story else ""
+        char_info = f"Name: {char.name}\nRole: {char.role}\nGender: {char.gender}\nPersonality: {char.personality}\nAppearance: {char.appearance}\nRelationship to you: {char.relationship_status}\nDialogue Style: {char.dialogue_style}"
+        
+        world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == char.story_id))
+        world_items = world_result.scalars().all()
+        world_info = "None"
+        if world_items:
+            world_info = "\n".join([f"{w.name} ({w.category}): {w.description}" for w in world_items])
+            
+        chapter_chronicle = await get_story_chapter_chronicle(char.story_id, db)
+        persistent_mems = await get_story_persistent_memories(char.story_id, db, limit=12)
+        vector_mems = await memory_service.retrieve_memories(str(char.story_id), str(char.id), last_user_msg.message)
+        combined_memories = persistent_mems
+        if vector_mems:
+            combined_memories = f"{persistent_mems}\n{vector_mems}".strip()
+            
+        hist_turns = []
+        for m in reversed(remaining_msgs[:16]):
+            if m.id != last_user_msg.id:
+                hist_turns.append({
+                    "role": "assistant" if m.is_ai else "user",
+                    "content": m.message
+                })
+                
+        tier_prompt = get_intimacy_tier_prompt(char.intimacy_score or 0)
+        persona_info = await get_effective_persona_info(story, db)
+        
+        ai_reply = await llm_service.chat_with_character(
+            character_info=char_info,
+            story_summary=story_summary,
+            world_info=world_info,
+            message=last_user_msg.message,
+            relevant_memories=combined_memories,
+            persona_info=persona_info,
+            intimacy_tier_prompt=tier_prompt,
+            chat_history=hist_turns,
+            chapter_chronicle=chapter_chronicle
+        )
+        
+        ai_reply = extract_and_apply_intimacy(ai_reply, char)
+        ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=True)
+        db.add(ai_msg)
+        await db.commit()
+        
+        background_tasks.add_task(bg_evaluate_chat_for_memory, character_id, char.name, char.story_id, last_user_msg.message, ai_reply)
+        background_tasks.add_task(bg_summarize_character_chat, character_id, char.story_id)
+        
+        final_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+        return final_res.scalars().all()
+    else:
+        return await continue_character_chat(character_id, background_tasks, db)
 
 @app.post("/api/v1/characters/{character_id}/chat/clear")
 async def clear_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
