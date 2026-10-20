@@ -1307,6 +1307,19 @@ class ApiService {
     throw Exception('Failed to create narrative memory');
   }
 
+  static Future<Map<String, dynamic>> syncStoryChronicle(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/sync-chronicle'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to sync chronicle');
+  }
+
   // --- 2. TENSION & JEALOUSY DIAL ---
   static Future<void> updateTensionDial(String storyId, int tensionLevel) async {
     final headers = await _getHeaders();

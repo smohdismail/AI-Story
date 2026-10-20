@@ -1357,6 +1357,7 @@ class NarrativeTimelineSheet extends StatefulWidget {
 class _NarrativeTimelineSheetState extends State<NarrativeTimelineSheet> {
   List<dynamic> _memories = [];
   bool _isLoading = true;
+  bool _isSyncing = false;
 
   @override
   void initState() {
@@ -1375,6 +1376,28 @@ class _NarrativeTimelineSheetState extends State<NarrativeTimelineSheet> {
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _syncMemories() async {
+    setState(() => _isSyncing = true);
+    try {
+      final res = await ApiService.syncStoryChronicle(widget.storyId);
+      await _loadMemories();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✨ Synchronized ${res['synced_chapters'] ?? 0} chapters & ${res['total_memories'] ?? 0} memory milestones!'),
+            backgroundColor: Colors.blueAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error syncing memories: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
     }
   }
 
@@ -1408,6 +1431,17 @@ class _NarrativeTimelineSheetState extends State<NarrativeTimelineSheet> {
                     style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
+                  IconButton(
+                    icon: _isSyncing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                          )
+                        : const Icon(Icons.sync, color: Colors.blueAccent),
+                    tooltip: 'Synchronize Living Memory',
+                    onPressed: _isSyncing ? null : _syncMemories,
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white60),
                     onPressed: () => Navigator.pop(context),

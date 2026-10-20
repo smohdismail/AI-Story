@@ -67,40 +67,150 @@ def upload_avatar_to_supabase(base64_string: str) -> str:
         print(f"Error uploading avatar to supabase: {e}")
         return base64_string
 
-async def trigger_summary_update(story_id: uuid.UUID, new_chapter_text: str):
+async def get_story_chapter_chronicle(story_id: uuid.UUID, db: AsyncSession) -> str:
+    chap_res = await db.execute(
+        select(models.Chapter)
+        .where(models.Chapter.story_id == story_id)
+        .order_by(models.Chapter.chapter_number.asc())
+    )
+    chapters = chap_res.scalars().all()
+    if not chapters:
+        return ""
+    lines = []
+    for ch in chapters:
+        s = ch.summary
+        if not s or not s.strip():
+            s = ch.content[:240].replace('\n', ' ').strip() + "..."
+        lines.append(f"• Chapter {ch.chapter_number} ('{ch.title}'): {s}")
+    return "\n".join(lines)
+
+async def get_story_persistent_memories(story_id: uuid.UUID, db: AsyncSession, limit: int = 15) -> str:
+    mems_res = await db.execute(
+        select(models.StoryNarrativeMemory)
+        .where(models.StoryNarrativeMemory.story_id == story_id)
+        .order_by(models.StoryNarrativeMemory.created_at.desc())
+        .limit(limit)
+    )
+    mems = list(reversed(mems_res.scalars().all()))
+    if not mems:
+        return ""
+    lines = []
+    for m in mems:
+        prefix = f"[{m.source.upper()}]" if m.source else "[MEMORY]"
+        who = f" with {m.character_name}" if m.character_name else ""
+        lines.append(f"• {prefix}{who}: {m.event_summary} ({m.emotional_impact or 'Moment'})")
+    return "\n".join(lines)
+
+async def bg_process_chapter_memory(story_id: uuid.UUID, chapter_id: uuid.UUID):
     async for db in get_db():
-        result = await db.execute(select(models.Story).where(models.Story.id == story_id))
-        story = result.scalars().first()
-        if story:
-            new_summary = await llm_service.update_master_summary(story.story_summary, new_chapter_text)
-            story.story_summary = new_summary
+        chap = await db.get(models.Chapter, chapter_id)
+        if not chap or not chap.content:
+            break
+        try:
+            incident_data = await llm_service.summarize_chapter_incident(
+                chap.chapter_number, chap.title or f"Chapter {chap.chapter_number}", chap.content
+            )
+            summary = incident_data.get("summary")
+            if summary:
+                chap.summary = summary
+
+            existing = await db.execute(
+                select(models.StoryNarrativeMemory).where(
+                    models.StoryNarrativeMemory.story_id == story_id,
+                    models.StoryNarrativeMemory.source == "chapter",
+                    models.StoryNarrativeMemory.character_name == f"Chapter {chap.chapter_number}"
+                )
+            )
+            if not existing.scalars().first() and summary:
+                mem = models.StoryNarrativeMemory(
+                    story_id=story_id,
+                    source="chapter",
+                    character_name=f"Chapter {chap.chapter_number}",
+                    event_summary=f"Chapter {chap.chapter_number} ('{chap.title}'): {summary}",
+                    emotional_impact=incident_data.get("emotional_milestone", "Chapter Canon")
+                )
+                db.add(mem)
+
+            story = await db.get(models.Story, story_id)
+            if story:
+                new_master = await llm_service.update_master_summary(story.story_summary or "", chap.content)
+                story.story_summary = new_master
+
             await db.commit()
+        except Exception as e:
+            print(f"Error in bg_process_chapter_memory: {e}")
         break
+
+async def bg_evaluate_chat_for_memory(character_id: uuid.UUID, character_name: str, story_id: uuid.UUID, user_text: str, ai_text: str):
+    dialogue_snippet = f"User: {user_text}\n{character_name}: {ai_text}"
+    try:
+        mem_data = await llm_service.extract_dialogue_memory(character_name, dialogue_snippet)
+        event_summary = mem_data.get("event_summary")
+        if event_summary:
+            async for db in get_db():
+                db_mem = models.StoryNarrativeMemory(
+                    story_id=story_id,
+                    source="character_chat",
+                    character_name=character_name,
+                    event_summary=event_summary,
+                    emotional_impact=mem_data.get("emotional_impact", "Confession")
+                )
+                db.add(db_mem)
+                await db.commit()
+                break
+    except Exception as e:
+        print(f"Error in bg_evaluate_chat_for_memory: {e}")
 
 async def bg_summarize_character_chat(character_id: uuid.UUID, story_id: uuid.UUID):
     async for db in get_db():
-        res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id, models.CharacterChat.is_summarized == 0).order_by(models.CharacterChat.created_at.asc()))
+        res = await db.execute(
+            select(models.CharacterChat)
+            .where(models.CharacterChat.character_id == character_id, models.CharacterChat.is_summarized == 0)
+            .order_by(models.CharacterChat.created_at.asc())
+        )
         unsummarized = res.scalars().all()
-        if len(unsummarized) >= 10:
+        if len(unsummarized) >= 6:
             chat_text = "\n".join([f"{'AI' if m.is_ai else 'User'}: {m.message}" for m in unsummarized])
             summary = await memory_service.summarize_and_store(str(story_id), str(character_id), chat_text, "1-on-1")
+            for m in unsummarized:
+                m.is_summarized = 1
             if summary:
-                for m in unsummarized:
-                    m.is_summarized = 1
-                await db.commit()
+                char_res = await db.execute(select(models.Character.name).where(models.Character.id == character_id))
+                c_name = char_res.scalar_one_or_none() or "Character"
+                db_mem = models.StoryNarrativeMemory(
+                    story_id=story_id,
+                    source="character_chat",
+                    character_name=c_name,
+                    event_summary=summary,
+                    emotional_impact="Conversation milestone"
+                )
+                db.add(db_mem)
+            await db.commit()
         break
 
 async def bg_summarize_group_chat(session_id: uuid.UUID, story_id: uuid.UUID):
     async for db in get_db():
-        res = await db.execute(select(models.GroupChatMessage).where(models.GroupChatMessage.session_id == session_id, models.GroupChatMessage.is_summarized == 0).order_by(models.GroupChatMessage.created_at.asc()))
+        res = await db.execute(
+            select(models.GroupChatMessage)
+            .where(models.GroupChatMessage.session_id == session_id, models.GroupChatMessage.is_summarized == 0)
+            .order_by(models.GroupChatMessage.created_at.asc())
+        )
         unsummarized = res.scalars().all()
-        if len(unsummarized) >= 10:
+        if len(unsummarized) >= 6:
             chat_text = "\n".join([f"{m.speaker_name}: {m.message}" for m in unsummarized])
             summary = await memory_service.summarize_and_store(str(story_id), "", chat_text, "group chat")
+            for m in unsummarized:
+                m.is_summarized = 1
             if summary:
-                for m in unsummarized:
-                    m.is_summarized = 1
-                await db.commit()
+                db_mem = models.StoryNarrativeMemory(
+                    story_id=story_id,
+                    source="group_chat",
+                    character_name="Tavern",
+                    event_summary=summary,
+                    emotional_impact="Group dynamic"
+                )
+                db.add(db_mem)
+            await db.commit()
         break
 
 @asynccontextmanager
@@ -662,7 +772,7 @@ async def create_chapter(story_id: uuid.UUID, chapter: schemas.ChapterCreate, ba
     await db.commit()
     await db.refresh(db_chapter)
     if db_chapter.content:
-        background_tasks.add_task(trigger_summary_update, story_id, db_chapter.content)
+        background_tasks.add_task(bg_process_chapter_memory, story_id, db_chapter.id)
     return db_chapter
 @app.delete("/api/v1/stories/{story_id}/chapters/{chapter_number}")
 async def delete_chapter(story_id: uuid.UUID, chapter_number: int, db: AsyncSession = Depends(get_db)):
@@ -703,7 +813,7 @@ async def update_chapter(story_id: uuid.UUID, chapter_number: int, chapter_updat
     await db.commit()
     await db.refresh(db_chapter)
     if chapter_update.content is not None and db_chapter.content:
-        background_tasks.add_task(trigger_summary_update, story_id, db_chapter.content)
+        background_tasks.add_task(bg_process_chapter_memory, story_id, db_chapter.id)
     return db_chapter
 
 @app.post("/api/v1/stories/{story_id}/chapters/{chapter_id}/choices")
@@ -886,15 +996,25 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
             last_chapter = all_chapters[-1]
             story_context += f"IMPORTANT: You are writing Chapter {last_chapter.chapter_number + 1}. Do NOT write 'Chapter 1' or repeat the previous chapter.\n\n"
             
+            chronicle_lines = []
+            for c in all_chapters:
+                c_sum = c.summary or (c.content[:260].replace('\n', ' ').strip() + "...")
+                chronicle_lines.append(f"• Chapter {c.chapter_number} ('{c.title}'): {c_sum}")
+            
+            story_context += (
+                "--- 📜 COMPLETE NOVEL CHRONICLE & PAST CHAPTER INCIDENTS ---\n"
+                "The following events have ALREADY occurred in earlier chapters of this novel. "
+                "You MUST maintain 100% continuity with these established facts, character relationships, and events:\n"
+                + "\n".join(chronicle_lines) + "\n"
+                "-----------------------------------------------------------\n\n"
+            )
+            
             if not request.context:
-                # Build rolling context from Master Summary and previous chapter
                 rolling_context = "STORY PROGRESSION SO FAR:\n"
                 if story and story.story_summary:
                     rolling_context += f"MASTER STORY SUMMARY:\n{story.story_summary}\n\n"
                 
-                # Full ending of the immediate previous chapter
-                rolling_context += f"--- IMMEDIATE PREVIOUS CHAPTER (Chapter {last_chapter.chapter_number}) ---\n...{last_chapter.content[-3000:]}\n\n[CONTINUE THE STORY FROM HERE]"
-                
+                rolling_context += f"--- IMMEDIATE PREVIOUS CHAPTER (Chapter {last_chapter.chapter_number}) ---\n...{last_chapter.content[-2500:]}\n\n[CONTINUE THE STORY FROM HERE]"
                 request.context = rolling_context
         else:
             story_context += "IMPORTANT: You are writing Chapter 1.\n"
@@ -902,7 +1022,7 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
     bg_task = None
     if request.story_id and all_chapters:
         last_chapter = all_chapters[-1]
-        bg_task = BackgroundTask(trigger_summary_update, request.story_id, last_chapter.content)
+        bg_task = BackgroundTask(bg_process_chapter_memory, request.story_id, last_chapter.id)
         
     return StreamingResponse(
         llm_service.stream_generator(request.prompt, request.context, story_context),
@@ -1063,8 +1183,29 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     for w in world_items:
         world_info += f"{w.name} ({w.category}): {w.description}\n"
     
-    # Retrieve relevant memories
-    relevant_memories = await memory_service.retrieve_memories(str(char.story_id), str(char.id), request.message)
+    # Retrieve Chapter Incident Chronicle and Persistent Memories
+    chapter_chronicle = await get_story_chapter_chronicle(char.story_id, db)
+    persistent_mems = await get_story_persistent_memories(char.story_id, db, limit=12)
+    vector_mems = await memory_service.retrieve_memories(str(char.story_id), str(char.id), request.message)
+    combined_memories = persistent_mems
+    if vector_mems:
+        combined_memories = f"{persistent_mems}\n{vector_mems}".strip()
+    
+    # Fetch recent conversation turns for multi-turn conversational memory
+    hist_turns_res = await db.execute(
+        select(models.CharacterChat)
+        .where(models.CharacterChat.character_id == character_id)
+        .order_by(models.CharacterChat.created_at.desc())
+        .limit(16)
+    )
+    raw_history = list(reversed(hist_turns_res.scalars().all()))
+    chat_history_turns = []
+    for m in raw_history:
+        if m.id != user_msg.id:
+            chat_history_turns.append({
+                "role": "assistant" if m.is_ai else "user",
+                "content": m.message
+            })
     
     # Retrieve Persona and Intimacy Tier
     persona_info = await get_effective_persona_info(story, db)
@@ -1080,7 +1221,17 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     else:
         tier_prompt = "You are DEVOTED/OBSESSED with the user. Be intensely loyal and deeply in love."
 
-    ai_reply = await llm_service.chat_with_character(char_info, story_summary, world_info, request.message, relevant_memories, persona_info, tier_prompt)
+    ai_reply = await llm_service.chat_with_character(
+        character_info=char_info,
+        story_summary=story_summary,
+        world_info=world_info,
+        message=request.message,
+        relevant_memories=combined_memories,
+        persona_info=persona_info,
+        intimacy_tier_prompt=tier_prompt,
+        chat_history=chat_history_turns,
+        chapter_chronicle=chapter_chronicle
+    )
     
     # Parse intimacy delta
     intimacy_match = re.search(r'\[INTIMACY:([+-]?\d+)\]', ai_reply)
@@ -1094,7 +1245,8 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     db.add(ai_msg)
     await db.commit()
     
-    # Trigger background summary check
+    # Trigger memory and summary background tasks
+    background_tasks.add_task(bg_evaluate_chat_for_memory, character_id, char.name, char.story_id, request.message, ai_reply)
     background_tasks.add_task(bg_summarize_character_chat, character_id, char.story_id)
     
     # Return history
@@ -1162,7 +1314,12 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
     if getattr(char.story, 'world_items', None):
         world_info = "\n".join([f"{w.name} ({w.category}): {w.description}" for w in char.story.world_items])
         
-    relevant_memories = await memory_service.retrieve_memories(str(char.story_id), str(char.id), "Continue the conversation naturally.")
+    chapter_chronicle = await get_story_chapter_chronicle(char.story_id, db)
+    persistent_mems = await get_story_persistent_memories(char.story_id, db, limit=12)
+    vector_mems = await memory_service.retrieve_memories(str(char.story_id), str(char.id), "Continue the conversation naturally.")
+    combined_memories = persistent_mems
+    if vector_mems:
+        combined_memories = f"{persistent_mems}\n{vector_mems}".strip()
     
     persona_info = await get_effective_persona_info(char.story, db)
 
@@ -1171,8 +1328,9 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
         story_summary=char.story.synopsis if char.story else "",
         world_info=world_info,
         chat_history=history_str,
-        relevant_memories=relevant_memories,
-        persona_info=persona_info
+        relevant_memories=combined_memories,
+        persona_info=persona_info,
+        chapter_chronicle=chapter_chronicle
     )
     
     chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
@@ -1545,11 +1703,23 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
     hist.reverse()
     chat_history_str = "\n".join([f"{m.speaker_name}: {m.message}" for m in hist])
     
-    relevant_memories = await memory_service.retrieve_memories(str(session.story_id), "", request.message)
+    chapter_chronicle = await get_story_chapter_chronicle(session.story_id, db)
+    persistent_mems = await get_story_persistent_memories(session.story_id, db, limit=12)
+    vector_mems = await memory_service.retrieve_memories(str(session.story_id), "", request.message)
+    combined_memories = persistent_mems
+    if vector_mems:
+        combined_memories = f"{persistent_mems}\n{vector_mems}".strip()
     persona_info = await get_effective_persona_info(story, db)
 
     # 4. Generate AI response
-    ai_reply = await llm_service.group_chat_with_characters(story.story_summary, char_info_str, chat_history_str, relevant_memories, persona_info)
+    ai_reply = await llm_service.group_chat_with_characters(
+        story.story_summary or "",
+        char_info_str,
+        chat_history_str,
+        combined_memories,
+        persona_info,
+        chapter_chronicle=chapter_chronicle
+    )
     
     # 5. Save AI responses with multi-paragraph support
     pattern = re.compile(r'^([A-Za-z0-9 _\'-]+):\s*(.*)', re.DOTALL)
@@ -2676,6 +2846,59 @@ async def create_narrative_memory_endpoint(story_id: uuid.UUID, req: NarrativeMe
     await db.commit()
     await db.refresh(mem)
     return mem
+
+@app.post("/api/v1/stories/{story_id}/sync-chronicle")
+async def sync_story_chronicle_endpoint(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Synchronizes all chapters and incident memories into the permanent StoryNarrativeMemory hub."""
+    chap_res = await db.execute(
+        select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc())
+    )
+    chapters = chap_res.scalars().all()
+    
+    synced_chapters = 0
+    for ch in chapters:
+        if not ch.summary or len(ch.summary.strip()) < 10:
+            if ch.content:
+                try:
+                    incident_data = await llm_service.summarize_chapter_incident(
+                        ch.chapter_number, ch.title or f"Chapter {ch.chapter_number}", ch.content
+                    )
+                    ch.summary = incident_data.get("summary") or (ch.content[:240].replace('\n', ' ') + "...")
+                    synced_chapters += 1
+                except Exception:
+                    ch.summary = ch.content[:240].replace('\n', ' ') + "..."
+        
+        existing = await db.execute(
+            select(models.StoryNarrativeMemory).where(
+                models.StoryNarrativeMemory.story_id == story_id,
+                models.StoryNarrativeMemory.source == "chapter",
+                models.StoryNarrativeMemory.character_name == f"Chapter {ch.chapter_number}"
+            )
+        )
+        if not existing.scalars().first():
+            mem = models.StoryNarrativeMemory(
+                story_id=story_id,
+                source="chapter",
+                character_name=f"Chapter {ch.chapter_number}",
+                event_summary=f"Chapter {ch.chapter_number} ('{ch.title}'): {ch.summary or ch.content[:200]}",
+                emotional_impact="Canon event"
+            )
+            db.add(mem)
+            
+    await db.commit()
+    
+    chronicle = await get_story_chapter_chronicle(story_id, db)
+    mems_res = await db.execute(
+        select(models.StoryNarrativeMemory).where(models.StoryNarrativeMemory.story_id == story_id).order_by(models.StoryNarrativeMemory.created_at.desc())
+    )
+    all_mems = mems_res.scalars().all()
+    
+    return {
+        "status": "success",
+        "synced_chapters": synced_chapters,
+        "total_memories": len(all_mems),
+        "chapter_chronicle": chronicle
+    }
 
 # --- 2. TENSION & JEALOUSY DIAL ---
 class TensionDialRequest(BaseModel):

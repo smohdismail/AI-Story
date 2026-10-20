@@ -103,14 +103,49 @@ async def update_master_summary(current_summary: str, new_chapter_text: str) -> 
         print(f"Error updating summary: {e}")
         return current_summary
 
-async def chat_with_character(character_info: str, story_summary: str, world_info: str, message: str, relevant_memories: str = "", persona_info: str = "", intimacy_tier_prompt: str = "") -> str:
-    memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
+async def chat_with_character(
+    character_info: str,
+    story_summary: str,
+    world_info: str,
+    message: str,
+    relevant_memories: str = "",
+    persona_info: str = "",
+    intimacy_tier_prompt: str = "",
+    chat_history: list = None,
+    chapter_chronicle: str = ""
+) -> str:
+    chronicle_section = f"\n\nCANON CHAPTER EVENTS & NOVEL HISTORY (What you and user experienced in chapters):\n{chapter_chronicle}" if chapter_chronicle else ""
+    memory_section = f"\n\nPERSISTENT LONG-TERM MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA (Who you are talking to):\n{persona_info}" if persona_info else ""
     tier_section = f"\n\nRELATIONSHIP DYNAMICS:\n{intimacy_tier_prompt}" if intimacy_tier_prompt else ""
     
-    messages = [
-        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character and converse with the user with deep realism, charm, and authenticity.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}{tier_section}\n\nCRITICAL RULE: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1] if the user is nice, [INTIMACY:-1] if they are mean, or [INTIMACY:0] if neutral). This is required. Do not break character. Do not say you are an AI. Respond naturally to the user's message.\nSTYLE & HUMAN REALISM:\n1. HEAVY NATURAL DIALOGUE: Converse directly with the user with authentic conversational rhythm, teasing banter, emotional vulnerability, and uninhibited passion.\n2. VIVID HUMAN BEHAVIOR & MICRO-EXPRESSIONS: Express lifelike human behaviors inside *asterisks* (italics)—subtle smirks, sudden warm smiles, breathless chuckles, amused laughs, biting the lower lip, shifting closer, soft gasps, involuntary groans, or breathless moaning when touched. Show physical closeness, eye contact, throat clearing, and authentic emotional reactions.\n3. LENGTH: Keep responses immersive and flowing (around 60 to 140 words)."}
-    ]
+    system_instruction = (
+        f"You are playing the role of a character in a living story novel. You must stay entirely in character and converse with the user with deep realism, charm, emotional vulnerability, and unwavering continuity.\n\n"
+        f"CHARACTER INFO:\n{character_info}\n\n"
+        f"STORY CONTEXT:\n{story_summary}"
+        f"{chronicle_section}"
+        f"{memory_section}\n\n"
+        f"WORLD LORE / FACTS:\n{world_info}"
+        f"{persona_section}{tier_section}\n\n"
+        f"CRITICAL MEMORY & CONTINUITY RULES:\n"
+        f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
+        f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"
+        f"3. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required.\n"
+        f"STYLE & HUMAN REALISM:\n"
+        f"1. HEAVY NATURAL DIALOGUE: Converse directly with the user with authentic rhythm, teasing banter, vulnerability, and genuine chemistry.\n"
+        f"2. VIVID HUMAN BEHAVIOR & MICRO-EXPRESSIONS: Express lifelike human behaviors inside *asterisks* (italics)—subtle smirks, warm smiles, breathless chuckles, biting lower lip, shifting closer, soft gasps, involuntary groans, eye contact, and physical touch.\n"
+        f"3. LENGTH: Keep responses immersive and flowing (around 65 to 145 words)."
+    )
+    
+    messages = [{"role": "system", "content": system_instruction}]
+    
+    if chat_history:
+        for turn in chat_history:
+            role = turn.get("role", "user")
+            content = turn.get("content", "")
+            if content:
+                messages.append({"role": role, "content": content})
+                
     messages.append({"role": "user", "content": message})
     
     try:
@@ -180,13 +215,22 @@ async def generate_character_diary(character_info: str, story_summary: str, chat
         print(f"Error generating diary: {e}")
         return "I could not write in my diary today."
 
-async def group_chat_with_characters(story_summary: str, characters_info: str, chat_history: str, relevant_memories: str = "", persona_info: str = "") -> str:
-    memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
+async def group_chat_with_characters(
+    story_summary: str,
+    characters_info: str,
+    chat_history: str,
+    relevant_memories: str = "",
+    persona_info: str = "",
+    chapter_chronicle: str = ""
+) -> str:
+    chronicle_section = f"\n\nCANON NOVEL CHAPTERS & RECENT INCIDENTS:\n{chapter_chronicle}" if chapter_chronicle else ""
+    memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA (Who you are interacting with):\n{persona_info}" if persona_info else ""
     system_prompt = f"""You are roleplaying multiple living characters sharing a lively, intimate group chat / tavern lounge with the user.
 
 STORY CONTEXT:
 {story_summary}
+{chronicle_section}
 
 CHARACTERS IN CHAT:
 {characters_info}{memory_section}{persona_section}
@@ -194,9 +238,10 @@ CHARACTERS IN CHAT:
 CRITICAL RULES FOR ULTRA-NATURAL & ORGANIC REPLIES:
 1. HUMAN GROUP DYNAMICS: Characters do not give isolated monologues. They react directly to what the user said AND to each other (teasing, bouncing off each other's remarks, friendly banter, eye contact, interruptions, protective warmth).
 2. DISTINCT LIVING VOICES: Each character must strictly embody their unique personality, dialogue cadence, status, and emotional relationship. If one is brooding/possessive, he speaks with quiet gravity; if another is witty or feisty, she counters with playful jabs.
-3. VISCERAL HUMAN BEHAVIOR: Include realistic micro-expressions and vocalizations inside *asterisks* (e.g. *chuckles softly*, *rolls eyes with a smirk*, *sighs in defeat*, *gasps softly*, *leans in close*, *whispers*, *laughs out loud*).
-4. NATURAL SPEECH: Speak like real people in an ongoing conversation. Use natural flow, humor, genuine curiosity, vulnerability, and emotion.
-5. FORMAT REQUIREMENT:
+3. SHARED STORY MEMORY: You and all characters share full memory of the events that happened in the novel chapters above. If something significant happened in a chapter (an injury, an argument, an intimate moment, a discovery), characters naturally bring it up or react to it.
+4. VISCERAL HUMAN BEHAVIOR: Include realistic micro-expressions and vocalizations inside *asterisks* (e.g. *chuckles softly*, *rolls eyes with a smirk*, *sighs in defeat*, *gasps softly*, *leans in close*, *whispers*, *laughs out loud*).
+5. NATURAL SPEECH: Speak like real people in an ongoing conversation. Use natural flow, humor, genuine curiosity, vulnerability, and emotion.
+6. FORMAT REQUIREMENT:
 Generate 1 or 2 distinct character turns that respond naturally.
 Each turn MUST start on its own line in the exact format:
 CharacterName: *action or expression* "Spoken dialogue here"
@@ -224,11 +269,20 @@ Keep each character's reply between 25 and 75 words so the conversation moves fa
         return "System: Error generating response."
 
 
-async def continue_chat(character_info: str, story_summary: str, world_info: str, chat_history: str, relevant_memories: str = "", persona_info: str = "") -> str:
-    memory_section = f"\n\nRELEVANT PAST MEMORIES:\n{relevant_memories}" if relevant_memories else ""
+async def continue_chat(
+    character_info: str,
+    story_summary: str,
+    world_info: str,
+    chat_history: str,
+    relevant_memories: str = "",
+    persona_info: str = "",
+    chapter_chronicle: str = ""
+) -> str:
+    chronicle_section = f"\n\nCANON CHAPTER EVENTS & NOVEL HISTORY:\n{chapter_chronicle}" if chapter_chronicle else ""
+    memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA:\n{persona_info}" if persona_info else ""
     messages = [
-        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}\n\nCRITICAL RULE: Continue your conversation and actions naturally. Do NOT introduce yourself again. Seamlessly continue the scene with authentic dialogue, playful or intense banter, and vivid human micro-expressions inside *asterisks* (smiles, low laughter, sudden breath hitching, sighs, soft groans or moans, taking their hand, eye contact).\nLENGTH CONSTRAINT: Keep your response natural and immersive (60 to 140 words)."}
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}{chronicle_section}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}\n\nCRITICAL RULE: Continue your conversation and actions naturally with deep memory of what just happened. Do NOT introduce yourself again. Seamlessly continue the scene with authentic dialogue, playful or intense banter, and vivid human micro-expressions inside *asterisks* (smiles, low laughter, sudden breath hitching, sighs, soft groans or moans, taking their hand, eye contact).\nLENGTH CONSTRAINT: Keep your response natural and immersive (60 to 140 words)."}
     ]
     messages.append({"role": "user", "content": f"Here is the recent chat history:\n\n{chat_history}\n\nPlease continue your last response or take the next action without the user saying anything."})
     
@@ -2341,3 +2395,66 @@ Return ONLY valid JSON (no markdown fences):
             "image_prompt": f"Portrait of {character_name}, {character_appearance}, dressed in {outfit_concept}, luxurious fabric, cinematic dramatic lighting, masterpiece 8k.",
             "novel_description_snippet": f"{character_name} wore {outfit_concept}, every fold of fabric cut to accentuate their effortless, commanding grace."
         }
+
+
+async def summarize_chapter_incident(chapter_number: int, chapter_title: str, chapter_content: str) -> dict:
+    """Extracts a 2-3 sentence incident summary + key relationship developments from a chapter."""
+    prompt = f"""You are an expert story archivist. Analyze Chapter {chapter_number}: \"{chapter_title}\" and extract a concise incident summary for the long-term memory engine.
+
+CHAPTER CONTENT EXCERPT:
+{chapter_content[:4000]}
+
+Return valid JSON with:
+{{
+  \"summary\": \"A 2-3 sentence factual summary of what specifically happened in this chapter (key incidents, encounters, revelations).\",
+  \"key_incidents\": [\"Specific event 1\", \"Specific event 2\"],
+  \"emotional_milestone\": \"Brief note on relationship or emotional tension shift between characters.\"
+}}"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=400,
+        )
+        content = response.choices[0].message.content.strip()
+        m = re.search(r'\{.*\}', content, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error in summarize_chapter_incident: {e}")
+        clean_text = chapter_content[:260].replace('\n', ' ').strip()
+        return {
+            "summary": f"In Chapter {chapter_number} ({chapter_title}): {clean_text}...",
+            "key_incidents": [f"Events of Chapter {chapter_number}"],
+            "emotional_milestone": "Plot progression"
+        }
+
+async def extract_dialogue_memory(character_name: str, dialogue_snippet: str) -> dict:
+    """Extracts any significant confessions, promises, secrets, or relationship shifts from chat."""
+    prompt = f"""Analyze this recent dialogue between the user and {character_name}. Extract any key confession, secret, emotional promise, or major agreement that should be remembered permanently. If it is only trivial chit-chat or casual pleasantries, return null for \"event_summary\".
+
+DIALOGUE:
+{dialogue_snippet}
+
+Return JSON with:
+{{
+  \"event_summary\": \"1-2 sentence memory of what was promised, confessed, or revealed (or null if purely trivial chit-chat)\",
+  \"emotional_impact\": \"e.g. Vulnerable confession, Passionate vow, Heated argument, Secret revealed, etc.\"
+}}"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=250,
+        )
+        raw = response.choices[0].message.content.strip()
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(raw)
+    except Exception:
+        return {"event_summary": None, "emotional_impact": None}
+
