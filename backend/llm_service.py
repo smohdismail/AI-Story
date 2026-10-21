@@ -153,7 +153,8 @@ async def chat_with_character(
     chapter_chronicle: str = "",
     ambient_weather: str = "",
     local_time_desc: str = "",
-    real_world_context: str = ""
+    real_world_context: str = "",
+    recent_group_banter: str = ""
 ) -> str:
     chronicle_section = f"\n\nCANON CHAPTER EVENTS & NOVEL HISTORY (What you and user experienced in chapters):\n{chapter_chronicle}" if chapter_chronicle else ""
     memory_section = f"\n\nPERSISTENT LONG-TERM MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
@@ -183,6 +184,12 @@ async def chat_with_character(
             f"   - If it's morning, bring morning warmth and ask about their coffee or how they slept.\n"
             f"3. AUTHENTIC TEXTING HABITS: Use real human cadence—1 to 3 expressive, intimate sentences, genuine curiosity about what they are doing right now, and lifelike micro-expressions in asterisks."
         )
+        
+    group_section = (
+        f"\n\nRECENT GROUP CHAT BANTER (What just happened in the shared lounge):\n"
+        f"{recent_group_banter}\n"
+        f"(You are fully aware of what was said in the group lounge and can naturally tease or mention it if relevant).\n"
+    ) if recent_group_banter else "" 
     
     system_instruction = (
         f"You are playing the role of a character in a living story novel. You must stay entirely in character and converse with the user with deep realism, charm, emotional vulnerability, and unwavering continuity.\n\n"
@@ -191,7 +198,7 @@ async def chat_with_character(
         f"{chronicle_section}"
         f"{memory_section}\n\n"
         f"WORLD LORE / FACTS:\n{world_info}"
-        f"{persona_section}{tier_section}{weather_section}{reality_section}\n\n"
+        f"{persona_section}{tier_section}{weather_section}{reality_section}{group_section}\n\n"
         f"CRITICAL MEMORY & CONTINUITY RULES:\n"
         f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
         f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"
@@ -294,7 +301,8 @@ async def group_chat_with_characters(
     chapter_chronicle: str = "",
     ambient_weather: str = "",
     local_time_desc: str = "",
-    real_world_context: str = ""
+    real_world_context: str = "",
+    recent_private_chats: str = ""
 ) -> str:
     chronicle_section = f"\n\nCANON NOVEL CHAPTERS & RECENT INCIDENTS:\n{chapter_chronicle}" if chapter_chronicle else ""
     memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
@@ -309,6 +317,10 @@ async def group_chat_with_characters(
         )
     if real_world_context:
         weather_section += f"\n• Live Real-World Sync: {real_world_context}\n(Characters are naturally aware of the user's real location, city, live temperature, and time of day, teasing or caring for them realistically).\n" 
+    private_chat_section = (
+        f"\n\nRECENT 1-ON-1 PRIVATE CHATS WITH USER:\n{recent_private_chats}\n"
+        f"(Characters naturally notice if the user has been having close private conversations with someone, and can playfully tease, gossip, or react to it).\n"
+    ) if recent_private_chats else ""
     system_prompt = f"""You are roleplaying multiple living characters sharing a lively, intimate group chat / tavern lounge with the user.
 
 STORY CONTEXT:
@@ -316,7 +328,7 @@ STORY CONTEXT:
 {chronicle_section}
 
 CHARACTERS IN CHAT:
-{characters_info}{memory_section}{persona_section}{weather_section}
+{characters_info}{memory_section}{persona_section}{weather_section}{private_chat_section}
 
 CRITICAL RULES FOR ULTRA-NATURAL & ORGANIC REPLIES:
 1. HUMAN GROUP DYNAMICS: Characters do not give isolated monologues. They react directly to what the user said AND to each other (teasing, bouncing off each other's remarks, friendly banter, eye contact, interruptions, protective warmth).

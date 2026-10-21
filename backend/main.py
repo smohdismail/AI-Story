@@ -77,11 +77,37 @@ async def get_story_chapter_chronicle(story_id: uuid.UUID, db: AsyncSession) -> 
     if not chapters:
         return ""
     lines = []
-    for ch in chapters:
-        s = ch.summary
-        if not s or not s.strip():
-            s = ch.content[:240].replace('\n', ' ').strip() + "..."
-        lines.append(f"• Chapter {ch.chapter_number} ('{ch.title}'): {s}")
+    total_chapters = len(chapters)
+    for i, ch in enumerate(chapters):
+        is_latest = (i == total_chapters - 1)
+        if is_latest:
+            # High-priority focus on the latest chapter: captures the full climax, intimate scenes, and confessions
+            excerpt = ""
+            if ch.content:
+                clean_content = ch.content.strip()
+                if len(clean_content) <= 1400:
+                    excerpt = clean_content
+                else:
+                    # Capture opening hook and the extensive climax/ending where intimate moments occur
+                    excerpt = f"Opening: {clean_content[:250]}...\nEnding Climax & Intimate Scenes: ...{clean_content[-1100:]}"
+            
+            summary_str = f"Summary: {ch.summary}\n" if ch.summary else ""
+            lines.append(
+                f"\n★★★ LATEST NOVEL CHAPTER (Chapter {ch.chapter_number}: '{ch.title}') — ACTIVE STORY REALITY ★★★\n"
+                f"{summary_str}"
+                f"Key Scenes & Climax Excerpt:\n{excerpt}\n"
+                f"[CRITICAL CONTINUITY MANDATE]: This is the most recent canon chapter you and the user experienced together! "
+                f"You remember every touch, confession, kiss, or intimate moment from this chapter vividly. "
+                f"React naturally, emotionally, and passionately to what happened here!\n"
+            )
+        else:
+            s = ch.summary
+            if not s or not s.strip():
+                if ch.content:
+                    s = ch.content[:180].replace('\n', ' ').strip() + "... " + ch.content[-150:].replace('\n', ' ').strip()
+                else:
+                    s = "Past chapter."
+            lines.append(f"• Chapter {ch.chapter_number} ('{ch.title}'): {s}")
     return "\n".join(lines)
 
 async def get_story_persistent_memories(story_id: uuid.UUID, db: AsyncSession, limit: int = 15) -> str:
@@ -1276,6 +1302,26 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     else:
         tier_prompt = "You are DEVOTED/OBSESSED with the user. Be intensely loyal and deeply in love."
 
+    # Fetch recent group banter for cross-chat sync
+    group_banter = ""
+    try:
+        group_sess_res = await db.execute(
+            select(models.GroupChatSession).where(models.GroupChatSession.story_id == char.story_id)
+        )
+        group_sess = group_sess_res.scalars().first()
+        if group_sess:
+            grp_msgs_res = await db.execute(
+                select(models.GroupChatMessage)
+                .where(models.GroupChatMessage.session_id == group_sess.id)
+                .order_by(models.GroupChatMessage.created_at.desc())
+                .limit(6)
+            )
+            recent_grp_msgs = list(reversed(grp_msgs_res.scalars().all()))
+            if recent_grp_msgs:
+                group_banter = "\n".join([f"{m.speaker_name}: {m.message}" for m in recent_grp_msgs])
+    except Exception as e:
+        print(f"Error fetching group banter: {e}")
+
     ai_reply = await llm_service.chat_with_character(
         character_info=char_info,
         story_summary=story_summary,
@@ -1288,7 +1334,8 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
         chapter_chronicle=chapter_chronicle,
         ambient_weather=request.ambient_weather or "",
         local_time_desc=request.local_time_desc or "",
-        real_world_context=request.real_world_context or ""
+        real_world_context=request.real_world_context or "",
+        recent_group_banter=group_banter
     )
     
     # Parse intimacy delta and sanitize text
@@ -1839,7 +1886,23 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
         combined_memories = f"{persistent_mems}\n{vector_mems}".strip()
     persona_info = await get_effective_persona_info(story, db)
 
-    # 4. Generate AI response
+    # 4. Fetch recent 1-on-1 private conversations for unified universe awareness
+    recent_1on1_str = ""
+    try:
+        recent_1on1_res = await db.execute(
+            select(models.CharacterChat, models.Character.name)
+            .join(models.Character, models.CharacterChat.character_id == models.Character.id)
+            .where(models.Character.story_id == session.story_id)
+            .order_by(models.CharacterChat.created_at.desc())
+            .limit(6)
+        )
+        recent_1on1_rows = list(reversed(recent_1on1_res.all()))
+        if recent_1on1_rows:
+            recent_1on1_str = "\n".join([f"{'User' if not chat.is_ai else char_name}: {chat.message}" for chat, char_name in recent_1on1_rows])
+    except Exception as e:
+        print(f"Error fetching 1-on-1 chats for group chat: {e}")
+
+    # Generate AI response
     ai_reply = await llm_service.group_chat_with_characters(
         story.story_summary or "",
         char_info_str,
@@ -1849,7 +1912,8 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
         chapter_chronicle=chapter_chronicle,
         ambient_weather=request.ambient_weather or "",
         local_time_desc=request.local_time_desc or "",
-        real_world_context=request.real_world_context or ""
+        real_world_context=request.real_world_context or "",
+        recent_private_chats=recent_1on1_str
     )
     
     # 5. Save AI responses with multi-paragraph support
