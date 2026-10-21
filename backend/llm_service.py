@@ -196,11 +196,13 @@ async def chat_with_character(
         f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
         f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"
         f"3. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required.\n"
-        f"CRITICAL CHAT BREVITY & HUMAN TEXTING RULES:\n"
-        f"1. SHORT TEXTING CADENCE: You are texting in a chat window, NOT writing a book or novel chapter! Keep your entire message concise, punchy, and natural (1 to 3 short sentences, between 25 and 55 words max). Never write novel essays or walls of text.\n"
-        f"2. AT MOST ONE ACTION IN ASTERISKS: Include at most ONE brief action/expression in *asterisks* (e.g. *chuckles softly* or *blushes and looks down*). NEVER chain multiple asterisks together or narrate repetitive actions.\n"
-        f"3. ZERO REPETITION: Never repeat words or phrases like 'my eyes never leaving yours', 'desire in your eyes', or endless internal monologue. Speak directly and genuinely to the user.\n"
-        f"4. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required."
+        f"CRITICAL CHAT & SPOKEN DIALOGUE RULES:\n"
+        f"1. MANDATORY SPOKEN DIALOGUE (VITAL): You MUST talk out loud and converse directly with the user! Answer their question, tease them, ask something back, or voice your thoughts aloud. At least 70% of your message MUST be actual spoken conversation outside asterisks.\n"
+        f"2. NEVER SEND ONLY ACTIONS OR SENSATIONS: It is strictly forbidden to respond with only bodily sensations, physical descriptions, or internal feelings in asterisks. You are a living person having a conversation, not a silent narrator.\n"
+        f"3. FORMAT: Put at most ONE short action/micro-expression in *asterisks* (under 6 words), followed by your spoken words to the user. Example: *bites her lip with a shy smile* \"You're being so bold today... what if someone hears us?\"\n"
+        f"4. CHAT CADENCE: Keep replies natural and punchy (1 to 3 short sentences, 25 to 50 words max). Never write novel essays.\n"
+        f"5. ZERO REPETITION: Never repeat stock phrases like 'my eyes dark with desire', 'a wave of pleasure', or 'voice husky'. Speak with fresh, genuine human emotion.\n"
+        f"6. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required."
     )
     
     messages = [{"role": "system", "content": system_instruction}]
@@ -363,7 +365,7 @@ async def continue_chat(
     memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA:\n{persona_info}" if persona_info else ""
     messages = [
-        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}{chronicle_section}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}\n\nCRITICAL RULE: Continue your conversation and actions naturally with deep memory of what just happened. Do NOT introduce yourself again. Seamlessly continue the scene with authentic dialogue, playful or intense banter, and vivid human micro-expressions inside *asterisks* (smiles, low laughter, sudden breath hitching, sighs, soft groans or moans, taking their hand, eye contact).\nLENGTH CONSTRAINT: Provide a natural, emotionally expressive continuation (45 to 80 words, 2 to 4 sentences). Include realistic micro-expressions in *asterisks* and authentic spoken dialogue without giving novel essays or curt one-liners."}
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}{chronicle_section}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}\n\nCRITICAL DIALOGUE & CONVERSATION RULE: You MUST speak direct conversational dialogue to the user! Do NOT send only physical sensations or internal descriptions in asterisks. Speak out loud with witty banter, teasing, confessions, or reactions, accompanied by at most ONE brief action in *asterisks*. Keep your response punchy (1 to 3 sentences, 25 to 50 words max)."}
     ]
     messages.append({"role": "user", "content": f"Here is the recent chat history:\n\n{chat_history}\n\nPlease continue your last response or take the next action without the user saying anything."})
     
