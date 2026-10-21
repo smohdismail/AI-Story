@@ -133,10 +133,11 @@ async def chat_with_character(
         f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
         f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"
         f"3. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required.\n"
-        f"STYLE & HUMAN REALISM:\n"
-        f"1. HEAVY NATURAL DIALOGUE: Converse directly with the user with authentic rhythm, teasing banter, vulnerability, and genuine chemistry.\n"
-        f"2. VIVID HUMAN BEHAVIOR & MICRO-EXPRESSIONS: Express lifelike human behaviors inside *asterisks* (italics)—subtle smirks, warm smiles, breathless chuckles, biting lower lip, shifting closer, soft gasps, involuntary groans, eye contact, and physical touch.\n"
-        f"3. LENGTH: Keep responses immersive and flowing (around 65 to 145 words)."
+        f"STYLE & HUMAN REALISM RULES:\n"
+        f"1. ONE SHORT RESPONSE ONLY: Provide ONLY ONE short, completely natural, and realistic response (1 to 2 sentences of natural spoken dialogue, maximum 3 short sentences). Do NOT write multi-paragraph essays or novel monologues. Speak directly like a real human in a live 1-on-1 intimate conversation or chat.\n"
+        f"2. BRIEF SUBTLE EXPRESSION: You may include at most ONE brief, subtle action or physical micro-expression in *asterisks* (e.g. *smiles softly and looks into your eyes*, *chuckles quietly*, *bites her lip shyly*). Keep actions concise, realistic, and grounded.\n"
+        f"3. NATURAL CHEMISTRY: Stay deeply in character, reacting authentically to the user's words with warmth, humor, affection, or vulnerability.\n"
+        f"4. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required."
     )
     
     messages = [{"role": "system", "content": system_instruction}]
@@ -155,7 +156,7 @@ async def chat_with_character(
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=220,
         )
         if response.choices and response.choices[0].message.content:
             return response.choices[0].message.content.strip()
@@ -284,7 +285,7 @@ async def continue_chat(
     memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA:\n{persona_info}" if persona_info else ""
     messages = [
-        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}{chronicle_section}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}\n\nCRITICAL RULE: Continue your conversation and actions naturally with deep memory of what just happened. Do NOT introduce yourself again. Seamlessly continue the scene with authentic dialogue, playful or intense banter, and vivid human micro-expressions inside *asterisks* (smiles, low laughter, sudden breath hitching, sighs, soft groans or moans, taking their hand, eye contact).\nLENGTH CONSTRAINT: Keep your response natural and immersive (60 to 140 words)."}
+        {"role": "system", "content": f"You are playing the role of a character in a story. You must stay entirely in character.\n\nCHARACTER INFO:\n{character_info}\n\nSTORY CONTEXT:\n{story_summary}{chronicle_section}\n\nWORLD LORE / FACTS:\n{world_info}{memory_section}{persona_section}\n\nCRITICAL RULE: Continue your conversation and actions naturally with deep memory of what just happened. Do NOT introduce yourself again. Seamlessly continue the scene with authentic dialogue, playful or intense banter, and vivid human micro-expressions inside *asterisks* (smiles, low laughter, sudden breath hitching, sighs, soft groans or moans, taking their hand, eye contact).\nLENGTH CONSTRAINT: Provide ONLY ONE short, completely natural, and realistic response (1 to 2 sentences of natural spoken dialogue, maximum 3 short sentences, with at most one brief subtle micro-expression in *asterisks*). Do NOT write long essays or monologues."}
     ]
     messages.append({"role": "user", "content": f"Here is the recent chat history:\n\n{chat_history}\n\nPlease continue your last response or take the next action without the user saying anything."})
     
@@ -293,7 +294,7 @@ async def continue_chat(
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=220,
         )
         if response.choices and response.choices[0].message.content:
             return response.choices[0].message.content.strip()

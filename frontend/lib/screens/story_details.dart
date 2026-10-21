@@ -66,6 +66,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   // Batch 4: 💌 Wax-Sealed Reply Dispatch
   bool isDispatchingWaxReply = false;
   Map<String, dynamic>? lastWaxReplyReaction;
+  bool _isStoryLoungeExpanded = false;
+  final Set<String> _expandedCharacterBios = {};
 
   @override
   void initState() {
@@ -1309,7 +1311,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
           child: Row(
             children: [
               Expanded(
@@ -1326,7 +1328,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   icon: const Icon(Icons.auto_awesome, color: Colors.amberAccent),
                   label: const Text('Create Character (AI Studio)'),
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(0, 50),
+                    minimumSize: const Size(0, 48),
                     backgroundColor: Colors.purple[800],
                   ),
                 ),
@@ -1339,7 +1341,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   icon: const Icon(Icons.person_add),
                   label: const Text('Manual'),
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 50),
+                    minimumSize: const Size(0, 48),
                   ),
                 ),
               ),
@@ -1352,136 +1354,237 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: ElevatedButton.icon(
-            onPressed: () async {
-              try {
-                final session = await ApiService.getActiveGroupChat(widget.storyId);
-                if (context.mounted) {
-                  context.push('/group_chat', extra: {
-                    'storyId': widget.storyId,
-                    'sessionId': session['id'].toString(),
-                  });
-                }
-              } catch(e) {
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-              }
-            },
-            icon: const Icon(Icons.groups, color: Colors.white),
-            label: const Text('Enter Tavern (Group Chat)', style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-              backgroundColor: Colors.amber[800],
-            ),
+
+        // Collapsible Story Lounge & Drama Hub
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1B2E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.25)),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-          child: OutlinedButton.icon(
-            onPressed: _updateAllCharacterChemistry,
-            icon: const Icon(Icons.favorite, color: Colors.pinkAccent),
-            label: const Text('❤️‍🔥 Dynamic Chemistry & Passion Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 44),
-              side: const BorderSide(color: Colors.pinkAccent, width: 1.5),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
-          child: ElevatedButton.icon(
-            onPressed: () => PrivateWhispersSheet.show(context, widget.storyId),
-            icon: const Icon(Icons.record_voice_over, color: Colors.purpleAccent, size: 18),
-            label: const Text('Eavesdrop: Private Whispers Behind Your Back 🤫', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 44),
-              backgroundColor: const Color(0xFF2E1A47),
-              foregroundColor: Colors.purpleAccent,
-              side: const BorderSide(color: Colors.purpleAccent, width: 1.2),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
-          child: ElevatedButton.icon(
-            onPressed: () => JealousyRivalryDialog.show(
-              context,
-              storyId: widget.storyId,
-              storyTitle: story?['title'] ?? 'Story',
-            ),
-            icon: const Icon(Icons.flash_on, color: Colors.redAccent, size: 18),
-            label: const Text('Jealousy & Rivalry Confrontation Drama 🎭⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 44),
-              backgroundColor: const Color(0xFF3B101D),
-              foregroundColor: Colors.redAccent,
-              side: const BorderSide(color: Colors.redAccent, width: 1.2),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => TensionDialSheet.show(context, widget.storyId),
-                  icon: const Icon(Icons.tune, size: 16, color: Colors.amber),
-                  label: const Text('Tension Dial 🖤', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.08),
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+              InkWell(
+                onTap: () => setState(() => _isStoryLoungeExpanded = !_isStoryLoungeExpanded),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.theater_comedy, color: Colors.purpleAccent, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '🎭 Story Lounge & Romance Hub',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _isStoryLoungeExpanded
+                                  ? 'Tap to collapse 8 interactive story modes'
+                                  : '8 Modes: Tavern • Chemistry • Whispers • Rivalry • Tarot...',
+                              style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.6)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _isStoryLoungeExpanded ? Colors.purpleAccent.withValues(alpha: 0.2) : Colors.white10,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _isStoryLoungeExpanded ? 'Close' : 'Open',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isStoryLoungeExpanded ? Colors.purpleAccent : Colors.white70),
+                            ),
+                            Icon(_isStoryLoungeExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: _isStoryLoungeExpanded ? Colors.purpleAccent : Colors.white70),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => DestinyTarotDialog.show(context, widget.storyId),
-                  icon: const Icon(Icons.auto_awesome, size: 16, color: Colors.purpleAccent),
-                  label: const Text('Destiny Tarot 🔮', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.08),
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
+              if (_isStoryLoungeExpanded) ...[
+                const Divider(height: 1, color: Colors.white12),
+                Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: Column(
+                    children: [
+                      // Row 1: Tavern & Dynamic Chemistry
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  final session = await ApiService.getActiveGroupChat(widget.storyId);
+                                  if (context.mounted) {
+                                    context.push('/group_chat', extra: {
+                                      'storyId': widget.storyId,
+                                      'sessionId': session['id'].toString(),
+                                    });
+                                  }
+                                } catch(e) {
+                                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                }
+                              },
+                              icon: const Icon(Icons.groups, color: Colors.white, size: 16),
+                              label: const Text('Tavern Group Chat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber[800],
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _updateAllCharacterChemistry,
+                              icon: const Icon(Icons.favorite, color: Colors.pinkAccent, size: 16),
+                              label: const Text('Passion Chemistry', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.pinkAccent, width: 1.2),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Row 2: Private Whispers & Jealousy Rivalry
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => PrivateWhispersSheet.show(context, widget.storyId),
+                              icon: const Icon(Icons.record_voice_over, color: Colors.purpleAccent, size: 16),
+                              label: const Text('Eavesdrop Whispers', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2E1A47),
+                                foregroundColor: Colors.purpleAccent,
+                                side: const BorderSide(color: Colors.purpleAccent, width: 1.1),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => JealousyRivalryDialog.show(
+                                context,
+                                storyId: widget.storyId,
+                                storyTitle: story?['title'] ?? 'Story',
+                              ),
+                              icon: const Icon(Icons.flash_on, color: Colors.redAccent, size: 16),
+                              label: const Text('Jealousy Drama ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3B101D),
+                                foregroundColor: Colors.redAccent,
+                                side: const BorderSide(color: Colors.redAccent, width: 1.1),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Row 3: Tension Dial & Destiny Tarot
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => TensionDialSheet.show(context, widget.storyId),
+                              icon: const Icon(Icons.tune, size: 15, color: Colors.amber),
+                              label: const Text('Tension Dial 🖤', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                foregroundColor: Colors.white,
+                                side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => DestinyTarotDialog.show(context, widget.storyId),
+                              icon: const Icon(Icons.auto_awesome, size: 15, color: Colors.purpleAccent),
+                              label: const Text('Destiny Tarot 🔮', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                foregroundColor: Colors.white,
+                                side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Row 4: Proposal Climax & Story Timeline
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => ClimaxMilestoneDialog.show(context, widget.storyId),
+                              icon: const Icon(Icons.ring_volume, size: 15, color: Colors.pinkAccent),
+                              label: const Text('Proposal Climax 💍', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.pink[900]?.withValues(alpha: 0.7),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => NarrativeTimelineSheet.show(context, widget.storyId),
+                              icon: const Icon(Icons.link, size: 15, color: Colors.blueAccent),
+                              label: const Text('Story Timeline 🔗', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue[900]?.withValues(alpha: 0.7),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => ClimaxMilestoneDialog.show(context, widget.storyId),
-                  icon: const Icon(Icons.ring_volume, size: 16, color: Colors.pinkAccent),
-                  label: const Text('Proposal Climax 💍', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.pink[900]?.withValues(alpha: 0.7),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => NarrativeTimelineSheet.show(context, widget.storyId),
-                  icon: const Icon(Icons.link, size: 16, color: Colors.blueAccent),
-                  label: const Text('Story Timeline 🔗', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[900]?.withValues(alpha: 0.7),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
           child: TextField(
@@ -1489,17 +1592,19 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               hintText: 'Search characters...',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(),
+              isDense: true,
             ),
             onChanged: (value) => setState(() => charSearchQuery = value),
           ),
         ),
+
         Expanded(
           child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : characters.isEmpty
               ? const Center(child: Text("No characters added yet.", style: TextStyle(fontSize: 18)))
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                   itemCount: characters.where((c) => (c['name'] ?? '').toLowerCase().contains(charSearchQuery.toLowerCase())).length,
                   itemBuilder: (context, index) {
                     final filteredChars = characters.where((c) => (c['name'] ?? '').toLowerCase().contains(charSearchQuery.toLowerCase())).toList();
@@ -1510,9 +1615,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     final gender = char['gender'] ?? 'N/A';
                     final relationship = char['relationship_status'];
                     final activeWardrobe = char['active_wardrobe'];
+                    final charId = char['id'].toString();
+                    final isBioExpanded = _expandedCharacterBios.contains(charId);
+                    final hasBio = (char['personality'] != null && char['personality'].toString().isNotEmpty) ||
+                                   (char['appearance'] != null && char['appearance'].toString().isNotEmpty);
 
                     return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      margin: const EdgeInsets.symmetric(vertical: 8),
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -1520,11 +1629,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       ),
                       color: const Color(0xFF161522),
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 1. TOP HEADER: Large Avatar + Name + Badges + PopupMenu
+                            // 1. TOP HEADER: Avatar + Name + Badges + PopupMenu
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -1549,8 +1658,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                     }
                                   },
                                   child: Container(
-                                    width: 58,
-                                    height: 58,
+                                    width: 56,
+                                    height: 56,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.6), width: 2),
@@ -1565,11 +1674,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                       color: Colors.purple[900]?.withValues(alpha: 0.4),
                                     ),
                                     child: (avatar == null || avatar.toString().isEmpty)
-                                        ? const Icon(Icons.person, color: Colors.white70, size: 30)
+                                        ? const Icon(Icons.person, color: Colors.white70, size: 28)
                                         : null,
                                   ),
                                 ),
-                                const SizedBox(width: 14),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1578,20 +1687,20 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                         charName,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 19,
+                                          fontSize: 18,
                                           color: Colors.white,
                                           letterSpacing: 0.2,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 6),
+                                      const SizedBox(height: 5),
                                       Wrap(
                                         spacing: 6,
                                         runSpacing: 4,
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                             decoration: BoxDecoration(
                                               color: Colors.blueAccent.withValues(alpha: 0.15),
                                               borderRadius: BorderRadius.circular(6),
@@ -1603,7 +1712,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                             ),
                                           ),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                             decoration: BoxDecoration(
                                               color: Colors.white.withValues(alpha: 0.08),
                                               borderRadius: BorderRadius.circular(6),
@@ -1615,7 +1724,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                           ),
                                           if (relationship != null && relationship.toString().isNotEmpty)
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: Colors.pink.withValues(alpha: 0.15),
                                                 borderRadius: BorderRadius.circular(6),
@@ -1717,13 +1826,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                               ],
                             ),
 
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 12),
 
-                            // 2. ACTION BUTTONS ROW (Chat, Routine, Voicemails, Wardrobe)
+                            // 2. PRIMARY ACTIONS ROW (Chat, Routine, Memory Vault)
                             Row(
                               children: [
                                 Expanded(
-                                  flex: 3,
+                                  flex: 4,
                                   child: ElevatedButton.icon(
                                     onPressed: () {
                                       context.push('/character_chat', extra: {
@@ -1744,7 +1853,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  flex: 3,
+                                  flex: 4,
                                   child: ElevatedButton.icon(
                                     onPressed: () => LiveRoutineSheet.show(context, char, onInteraction: _loadData),
                                     icon: const Icon(Icons.access_time, size: 15, color: Colors.amberAccent),
@@ -1758,106 +1867,152 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                IconButton.filledTonal(
-                                  onPressed: () => CharacterVoicemailsSheet.show(context, char),
-                                  icon: const Icon(Icons.mic, color: Colors.tealAccent, size: 18),
-                                  tooltip: 'Midnight Voicemails',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.teal.withValues(alpha: 0.15),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton.filledTonal(
-                                  onPressed: () => WardrobeClosetSheet.show(context, char, onEquipped: _loadData),
-                                  icon: const Icon(Icons.checkroom, color: Colors.purpleAccent, size: 18),
-                                  tooltip: 'Wardrobe Closet',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.purple.withValues(alpha: 0.15),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton.filledTonal(
-                                  onPressed: () => CharacterMemoryVaultSheet.show(
-                                    context,
-                                    characterId: char['id'].toString(),
-                                    characterName: charName,
-                                    avatarBase64: avatar?.toString(),
-                                    storyId: widget.storyId,
-                                  ),
-                                  icon: const Icon(Icons.psychology, color: Colors.cyanAccent, size: 18),
-                                  tooltip: 'Character Memory Vault & Feelings',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.cyan.withValues(alpha: 0.15),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            // Keepsakes & Epilogue Row: Mailbox, Dream, Domestic Bliss
-                            Row(
-                              children: [
                                 Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => VintageMailboxSheet.show(
+                                  flex: 4,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => CharacterMemoryVaultSheet.show(
                                       context,
                                       characterId: char['id'].toString(),
                                       characterName: charName,
                                       avatarBase64: avatar?.toString(),
+                                      storyId: widget.storyId,
                                     ),
-                                    icon: const Icon(Icons.markunread_mailbox, size: 14, color: Colors.amber),
-                                    label: const Text('Mailbox 📬', style: TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold)),
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => SharedDreamSheet.show(
-                                      context,
-                                      characterId: char['id'].toString(),
-                                      characterName: charName,
-                                      avatarBase64: avatar?.toString(),
-                                    ),
-                                    icon: const Icon(Icons.nightlight_round, size: 14, color: Colors.purpleAccent),
-                                    label: const Text('Dream 🌙', style: TextStyle(fontSize: 11, color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.4)),
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => DomesticBlissSheet.show(
-                                      context,
-                                      characterId: char['id'].toString(),
-                                      characterName: charName,
-                                      avatarBase64: avatar?.toString(),
-                                    ),
-                                    icon: const Icon(Icons.cottage, size: 14, color: Colors.orangeAccent),
-                                    label: const Text('Bliss 🏡', style: TextStyle(fontSize: 11, color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: Colors.orangeAccent.withValues(alpha: 0.4)),
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    icon: const Icon(Icons.psychology, size: 15, color: Colors.cyanAccent),
+                                    label: const Text('Vault 🧠', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.cyan[900]?.withValues(alpha: 0.6),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
 
-                            // 3. Active Wardrobe tag (if equipped)
+                            const SizedBox(height: 8),
+
+                            // 3. STORY KEEPSAKES & ACTIVITIES ROW (Mailbox, Dream, Bliss, Voicemail, Wardrobe)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => VintageMailboxSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.amber.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.markunread_mailbox, size: 15, color: Colors.amber),
+                                        SizedBox(height: 2),
+                                        Text('Mailbox', style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => SharedDreamSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.nightlight_round, size: 15, color: Colors.purpleAccent),
+                                        SizedBox(height: 2),
+                                        Text('Dream', style: TextStyle(fontSize: 10, color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => DomesticBlissSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.orangeAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.cottage, size: 15, color: Colors.orangeAccent),
+                                        SizedBox(height: 2),
+                                        Text('Bliss', style: TextStyle(fontSize: 10, color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => CharacterVoicemailsSheet.show(context, char),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.tealAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.mic, size: 15, color: Colors.tealAccent),
+                                        SizedBox(height: 2),
+                                        Text('Voice', style: TextStyle(fontSize: 10, color: Colors.tealAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => WardrobeClosetSheet.show(context, char, onEquipped: _loadData),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.pinkAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.checkroom, size: 15, color: Colors.pinkAccent),
+                                        SizedBox(height: 2),
+                                        Text('Wardrobe', style: TextStyle(fontSize: 10, color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // 4. Active Wardrobe tag (if equipped)
                             if (activeWardrobe != null && activeWardrobe.toString().isNotEmpty) ...[
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 8),
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
                                   color: Colors.purple.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(8),
@@ -1865,7 +2020,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.checkroom, size: 14, color: Colors.purpleAccent),
+                                    const Icon(Icons.checkroom, size: 13, color: Colors.purpleAccent),
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
@@ -1880,11 +2035,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                               ),
                             ],
 
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
 
-                            // 4. Dynamic Chemistry & Passion Gauge
+                            // 5. Dynamic Chemistry & Passion Gauge
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF1C1929),
                                 borderRadius: BorderRadius.circular(12),
@@ -1898,95 +2053,63 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                     children: [
                                       const Row(
                                         children: [
-                                          Icon(Icons.favorite, color: Colors.pinkAccent, size: 15),
-                                          SizedBox(width: 6),
-                                          Text('Chemistry & Bond Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          Icon(Icons.favorite, color: Colors.pinkAccent, size: 14),
+                                          SizedBox(width: 5),
+                                          Text('Chemistry & Bond Gauge', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                                         ],
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                         decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(6)),
                                         child: Text(char['romantic_status'] ?? 'Guarded', style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   Row(
                                     children: [
-                                      const Text('🔥 Passion', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                      const Text('🔥 Passion', style: TextStyle(fontSize: 10, color: Colors.white70)),
                                       const Spacer(),
-                                      Text('${char['passion_level'] ?? 50}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
+                                      Text('${char['passion_level'] ?? 50}%', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 3),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
                                       value: ((char['passion_level'] ?? 50) as int) / 100.0,
                                       backgroundColor: Colors.white12,
                                       valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
-                                      minHeight: 5,
+                                      minHeight: 4,
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 5),
                                   Row(
                                     children: [
-                                      const Text('🥀 Vulnerability', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                                      const Text('🥀 Vulnerability', style: TextStyle(fontSize: 10, color: Colors.white70)),
                                       const Spacer(),
-                                      Text('${char['vulnerability_level'] ?? 30}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
+                                      Text('${char['vulnerability_level'] ?? 30}%', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 3),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
                                       value: ((char['vulnerability_level'] ?? 30) as int) / 100.0,
                                       backgroundColor: Colors.white12,
                                       valueColor: const AlwaysStoppedAnimation<Color>(Colors.pinkAccent),
-                                      minHeight: 5,
+                                      minHeight: 4,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
 
-                            const SizedBox(height: 12),
-
-                            // 5. Personality & Appearance details
-                            if (char['personality'] != null && char['personality'].toString().isNotEmpty) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.03),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.white10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Row(
-                                      children: [
-                                        Icon(Icons.psychology, size: 14, color: Colors.amberAccent),
-                                        SizedBox(width: 5),
-                                        Text('Personality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amberAccent)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      char['personality'] ?? 'N/A',
-                                      style: const TextStyle(height: 1.35, fontSize: 13, color: Colors.white70),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            // 6. Personality & Appearance Collapsible Section
+                            if (hasBio) ...[
                               const SizedBox(height: 8),
-                            ],
-
-                            if (char['appearance'] != null && char['appearance'].toString().isNotEmpty) ...[
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.03),
                                   borderRadius: BorderRadius.circular(10),
@@ -1995,18 +2118,78 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Row(
-                                      children: [
-                                        Icon(Icons.face, size: 14, color: Colors.cyanAccent),
-                                        SizedBox(width: 5),
-                                        Text('Appearance & Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.cyanAccent)),
-                                      ],
+                                    InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          if (isBioExpanded) {
+                                            _expandedCharacterBios.remove(charId);
+                                          } else {
+                                            _expandedCharacterBios.add(charId);
+                                          }
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.person_pin, size: 14, color: Colors.amberAccent),
+                                            const SizedBox(width: 6),
+                                            const Text('Personality & Appearance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.amberAccent)),
+                                            const Spacer(),
+                                            Text(
+                                              isBioExpanded ? 'Hide' : 'Show',
+                                              style: const TextStyle(fontSize: 10, color: Colors.white60),
+                                            ),
+                                            Icon(
+                                              isBioExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                              size: 15,
+                                              color: Colors.white60,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      char['appearance'] ?? 'N/A',
-                                      style: const TextStyle(height: 1.35, fontSize: 13, color: Colors.white70),
-                                    ),
+                                    if (isBioExpanded) ...[
+                                      const Divider(height: 1, color: Colors.white10),
+                                      Padding(
+                                        padding: const EdgeInsets.all(10.0),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            if (char['personality'] != null && char['personality'].toString().isNotEmpty) ...[
+                                              const Row(
+                                                children: [
+                                                  Icon(Icons.psychology, size: 13, color: Colors.amberAccent),
+                                                  SizedBox(width: 4),
+                                                  Text('Personality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.amberAccent)),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                char['personality'] ?? 'N/A',
+                                                style: const TextStyle(height: 1.35, fontSize: 12, color: Colors.white70),
+                                              ),
+                                              const SizedBox(height: 8),
+                                            ],
+                                            if (char['appearance'] != null && char['appearance'].toString().isNotEmpty) ...[
+                                              const Row(
+                                                children: [
+                                                  Icon(Icons.face, size: 13, color: Colors.cyanAccent),
+                                                  SizedBox(width: 4),
+                                                  Text('Appearance & Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.cyanAccent)),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                char['appearance'] ?? 'N/A',
+                                                style: const TextStyle(height: 1.35, fontSize: 12, color: Colors.white70),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
