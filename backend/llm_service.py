@@ -3156,3 +3156,324 @@ Format STRICTLY as JSON:
             "interactive_activity": "Wrapping your arms around her waist from behind and resting your chin on her shoulder.",
             "bliss_sentiment": "Unconditional peace, quiet belonging, and domestic tenderness."
         }
+
+
+# ==============================================================================
+# BATCH 5: 6 NEXT-LEVEL VISUAL & SENSORY FEATURES
+# ==============================================================================
+
+async def generate_candid_photo_details(
+    character_name: str,
+    character_appearance: str,
+    character_personality: str,
+    story_summary: str,
+    category: str,
+    prompt_theme: str
+) -> dict:
+    prompt = f"""You are a creative romance director. Generate a spontaneous, authentic, candid photo moment sent by {character_name} to the user.
+CHARACTER:
+Name: {character_name}
+Appearance: {character_appearance}
+Personality: {character_personality}
+
+STORY CONTEXT:
+{story_summary}
+
+PHOTO CATEGORY / SITUATION:
+{category} (Details: {prompt_theme})
+
+Return STRICTLY a JSON object with:
+{{
+  "image_prompt": "highly detailed photorealistic description of {character_name} in this candid situation, natural phone camera selfie angle, natural lighting, lifelike skin texture, real human photo, 8k",
+  "caption": "A short, sweet, authentic 1-2 sentence text message she sent along with this photo, directly to the user (e.g. 'I tried making your favorite chai... it actually turned out so good! Wish you were here to taste it 👉👈')",
+  "location_tag": "Short realistic place name (e.g. 'Her Cozy Bedroom', 'City Central Library', 'Sunlit Balcony', 'Old Town Cafe')"
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=400,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating candid photo: {e}")
+        return {
+            "image_prompt": f"candid realistic phone selfie of a beautiful young woman {character_appearance}, smiling warmly at camera, natural indoor lighting, 8k resolution",
+            "caption": f"I was just thinking about you and wanted to show you what I was up to... don't tease me about how messy my hair is!",
+            "location_tag": "Sunlit Bedroom"
+        }
+
+async def generate_daily_story_details(
+    character_name: str,
+    character_appearance: str,
+    character_personality: str,
+    time_period: str
+) -> dict:
+    prompt = f"""Generate a spontaneous Instagram/Snapchat-style 24-hour Story post from {character_name}.
+CHARACTER: {character_name} ({character_personality})
+APPEARANCE: {character_appearance}
+TIME OF DAY: {time_period} (morning, afternoon, evening, or late_night)
+
+Format STRICTLY as JSON:
+{{
+  "status_text": "Short candid story caption with emojis (1-2 lines, e.g. 'Can\'t wake up without my morning chai ☕ wish you were sitting across from me')",
+  "image_prompt": "vivid aesthetic photo matching this exact time of day, {character_name} or her immediate first-person perspective, cozy natural lighting, film-like phone photography",
+  "music_mood": "e.g. 'Rainy Lo-Fi Chai', 'Midnight Acoustic Piano', 'Golden Hour Breeze'"
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=350,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating daily story: {e}")
+        return {
+            "status_text": f"Just another day wishing you were right here beside me... ✨",
+            "image_prompt": f"aesthetic cozy photography, warm lighting, beautiful perspective with subtle touches of tea and soft fabrics, cinematic",
+            "music_mood": "Acoustic Warmth & Gentle Rain"
+        }
+
+async def generate_vhs_memory_details(
+    character_name: str,
+    character_appearance: str,
+    story_summary: str,
+    clip_theme: str
+) -> dict:
+    prompt = f"""Create a nostalgic, looping VHS camcorder memory moment of {character_name}.
+CHARACTER: {character_name} ({character_appearance})
+STORY CONTEXT: {story_summary}
+THEME: {clip_theme}
+
+Format STRICTLY as JSON:
+{{
+  "clip_title": "Poetic 3-5 word title (e.g. 'Turning Around in Autumn Rain', 'Stealing Your Oversized Jacket')",
+  "narrative_moment": "A deeply poetic paragraph describing the fleeting, precious moment caught on camcorder tape, her laughter, the breeze, the eye contact.",
+  "whisper_quote": "{character_name}: 'Wait, are you recording this? Put the camera away... okay fine, only if you smile with me.'",
+  "ambient_sound": "e.g. 'Soft Rain & Cassette Tape Whir', 'Night Ocean Breeze & Soft Giggles', 'Vinyl Crackle & Distant Piano'",
+  "image_prompt": "vintage 1990s VHS camcorder still, warm film grain, slight chromatic aberration, {character_name} caught in a candid candid smile turning toward camera, nostalgic lighting, analog film masterpiece"
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=450,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating VHS memory: {e}")
+        return {
+            "clip_title": f"A Fleeting Smile in the Rain",
+            "narrative_moment": f"The vintage magnetic tape flickers with warm analog grain. {character_name} spins around under the glow of streetlamps, raindrops shimmering like diamonds in her hair. She glances at the lens with breathless fondness.",
+            "whisper_quote": f"{character_name}: 'You always know how to make me laugh when I least expect it...'",
+            "ambient_sound": "Soft Raindrops & Lo-Fi Tape Flutter",
+            "image_prompt": f"vintage analog camcorder still of {character_name}, nostalgic film grain, warm incandescent lighting, candid laughing expression"
+        }
+
+async def generate_gift_tryon_details(
+    character_name: str,
+    character_appearance: str,
+    character_personality: str,
+    gift_name: str,
+    gift_category: str
+) -> dict:
+    prompt = f"""The user just surprised {character_name} with a romantic gift: '{gift_name}' (Category: {gift_category}).
+CHARACTER: {character_name}
+APPEARANCE: {character_appearance}
+PERSONALITY: {character_personality}
+
+Generate her authentic, deeply touched reaction dialogue and 2 candid mirror selfie prompts of her trying it on!
+
+Format STRICTLY as JSON:
+{{
+  "character_reaction": "Emotional, blushing, sweet spoken reaction in quotes (e.g. 'Wait... is this really for me? Oh my heart, you remembered I love emerald! Let me try it on right now!')",
+  "equipped_wardrobe": "Updated attire description (e.g. 'Wearing {gift_name}')",
+  "tryon_caption_1": "Her first mirror selfie caption (e.g. 'How does it look? Be totally honest with me 👉👈')",
+  "image_prompt_1": "candid mirror selfie of {character_name} wearing {gift_name}, holding phone, blushing slightly, looking directly into mirror, photorealistic, 8k",
+  "tryon_caption_2": "Her second playful or affectionate pose caption (e.g. 'I\'m literally never taking this off. Thank you... for everything.')",
+  "image_prompt_2": "candid over-the-shoulder angle of {character_name} wearing {gift_name}, warm lighting, genuine happy smile, photorealistic, 8k"
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=500,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating gift try-on: {e}")
+        return {
+            "character_reaction": f"Wait... you bought this for me? My heart is beating so fast... let me try it on right now!",
+            "equipped_wardrobe": f"Attire: Styled with {gift_name}",
+            "tryon_caption_1": "Does it suit me? I hope you like how it looks!",
+            "image_prompt_1": f"candid mirror selfie of beautiful young woman {character_appearance} wearing {gift_name}, soft indoor light, 8k",
+            "tryon_caption_2": "I'm never taking this off. Thank you so much...",
+            "image_prompt_2": f"candid close-up of {character_appearance} happily smiling wearing {gift_name}, natural lighting"
+        }
+
+async def generate_photobooth_details(
+    character_name: str,
+    character_appearance: str,
+    milestone_event: str
+) -> dict:
+    prompt = f"""Generate a Korean/Japanese 4-cut Purikura photobooth strip commemorating a date between {character_name} and the user.
+EVENT: {milestone_event}
+CHARACTER: {character_name} ({character_appearance})
+
+Format STRICTLY as JSON with 4 distinct candid poses:
+{{
+  "shot_1_pose": "Shy gentle smile next to each other",
+  "shot_1_prompt": "photobooth camera angle, {character_name} smiling shyly next to companion, warm booth lighting, cute candid look",
+  "shot_2_pose": "Playful peace signs and winking at camera",
+  "shot_2_prompt": "photobooth camera angle, {character_name} making cute peace sign ✌️, playful wink, laughing together",
+  "shot_3_pose": "Resting head tenderly on shoulder",
+  "shot_3_prompt": "photobooth camera angle, {character_name} leaning head softly on companion shoulder, peaceful loving expression",
+  "shot_4_pose": "Affectionate candid gaze looking at each other",
+  "shot_4_prompt": "photobooth camera angle, {character_name} laughing warmly looking into companion eyes, candid genuine romance",
+  "handwritten_note": "Short sweet doodle inscription at bottom of strip (e.g. '{character_name} & You — Forever & Always ✨')"
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating photobooth: {e}")
+        return {
+            "shot_1_pose": "Shy gentle smile",
+            "shot_1_prompt": f"photobooth strip shot of {character_name} smiling shyly next to you, cute photobooth flash",
+            "shot_2_pose": "Cute peace signs",
+            "shot_2_prompt": f"photobooth strip shot of {character_name} flashing playful peace signs and grinning",
+            "shot_3_pose": "Leaning head on your shoulder",
+            "shot_3_prompt": f"photobooth strip shot of {character_name} resting head softly on your shoulder",
+            "shot_4_pose": "Candid affectionate laugh",
+            "shot_4_prompt": f"photobooth strip shot of {character_name} laughing warmly with genuine happiness",
+            "handwritten_note": f"{character_name} & You — Best Day Ever 💖"
+        }
+
+async def generate_room_inspection_details(
+    character_name: str,
+    character_appearance: str,
+    character_personality: str,
+    room_type: str
+) -> dict:
+    prompt = f"""Generate an interactive 'Room & Secret Inspection' scene of {character_name}'s personal space ({room_type}).
+CHARACTER: {character_name} ({character_personality})
+
+Format STRICTLY as JSON with 3 interactive hotspots (coordinates in percent 10-85%):
+{{
+  "scene_title": "e.g. '{character_name}\'s Cozy Bedroom Sanctuary' or 'Her Late-Night Study Desk'",
+  "scene_description": "A sensory, intimate description of her personal room, scents, lighting, and cozy items.",
+  "image_prompt": "aesthetic interior photography of {character_name}\'s {room_type}, cozy soft lighting, lived-in intimate details, fairy lights, books, tea cup, 8k",
+  "hotspots": [
+    {{
+      "x_percent": 30,
+      "y_percent": 45,
+      "item_name": "Framed Childhood Photo",
+      "discovery_lore": "A slightly faded photo of her as a little girl holding a plush bunny in a sunlit garden.",
+      "character_secret_dialogue": "'That was taken when I was seven... I used to carry that bunny everywhere because I was afraid of the dark.'"
+    }},
+    {{
+      "x_percent": 65,
+      "y_percent": 60,
+      "item_name": "Folded Pastel Sticky Note",
+      "discovery_lore": "Under her diary lies a doodle of your initials enclosed in a tiny sketched heart with little sparkles.",
+      "character_secret_dialogue": "'Wait, don\'t read that! ...Okay, fine. I was just bored during class, okay? Don\'t get a big head!'"
+    }},
+    {{
+      "x_percent": 50,
+      "y_percent": 80,
+      "item_name": "Special Keepsake by Her Pillow",
+      "discovery_lore": "A little token or ribbon you gave her, kept right next to where her head rests at night.",
+      "character_secret_dialogue": "'I keep it right where I sleep so I always feel like you\'re close by...'"
+    }}
+  ]
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating room inspection: {e}")
+        return {
+            "scene_title": f"{character_name}'s Cozy Private Sanctuary",
+            "scene_description": f"The warm glow of fairy lights casts gentle shadows across the wooden desk. The comforting scent of vanilla and fresh tea lingers in the quiet air.",
+            "image_prompt": f"aesthetic cozy bedroom interior, warm lamplight, desk with books and tea, fairy lights, artistic, masterpiece",
+            "hotspots": [
+                {
+                    "x_percent": 35,
+                    "y_percent": 40,
+                    "item_name": "Framed Childhood Photo",
+                    "discovery_lore": "A vintage framed snapshot from her early childhood.",
+                    "character_secret_dialogue": "That was taken when I was little... I was always so shy around everyone."
+                },
+                {
+                    "x_percent": 65,
+                    "y_percent": 55,
+                    "item_name": "Hidden Doodle Note",
+                    "discovery_lore": "A little note with your initials sketched inside a heart.",
+                    "character_secret_dialogue": "You weren't supposed to find that! I was just doodling... really!"
+                },
+                {
+                    "x_percent": 50,
+                    "y_percent": 75,
+                    "item_name": "Keepsake by the Bedside",
+                    "discovery_lore": "A token you gave her, placed right next to her lamp.",
+                    "character_secret_dialogue": "I keep it right here every night so I fall asleep feeling peaceful."
+                }
+            ]
+        }

@@ -14,6 +14,11 @@ import '../widgets/character_memory_vault_sheet.dart';
 import '../widgets/vintage_mailbox_sheet.dart';
 import '../widgets/shared_dream_sheet.dart';
 import '../widgets/domestic_bliss_sheet.dart';
+import '../widgets/candid_camera_roll_sheet.dart';
+import '../widgets/vhs_memory_clips_sheet.dart';
+import '../widgets/story_romance_boutique_sheet.dart';
+import '../widgets/photobooth_strip_sheet.dart';
+import '../widgets/room_inspection_sheet.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -843,6 +848,42 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                   characterName: widget.characterName,
                   avatarBase64: widget.backgroundImage,
                 );
+              } else if (choice == 'Candid Selfies') {
+                CandidCameraRollSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'VHS Tape') {
+                VhsMemoryClipsSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Boutique Gifts') {
+                StoryRomanceBoutiqueSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                  onGiftGiven: _loadChat,
+                );
+              } else if (choice == 'Photobooth Strip') {
+                PhotoboothStripSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Inspect Sanctuary') {
+                RoomInspectionSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
               } else if (choice == 'Intimacy Unlocks') {
                 _showIntimacyMilestones();
               } else if (choice == 'Toggle Audio') {
@@ -863,6 +904,11 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                 const PopupMenuItem(value: 'Dreamworld', child: Row(children: [Icon(Icons.nightlight_round, color: Colors.purpleAccent), SizedBox(width: 8), Text('Shared Dreamworld 🌙')])),
                 const PopupMenuItem(value: 'Domestic Bliss', child: Row(children: [Icon(Icons.cottage, color: Colors.orangeAccent), SizedBox(width: 8), Text('Domestic Bliss 🏡')])),
                 const PopupMenuItem(value: 'Memory Vault', child: Row(children: [Icon(Icons.psychology, color: Colors.cyanAccent), SizedBox(width: 8), Text('Memory Vault & Feelings')])),
+                const PopupMenuItem(value: 'Candid Selfies', child: Row(children: [Icon(Icons.camera_alt, color: Colors.pinkAccent), SizedBox(width: 8), Text('Candid Camera Roll 📸')])),
+                const PopupMenuItem(value: 'VHS Tape', child: Row(children: [Icon(Icons.videocam, color: Colors.redAccent), SizedBox(width: 8), Text('VHS Camcorder Vault 📹')])),
+                const PopupMenuItem(value: 'Boutique Gifts', child: Row(children: [Icon(Icons.card_giftcard, color: Colors.amberAccent), SizedBox(width: 8), Text('Romance Boutique 🛍️')])),
+                const PopupMenuItem(value: 'Photobooth Strip', child: Row(children: [Icon(Icons.crop_portrait, color: Colors.purpleAccent), SizedBox(width: 8), Text('4-Cut Photobooth 🧳')])),
+                const PopupMenuItem(value: 'Inspect Sanctuary', child: Row(children: [Icon(Icons.search, color: Colors.tealAccent), SizedBox(width: 8), Text('Inspect Sanctuary 🔍')])),
                 const PopupMenuItem(value: 'Intimacy Unlocks', child: Row(children: [Icon(Icons.stars, color: Colors.pinkAccent), SizedBox(width: 8), Text('Intimacy Unlocks')])),
                 PopupMenuItem(value: 'Toggle Audio', child: Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')),
                 PopupMenuItem(value: 'Toggle Background', child: Text(_showBackgroundImage ? 'Hide Background' : 'Show Background')),
@@ -1118,6 +1164,37 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                                   TextButton.icon(icon: const Icon(Icons.lightbulb, size: 16), label: const Text('Suggest'), onPressed: _isSending ? null : _getSuggestions),
                                   TextButton.icon(icon: const Icon(Icons.psychology, size: 16), label: const Text('Thought'), onPressed: _isSending ? null : _generateThought),
                                   TextButton.icon(icon: const Icon(Icons.refresh, size: 16), label: const Text('Regenerate'), onPressed: _isSending ? null : _regenerateChat),
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.camera_alt, size: 16, color: Colors.pinkAccent),
+                                    label: const Text('Photo 📸', style: TextStyle(color: Colors.pinkAccent)),
+                                    onPressed: () => CandidCameraRollSheet.show(
+                                      context,
+                                      characterId: widget.characterId,
+                                      characterName: widget.characterName,
+                                      avatarBase64: widget.backgroundImage,
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.card_giftcard, size: 16, color: Colors.amberAccent),
+                                    label: const Text('Gift 🛍️', style: TextStyle(color: Colors.amberAccent)),
+                                    onPressed: () => StoryRomanceBoutiqueSheet.show(
+                                      context,
+                                      characterId: widget.characterId,
+                                      characterName: widget.characterName,
+                                      avatarBase64: widget.backgroundImage,
+                                      onGiftGiven: _loadChat,
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.videocam, size: 16, color: Colors.redAccent),
+                                    label: const Text('VHS 📹', style: TextStyle(color: Colors.redAccent)),
+                                    onPressed: () => VhsMemoryClipsSheet.show(
+                                      context,
+                                      characterId: widget.characterId,
+                                      characterName: widget.characterName,
+                                      avatarBase64: widget.backgroundImage,
+                                    ),
+                                  ),
                                   TextButton.icon(icon: const Icon(Icons.restart_alt, size: 16, color: Colors.red), label: const Text('Restart', style: TextStyle(color: Colors.red)), onPressed: _isSending ? null : _restartChat),
                                 ],
                               ),

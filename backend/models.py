@@ -338,3 +338,90 @@ class CharacterDomesticBlissVignette(Base):
     interactive_activity = Column(String, nullable=True)
     bliss_sentiment = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterCandidPhoto(Base):
+    __tablename__ = "character_candid_photos"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    category = Column(String, default="casual_selfie")
+    prompt_theme = Column(String)
+    image_url = Column(Text)
+    caption = Column(Text)
+    location_tag = Column(String, nullable=True)
+    is_spontaneous = Column(Boolean, default=False)
+    stickers_json = Column(Text, nullable=True)
+    is_favorited = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterDailyStory(Base):
+    __tablename__ = "character_daily_stories"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    time_period = Column(String, default="morning") # morning, afternoon, evening, late_night
+    status_text = Column(Text)
+    image_url = Column(Text)
+    music_mood = Column(String, default="Acoustic Lo-Fi")
+    replies_json = Column(Text, default="[]")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterVhsMemoryClip(Base):
+    __tablename__ = "character_vhs_memory_clips"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    clip_title = Column(String)
+    date_stamp = Column(String)
+    vibe_filter = Column(String, default="vhs_camcorder")
+    ambient_sound = Column(String, default="Gentle Rain & Tape Whir")
+    image_url = Column(Text)
+    narrative_moment = Column(Text)
+    whisper_quote = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterGiftTryOn(Base):
+    __tablename__ = "character_gift_tryons"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    gift_name = Column(String)
+    gift_category = Column(String, default="outfit")
+    character_reaction = Column(Text)
+    tryon_photo_1 = Column(Text)
+    tryon_caption_1 = Column(Text)
+    tryon_photo_2 = Column(Text, nullable=True)
+    tryon_caption_2 = Column(Text, nullable=True)
+    equipped_wardrobe = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterPhotoboothStrip(Base):
+    __tablename__ = "character_photobooth_strips"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    milestone_event = Column(String)
+    strip_theme = Column(String, default="pastel_blossom")
+    shot_1_pose = Column(String)
+    shot_1_image = Column(Text)
+    shot_2_pose = Column(String)
+    shot_2_image = Column(Text)
+    shot_3_pose = Column(String)
+    shot_3_image = Column(Text)
+    shot_4_pose = Column(String)
+    shot_4_image = Column(Text)
+    handwritten_note = Column(Text)
+    stickers_json = Column(Text, default="[]")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterRoomInspection(Base):
+    __tablename__ = "character_room_inspections"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    scene_title = Column(String)
+    image_url = Column(Text)
+    scene_description = Column(Text)
+    hotspots_json = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

@@ -23,6 +23,12 @@ import '../widgets/vintage_mailbox_sheet.dart';
 import '../widgets/shared_dream_sheet.dart';
 import '../widgets/jealousy_rivalry_dialog.dart';
 import '../widgets/domestic_bliss_sheet.dart';
+import '../widgets/candid_camera_roll_sheet.dart';
+import '../widgets/daily_story_reel_viewer.dart';
+import '../widgets/vhs_memory_clips_sheet.dart';
+import '../widgets/story_romance_boutique_sheet.dart';
+import '../widgets/photobooth_strip_sheet.dart';
+import '../widgets/room_inspection_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -67,6 +73,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
   bool isDispatchingWaxReply = false;
   Map<String, dynamic>? lastWaxReplyReaction;
   bool _isStoryLoungeExpanded = false;
+  List<dynamic> _dailyStories = [];
   final Set<String> _expandedCharacterBios = {};
 
   @override
@@ -118,6 +125,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     } catch (e) {
       debugPrint('Error loading illustrations: $e');
     }
+
+    try {
+      final storyReels = await ApiService.getStoryDailyStories(widget.storyId);
+      setState(() => _dailyStories = storyReels);
+    } catch (_) {}
 
     setState(() {
       isLoading = false;
@@ -1585,6 +1597,133 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
           ),
         ),
 
+        // Daily Stories Reels Bar
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B1728),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () async {
+                  if (characters.isNotEmpty) {
+                    final char = characters.first;
+                    await ApiService.generateDailyStory(char['id'].toString(), timePeriod: 'morning');
+                    _loadData();
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white10,
+                        border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.6), width: 1.5),
+                      ),
+                      child: const Icon(Icons.add_a_photo, size: 20, color: Colors.pinkAccent),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text('Post Story', style: TextStyle(fontSize: 10, color: Colors.white70)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(width: 1, height: 40, color: Colors.white12),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _dailyStories.isEmpty
+                    ? InkWell(
+                        onTap: () async {
+                          if (characters.isNotEmpty) {
+                            final char = characters.first;
+                            await ApiService.generateDailyStory(char['id'].toString(), timePeriod: 'morning');
+                            _loadData();
+                          }
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.auto_stories, color: Colors.purpleAccent, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Tap to generate 24h Daily Story Reels 🎞️',
+                                style: TextStyle(fontSize: 11, color: Colors.white70, fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : SizedBox(
+                        height: 54,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _dailyStories.length,
+                          itemBuilder: (ctx, sIdx) {
+                            final st = _dailyStories[sIdx];
+                            final charAv = st['character_avatar'];
+                            final cName = st['character_name'] ?? 'Character';
+                            return GestureDetector(
+                              onTap: () {
+                                DailyStoryReelViewer.show(
+                                  context,
+                                  stories: _dailyStories,
+                                  initialIndex: sIdx,
+                                  storyId: widget.storyId,
+                                  onRefresh: _loadData,
+                                );
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 12),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: [Colors.purpleAccent, Colors.pinkAccent, Colors.amberAccent],
+                                        ),
+                                      ),
+                                      child: CircleAvatar(
+                                        radius: 17,
+                                        backgroundColor: Colors.purple[900],
+                                        backgroundImage: (charAv != null && charAv.toString().isNotEmpty)
+                                            ? (charAv.toString().startsWith('http')
+                                                ? NetworkImage(charAv.toString())
+                                                : MemoryImage(base64Decode(charAv.toString()))) as ImageProvider
+                                            : null,
+                                        child: (charAv == null || charAv.toString().isEmpty)
+                                            ? const Icon(Icons.person, color: Colors.white, size: 16)
+                                            : null,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      cName,
+                                      style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
           child: TextField(
@@ -2000,6 +2139,135 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                         Icon(Icons.checkroom, size: 15, color: Colors.pinkAccent),
                                         SizedBox(height: 2),
                                         Text('Wardrobe', style: TextStyle(fontSize: 10, color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            // Row 3: Visual & Sensory Studios (Selfies, VHS Tape, Boutique, Photobooth, Room Inspect)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => CandidCameraRollSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                      storyId: widget.storyId,
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.pinkAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.camera_alt, size: 14, color: Colors.pinkAccent),
+                                        SizedBox(height: 2),
+                                        Text('Selfies 📸', style: TextStyle(fontSize: 9, color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => VhsMemoryClipsSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.videocam, size: 14, color: Colors.redAccent),
+                                        SizedBox(height: 2),
+                                        Text('VHS 📹', style: TextStyle(fontSize: 9, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => StoryRomanceBoutiqueSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                      onGiftGiven: _loadData,
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.card_giftcard, size: 14, color: Colors.amberAccent),
+                                        SizedBox(height: 2),
+                                        Text('Gift 🛍️', style: TextStyle(fontSize: 9, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => PhotoboothStripSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.purpleAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.crop_portrait, size: 14, color: Colors.purpleAccent),
+                                        SizedBox(height: 2),
+                                        Text('4-Cut 🧳', style: TextStyle(fontSize: 9, color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => RoomInspectionSheet.show(
+                                      context,
+                                      characterId: char['id'].toString(),
+                                      characterName: charName,
+                                      avatarBase64: avatar?.toString(),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.tealAccent.withValues(alpha: 0.45)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.search, size: 14, color: Colors.tealAccent),
+                                        SizedBox(height: 2),
+                                        Text('Inspect 🔍', style: TextStyle(fontSize: 9, color: Colors.tealAccent, fontWeight: FontWeight.bold)),
                                       ],
                                     ),
                                   ),

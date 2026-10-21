@@ -368,3 +368,130 @@ class MangaComicResponse(BaseModel):
     chapter_title: str
     panels: List[MangaPanelSchema] = []
 
+# --- 📸 1. Candid Photo Requests ---
+class CandidPhotoRequest(BaseModel):
+    category: Optional[str] = "casual_selfie"
+    prompt_theme: Optional[str] = ""
+    is_spontaneous: Optional[bool] = False
+
+class CandidPhotoResponse(BaseModel):
+    id: UUID4
+    story_id: Optional[UUID4] = None
+    character_id: UUID4
+    category: str
+    prompt_theme: str
+    image_url: str
+    caption: str
+    location_tag: Optional[str] = None
+    is_spontaneous: bool
+    stickers_json: Optional[str] = None
+    is_favorited: bool = False
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# --- 🎞️ 2. Daily Stories (Status Reel) ---
+class DailyStoryRequest(BaseModel):
+    time_period: Optional[str] = "morning"
+
+class DailyStoryReplyRequest(BaseModel):
+    reply_text: str
+    reaction_emoji: Optional[str] = "❤️"
+
+class DailyStoryResponse(BaseModel):
+    id: UUID4
+    story_id: Optional[UUID4] = None
+    character_id: UUID4
+    character_name: Optional[str] = None
+    character_avatar: Optional[str] = None
+    time_period: str
+    status_text: str
+    image_url: str
+    music_mood: str
+    replies_json: Optional[str] = "[]"
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# --- 📹 3. VHS Memory Clips ---
+class VhsClipRequest(BaseModel):
+    clip_theme: Optional[str] = "candid_romantic_moment"
+
+class VhsClipResponse(BaseModel):
+    id: UUID4
+    story_id: Optional[UUID4] = None
+    character_id: UUID4
+    clip_title: str
+    date_stamp: str
+    vibe_filter: str
+    ambient_sound: str
+    image_url: str
+    narrative_moment: str
+    whisper_quote: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# --- 🛍️ 4. Gift Giving & Try-On Photoshoot ---
+class GiftGiveRequest(BaseModel):
+    gift_name: str
+    gift_category: Optional[str] = "outfit"
+
+class GiftTryOnResponse(BaseModel):
+    id: UUID4
+    story_id: Optional[UUID4] = None
+    character_id: UUID4
+    gift_name: str
+    gift_category: str
+    character_reaction: str
+    tryon_photo_1: str
+    tryon_caption_1: str
+    tryon_photo_2: Optional[str] = None
+    tryon_caption_2: Optional[str] = None
+    equipped_wardrobe: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# --- 🧳 5. Photobooth Strips ---
+class PhotoboothRequest(BaseModel):
+    milestone_event: Optional[str] = "Candid Couple Date"
+    strip_theme: Optional[str] = "pastel_blossom"
+
+class PhotoboothStripResponse(BaseModel):
+    id: UUID4
+    story_id: Optional[UUID4] = None
+    character_id: UUID4
+    milestone_event: str
+    strip_theme: str
+    shot_1_pose: str
+    shot_1_image: str
+    shot_2_pose: str
+    shot_2_image: str
+    shot_3_pose: str
+    shot_3_image: str
+    shot_4_pose: str
+    shot_4_image: str
+    handwritten_note: str
+    stickers_json: Optional[str] = "[]"
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# --- 🔍 6. Room Inspection ---
+class RoomInspectionRequest(BaseModel):
+    room_type: Optional[str] = "bedroom"
+
+class RoomInspectionResponse(BaseModel):
+    id: UUID4
+    story_id: Optional[UUID4] = None
+    character_id: UUID4
+    scene_title: str
+    image_url: str
+    scene_description: str
+    hotspots_json: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+

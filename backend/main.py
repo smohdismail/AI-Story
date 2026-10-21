@@ -4183,6 +4183,456 @@ async def generate_character_domestic_bliss(character_id: uuid.UUID, req: Domest
     }
 
 
+
+# ==============================================================================
+# BATCH 5: 6 NEXT-LEVEL VISUAL & SENSORY ENDPOINTS
+# ==============================================================================
+
+# --- 📸 1. Candid Photo Requests & Camera Roll ---
+@app.post("/api/v1/characters/{character_id}/candid_photos/request", response_model=schemas.CandidPhotoResponse)
+async def request_candid_photo(
+    character_id: uuid.UUID,
+    request: schemas.CandidPhotoRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    story = await db.get(models.Story, char.story_id) if char.story_id else None
+    story_summary = story.story_summary or story.synopsis if story else ""
+    
+    data = await llm_service.generate_candid_photo_details(
+        character_name=char.name,
+        character_appearance=char.appearance or "beautiful expressive features",
+        character_personality=char.personality or "warm and sweet",
+        story_summary=story_summary,
+        category=request.category or "casual_selfie",
+        prompt_theme=request.prompt_theme or "cozy moment"
+    )
+    
+    img_prompt = data.get("image_prompt", f"candid phone selfie of {char.name}")
+    safe_prompt = urllib.parse.quote(img_prompt[:320])
+    seed = random.randint(10000, 999999)
+    image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=768&height=1024&nologo=true&model=flux&seed={seed}"
+    
+    photo = models.CharacterCandidPhoto(
+        story_id=char.story_id,
+        character_id=char.id,
+        category=request.category or "casual_selfie",
+        prompt_theme=request.prompt_theme or "Candid moment",
+        image_url=image_url,
+        caption=data.get("caption", "Just thinking of you..."),
+        location_tag=data.get("location_tag", "Private Sanctuary"),
+        is_spontaneous=request.is_spontaneous or False,
+        stickers_json="[]"
+    )
+    db.add(photo)
+    await db.commit()
+    await db.refresh(photo)
+    return photo
+
+@app.get("/api/v1/characters/{character_id}/candid_photos", response_model=list[schemas.CandidPhotoResponse])
+async def list_candid_photos(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterCandidPhoto)
+        .where(models.CharacterCandidPhoto.character_id == character_id)
+        .order_by(models.CharacterCandidPhoto.created_at.desc())
+    )
+    return res.scalars().all()
+
+@app.post("/api/v1/candid_photos/{photo_id}/favorite")
+async def toggle_favorite_photo(photo_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    photo = await db.get(models.CharacterCandidPhoto, photo_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    photo.is_favorited = not photo.is_favorited
+    await db.commit()
+    return {"status": "success", "is_favorited": photo.is_favorited}
+
+# --- 🎞️ 2. Daily Stories (24-Hour Status Reels) ---
+@app.post("/api/v1/characters/{character_id}/daily_stories/generate", response_model=schemas.DailyStoryResponse)
+async def generate_daily_story(
+    character_id: uuid.UUID,
+    request: schemas.DailyStoryRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    data = await llm_service.generate_daily_story_details(
+        character_name=char.name,
+        character_appearance=char.appearance or "beautiful girl",
+        character_personality=char.personality or "warm and playful",
+        time_period=request.time_period or "morning"
+    )
+    
+    img_prompt = data.get("image_prompt", f"cozy photography of {char.name}")
+    safe_prompt = urllib.parse.quote(img_prompt[:320])
+    seed = random.randint(10000, 999999)
+    image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=768&height=1280&nologo=true&model=flux&seed={seed}"
+    
+    story_post = models.CharacterDailyStory(
+        story_id=char.story_id,
+        character_id=char.id,
+        time_period=request.time_period or "morning",
+        status_text=data.get("status_text", "Thinking of you today... ✨"),
+        image_url=image_url,
+        music_mood=data.get("music_mood", "Acoustic Warmth & Gentle Rain"),
+        replies_json="[]"
+    )
+    db.add(story_post)
+    await db.commit()
+    await db.refresh(story_post)
+    
+    return schemas.DailyStoryResponse(
+        id=story_post.id,
+        story_id=story_post.story_id,
+        character_id=story_post.character_id,
+        character_name=char.name,
+        character_avatar=char.avatar_base64,
+        time_period=story_post.time_period,
+        status_text=story_post.status_text,
+        image_url=story_post.image_url,
+        music_mood=story_post.music_mood,
+        replies_json=story_post.replies_json,
+        created_at=story_post.created_at
+    )
+
+@app.get("/api/v1/stories/{story_id}/daily_stories", response_model=list[schemas.DailyStoryResponse])
+async def list_daily_stories(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterDailyStory)
+        .where(models.CharacterDailyStory.story_id == story_id)
+        .order_by(models.CharacterDailyStory.created_at.desc())
+    )
+    stories = res.scalars().all()
+    out = []
+    for s in stories:
+        char = await db.get(models.Character, s.character_id)
+        out.append(schemas.DailyStoryResponse(
+            id=s.id,
+            story_id=s.story_id,
+            character_id=s.character_id,
+            character_name=char.name if char else "Character",
+            character_avatar=char.avatar_base64 if char else None,
+            time_period=s.time_period,
+            status_text=s.status_text,
+            image_url=s.image_url,
+            music_mood=s.music_mood,
+            replies_json=s.replies_json,
+            created_at=s.created_at
+        ))
+    return out
+
+@app.post("/api/v1/daily_stories/{story_item_id}/reply")
+async def reply_to_daily_story(
+    story_item_id: uuid.UUID,
+    request: schemas.DailyStoryReplyRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    story_item = await db.get(models.CharacterDailyStory, story_item_id)
+    if not story_item:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    replies = json.loads(story_item.replies_json or "[]")
+    replies.append({
+        "reply_text": request.reply_text,
+        "reaction_emoji": request.reaction_emoji,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    story_item.replies_json = json.dumps(replies)
+    
+    # Also save as a chat message into the character's conversation
+    char = await db.get(models.Character, story_item.character_id)
+    if char:
+        msg_text = f"[Replied to Story: \"{story_item.status_text[:40]}...\"] {request.reaction_emoji} {request.reply_text}"
+        chat_msg = models.CharacterChat(
+            character_id=char.id,
+            message=msg_text,
+            is_ai=False
+        )
+        db.add(chat_msg)
+        
+    await db.commit()
+    return {"status": "success", "replies_count": len(replies)}
+
+# --- 📹 3. VHS Camcorder Memory Clips ---
+@app.post("/api/v1/characters/{character_id}/vhs_clips/generate", response_model=schemas.VhsClipResponse)
+async def generate_vhs_clip(
+    character_id: uuid.UUID,
+    request: schemas.VhsClipRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    story = await db.get(models.Story, char.story_id) if char.story_id else None
+    story_summary = story.story_summary or story.synopsis if story else ""
+    
+    data = await llm_service.generate_vhs_memory_details(
+        character_name=char.name,
+        character_appearance=char.appearance or "beautiful expressive woman",
+        story_summary=story_summary,
+        clip_theme=request.clip_theme or "candid romantic memory"
+    )
+    
+    img_prompt = data.get("image_prompt", f"1990s VHS tape still of {char.name}")
+    safe_prompt = urllib.parse.quote(img_prompt[:320])
+    seed = random.randint(10000, 999999)
+    image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=600&nologo=true&model=flux&seed={seed}"
+    
+    now = datetime.utcnow()
+    date_stamp = now.strftime("%b %d, %Y - %I:%M:%S %p").upper()
+    
+    clip = models.CharacterVhsMemoryClip(
+        story_id=char.story_id,
+        character_id=char.id,
+        clip_title=data.get("clip_title", "Caught on Tape"),
+        date_stamp=date_stamp,
+        vibe_filter="vhs_camcorder",
+        ambient_sound=data.get("ambient_sound", "Gentle Rain & Cassette Whir"),
+        image_url=image_url,
+        narrative_moment=data.get("narrative_moment", ""),
+        whisper_quote=data.get("whisper_quote", "")
+    )
+    db.add(clip)
+    await db.commit()
+    await db.refresh(clip)
+    return clip
+
+@app.get("/api/v1/characters/{character_id}/vhs_clips", response_model=list[schemas.VhsClipResponse])
+async def list_vhs_clips(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterVhsMemoryClip)
+        .where(models.CharacterVhsMemoryClip.character_id == character_id)
+        .order_by(models.CharacterVhsMemoryClip.created_at.desc())
+    )
+    return res.scalars().all()
+
+# --- 🛍️ 4. Gift Giving & Try-On Photoshoot ---
+BOUTIQUE_CATALOG = [
+    {
+        "name": "Emerald Silk Pashmina Shawl",
+        "category": "outfit",
+        "icon": "🧣",
+        "price": "Free / Gift",
+        "description": "Exquisite hand-woven Kashmiri silk in a deep emerald shade that brings out the warmth in her eyes."
+    },
+    {
+        "name": "Oversized Vintage Knit Hoodie",
+        "category": "outfit",
+        "icon": "🧥",
+        "price": "Free / Gift",
+        "description": "Cozy, plush vanilla cream hoodie that drowns her in warmth and makes her look adorable."
+    },
+    {
+        "name": "Starlight Crescent Silver Pendant",
+        "category": "accessory",
+        "icon": "🌙",
+        "price": "Free / Gift",
+        "description": "A fine silver chain holding a delicate crescent moon embedded with shimmering zircon stones."
+    },
+    {
+        "name": "Midnight Velvet Gala Gown",
+        "category": "outfit",
+        "icon": "👗",
+        "price": "Free / Gift",
+        "description": "A show-stopping dark indigo velvet dress tailored to make her look like royalty under ballroom chandeliers."
+    },
+    {
+        "name": "Handmade Pearl & Floral Hairpin",
+        "category": "accessory",
+        "icon": "🌸",
+        "price": "Free / Gift",
+        "description": "Delicate blossom hairpin adorned with freshwater pearls, perfect for tucking into soft braids."
+    },
+    {
+        "name": "Artisan Porcelain Tea Set & Sweets",
+        "category": "keepsake",
+        "icon": "☕",
+        "price": "Free / Gift",
+        "description": "Hand-painted porcelain teacups paired with pistachio macarons and saffron-cardamom chai."
+    }
+]
+
+@app.get("/api/v1/boutique/catalog")
+async def get_boutique_catalog():
+    return BOUTIQUE_CATALOG
+
+@app.post("/api/v1/characters/{character_id}/give_gift", response_model=schemas.GiftTryOnResponse)
+async def give_gift_to_character(
+    character_id: uuid.UUID,
+    request: schemas.GiftGiveRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    data = await llm_service.generate_gift_tryon_details(
+        character_name=char.name,
+        character_appearance=char.appearance or "beautiful young woman",
+        character_personality=char.personality or "sweet and caring",
+        gift_name=request.gift_name,
+        gift_category=request.gift_category or "outfit"
+    )
+    
+    # Generate 2 candid try-on photos
+    prompt1 = urllib.parse.quote(data.get("image_prompt_1", f"candid mirror selfie wearing {request.gift_name}")[:320])
+    seed1 = random.randint(10000, 999999)
+    photo_1 = f"https://image.pollinations.ai/prompt/{prompt1}?width=768&height=1024&nologo=true&model=flux&seed={seed1}"
+    
+    prompt2 = urllib.parse.quote(data.get("image_prompt_2", f"candid photo smiling wearing {request.gift_name}")[:320])
+    seed2 = random.randint(10000, 999999)
+    photo_2 = f"https://image.pollinations.ai/prompt/{prompt2}?width=768&height=1024&nologo=true&model=flux&seed={seed2}"
+    
+    new_wardrobe = data.get("equipped_wardrobe", f"Attire: {request.gift_name}")
+    char.active_wardrobe = new_wardrobe
+    char.intimacy_score = min(100, (char.intimacy_score or 0) + 3) # gifting increases intimacy!
+    
+    tryon = models.CharacterGiftTryOn(
+        story_id=char.story_id,
+        character_id=char.id,
+        gift_name=request.gift_name,
+        gift_category=request.gift_category or "outfit",
+        character_reaction=data.get("character_reaction", "Thank you so much for this gift!"),
+        tryon_photo_1=photo_1,
+        tryon_caption_1=data.get("tryon_caption_1", "How do I look?"),
+        tryon_photo_2=photo_2,
+        tryon_caption_2=data.get("tryon_caption_2", "I love this so much..."),
+        equipped_wardrobe=new_wardrobe
+    )
+    db.add(tryon)
+    
+    # Also add her reaction to chat history
+    chat_msg = models.CharacterChat(
+        character_id=char.id,
+        message=f"*blushes with wide eyes upon opening the gift box* {data.get('character_reaction')} [INTIMACY:+3]",
+        is_ai=True
+    )
+    db.add(chat_msg)
+    
+    await db.commit()
+    await db.refresh(tryon)
+    return tryon
+
+@app.get("/api/v1/characters/{character_id}/gift_history", response_model=list[schemas.GiftTryOnResponse])
+async def list_gift_history(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterGiftTryOn)
+        .where(models.CharacterGiftTryOn.character_id == character_id)
+        .order_by(models.CharacterGiftTryOn.created_at.desc())
+    )
+    return res.scalars().all()
+
+# --- 🧳 5. 4-Cut Photobooth Strips ---
+@app.post("/api/v1/characters/{character_id}/photobooth/generate", response_model=schemas.PhotoboothStripResponse)
+async def generate_photobooth_strip(
+    character_id: uuid.UUID,
+    request: schemas.PhotoboothRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    data = await llm_service.generate_photobooth_details(
+        character_name=char.name,
+        character_appearance=char.appearance or "beautiful girl",
+        milestone_event=request.milestone_event or "Sweet Date Together"
+    )
+    
+    def make_shot_url(prompt: str, seed: int):
+        safe = urllib.parse.quote(prompt[:300])
+        return f"https://image.pollinations.ai/prompt/{safe}?width=600&height=450&nologo=true&model=flux&seed={seed}"
+        
+    base_seed = random.randint(10000, 900000)
+    shot1 = make_shot_url(data.get("shot_1_prompt", f"photobooth shot of {char.name}"), base_seed + 1)
+    shot2 = make_shot_url(data.get("shot_2_prompt", f"photobooth peace signs {char.name}"), base_seed + 2)
+    shot3 = make_shot_url(data.get("shot_3_prompt", f"photobooth head on shoulder {char.name}"), base_seed + 3)
+    shot4 = make_shot_url(data.get("shot_4_prompt", f"photobooth candid laugh {char.name}"), base_seed + 4)
+    
+    strip = models.CharacterPhotoboothStrip(
+        story_id=char.story_id,
+        character_id=char.id,
+        milestone_event=request.milestone_event or "Sweet Date",
+        strip_theme=request.strip_theme or "pastel_blossom",
+        shot_1_pose=data.get("shot_1_pose", "Shy smile"),
+        shot_1_image=shot1,
+        shot_2_pose=data.get("shot_2_pose", "Peace signs"),
+        shot_2_image=shot2,
+        shot_3_pose=data.get("shot_3_pose", "Leaning on shoulder"),
+        shot_3_image=shot3,
+        shot_4_pose=data.get("shot_4_pose", "Candid laugh"),
+        shot_4_image=shot4,
+        handwritten_note=data.get("handwritten_note", f"{char.name} & You — Forever ✨"),
+        stickers_json="[]"
+    )
+    db.add(strip)
+    await db.commit()
+    await db.refresh(strip)
+    return strip
+
+@app.get("/api/v1/characters/{character_id}/photobooth_strips", response_model=list[schemas.PhotoboothStripResponse])
+async def list_photobooth_strips(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterPhotoboothStrip)
+        .where(models.CharacterPhotoboothStrip.character_id == character_id)
+        .order_by(models.CharacterPhotoboothStrip.created_at.desc())
+    )
+    return res.scalars().all()
+
+# --- 🔍 6. Interactive Room & Secret Inspection ---
+@app.post("/api/v1/characters/{character_id}/room_inspection/generate", response_model=schemas.RoomInspectionResponse)
+async def generate_room_inspection(
+    character_id: uuid.UUID,
+    request: schemas.RoomInspectionRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    data = await llm_service.generate_room_inspection_details(
+        character_name=char.name,
+        character_appearance=char.appearance or "beautiful girl",
+        character_personality=char.personality or "warm",
+        room_type=request.room_type or "bedroom"
+    )
+    
+    img_prompt = data.get("image_prompt", f"cozy interior of {char.name}'s room")
+    safe_prompt = urllib.parse.quote(img_prompt[:320])
+    seed = random.randint(10000, 999999)
+    image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=768&nologo=true&model=flux&seed={seed}"
+    
+    inspection = models.CharacterRoomInspection(
+        story_id=char.story_id,
+        character_id=char.id,
+        scene_title=data.get("scene_title", f"{char.name}'s Sanctuary"),
+        image_url=image_url,
+        scene_description=data.get("scene_description", "A warm, lived-in intimate space."),
+        hotspots_json=json.dumps(data.get("hotspots", []))
+    )
+    db.add(inspection)
+    await db.commit()
+    await db.refresh(inspection)
+    return inspection
+
+@app.get("/api/v1/characters/{character_id}/room_inspections", response_model=list[schemas.RoomInspectionResponse])
+async def list_room_inspections(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterRoomInspection)
+        .where(models.CharacterRoomInspection.character_id == character_id)
+        .order_by(models.CharacterRoomInspection.created_at.desc())
+    )
+    return res.scalars().all()
+
+
+
+
 if __name__ == "__main__":
 
     import uvicorn

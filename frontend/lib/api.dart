@@ -1757,4 +1757,259 @@ class ApiService {
     }
     throw Exception('Failed to generate domestic bliss vignette');
   }
+
+
+  // ==========================================
+  // BATCH 5: 6 NEXT-LEVEL VISUAL & SENSORY APIS
+  // ==========================================
+
+  // 1. 📸 Spontaneous Candid Selfies & Photo Requests
+  static Future<Map<String, dynamic>> requestCandidPhoto(
+    String characterId, {
+    String? category,
+    String? promptTheme,
+    bool isSpontaneous = false,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/candid_photos/request'),
+      headers: headers,
+      body: jsonEncode({
+        'category': category ?? 'casual_selfie',
+        'prompt_theme': promptTheme ?? '',
+        'is_spontaneous': isSpontaneous,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to request candid photo');
+  }
+
+  static Future<List<dynamic>> getCandidPhotos(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/candid_photos'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load candid photos');
+  }
+
+  static Future<bool> toggleFavoriteCandidPhoto(String photoId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/candid_photos/$photoId/favorite'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      final res = jsonDecode(response.body);
+      return res['is_favorited'] == true;
+    }
+    throw Exception('Failed to toggle favorite');
+  }
+
+  // 2. 🎞️ Daily Stories (24-Hour Status Reels)
+  static Future<Map<String, dynamic>> generateDailyStory(
+    String characterId, {
+    String? timePeriod,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/daily_stories/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'time_period': timePeriod ?? 'morning',
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate daily story');
+  }
+
+  static Future<List<dynamic>> getStoryDailyStories(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/daily_stories'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load daily stories');
+  }
+
+  static Future<void> replyToDailyStory(
+    String storyItemId, {
+    required String replyText,
+    String reactionEmoji = '❤️',
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/daily_stories/$storyItemId/reply'),
+      headers: headers,
+      body: jsonEncode({
+        'reply_text': replyText,
+        'reaction_emoji': reactionEmoji,
+      }),
+    );
+    await _checkStatus(response);
+  }
+
+  // 3. 📹 VHS Camcorder Memory Clips
+  static Future<Map<String, dynamic>> generateVhsClip(
+    String characterId, {
+    String? clipTheme,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/vhs_clips/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'clip_theme': clipTheme ?? 'candid_romantic_moment',
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate VHS clip');
+  }
+
+  static Future<List<dynamic>> getVhsClips(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/vhs_clips'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load VHS clips');
+  }
+
+  // 4. 🛍️ Gift Giving & Try-On Photoshoot
+  static Future<List<dynamic>> getBoutiqueCatalog() async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/boutique/catalog'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load boutique catalog');
+  }
+
+  static Future<Map<String, dynamic>> giveGiftToCharacter(
+    String characterId, {
+    required String giftName,
+    String giftCategory = 'outfit',
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/give_gift'),
+      headers: headers,
+      body: jsonEncode({
+        'gift_name': giftName,
+        'gift_category': giftCategory,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to give gift');
+  }
+
+  static Future<List<dynamic>> getGiftHistory(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/gift_history'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load gift history');
+  }
+
+  // 5. 🧳 Photobooth Strips
+  static Future<Map<String, dynamic>> generatePhotoboothStrip(
+    String characterId, {
+    String? milestoneEvent,
+    String? stripTheme,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/photobooth/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'milestone_event': milestoneEvent ?? 'Sweet Date',
+        'strip_theme': stripTheme ?? 'pastel_blossom',
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate photobooth strip');
+  }
+
+  static Future<List<dynamic>> getPhotoboothStrips(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/photobooth_strips'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load photobooth strips');
+  }
+
+  // 6. 🔍 Room Inspection
+  static Future<Map<String, dynamic>> generateRoomInspection(
+    String characterId, {
+    String? roomType,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/room_inspection/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'room_type': roomType ?? 'bedroom',
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate room inspection');
+  }
+
+  static Future<List<dynamic>> getRoomInspections(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/room_inspections'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load room inspections');
+  }
 }
