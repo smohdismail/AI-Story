@@ -21,6 +21,7 @@ import '../widgets/photobooth_strip_sheet.dart';
 import '../widgets/room_inspection_sheet.dart';
 import '../widgets/dynamic_weather_overlay.dart';
 import '../widgets/ambience_weather_sheet.dart';
+import '../widgets/secret_locked_diary_sheet.dart';
 import '../services/ambient_sound_service.dart';
 import '../services/real_world_sync_service.dart';
 
@@ -443,44 +444,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     );
   }
 
-  Future<void> _viewDiary() async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text('Character is writing in diary...'),
-          ],
-        ),
-      ),
+  void _viewDiary() {
+    SecretLockedDiarySheet.show(
+      context,
+      characterId: widget.characterId,
+      characterName: widget.characterName,
+      intimacyScore: _intimacyScore,
+      avatarBase64: widget.backgroundImage,
     );
-
-    try {
-      final res = await ApiService.generateCharacterDiary(widget.characterId);
-      if (mounted) {
-        Navigator.pop(context); // Close loading dialog
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('${widget.characterName}\'s Private Diary', style: const TextStyle(fontFamily: 'Courier', fontWeight: FontWeight.bold)),
-            content: SingleChildScrollView(
-              child: Text(res['diary_entry'] ?? 'No entry.'),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // Close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
   }
 
   Future<void> _showIntimacyMilestones() async {
@@ -808,6 +779,17 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                   ],
                 ),
               ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.menu_book, color: Color(0xFFFDE68A)),
+            tooltip: 'Secret Locked Diary 💌',
+            onPressed: () => SecretLockedDiarySheet.show(
+              context,
+              characterId: widget.characterId,
+              characterName: widget.characterName,
+              intimacyScore: _intimacyScore,
+              avatarBase64: widget.backgroundImage,
             ),
           ),
           IconButton(

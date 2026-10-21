@@ -4,6 +4,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../api.dart';
 import '../widgets/dynamic_weather_overlay.dart';
 import '../widgets/ambience_weather_sheet.dart';
+import '../widgets/autonomous_gossip_sheet.dart';
 import '../services/ambient_sound_service.dart';
 import '../services/real_world_sync_service.dart';
 
@@ -615,6 +616,15 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.hearing, color: Color(0xFFA78BFA)),
+            tooltip: 'Overheard Hallway Whispers 👥',
+            onPressed: () => AutonomousGossipSheet.show(
+              context,
+              storyId: widget.storyId,
+              storyTitle: _sessionTitle,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.cloudy_snowing, color: Color(0xFF38BDF8)),
             tooltip: 'Atmosphere & Ambience Soundscapes',

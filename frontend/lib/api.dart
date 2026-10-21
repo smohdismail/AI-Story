@@ -683,19 +683,6 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> generateCharacterDiary(String characterId) async {
-    final headers = await _getHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/characters/$characterId/diary'),
-      headers: headers,
-    );
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to generate diary');
-    }
-  }
-
   static Future<Map<String, dynamic>> getCharacter(String characterId) async {
     final headers = await _getHeaders();
     final response = await http.get(Uri.parse('$baseUrl/characters/$characterId'), headers: headers);
@@ -2081,5 +2068,79 @@ class ApiService {
       return jsonDecode(response.body);
     }
     throw Exception('Failed to check chapter continuity');
+  }
+
+  // ==========================================
+  // 👥 8. AUTONOMOUS GOSSIP & CHARACTER-TO-CHARACTER DRAMA
+  // ==========================================
+  static Future<List<dynamic>> getStoryGossip(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/gossip'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load overheard gossip');
+  }
+
+  static Future<Map<String, dynamic>> generateStoryGossip(String storyId, {String? topicHint}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/gossip/generate'),
+      headers: headers,
+      body: jsonEncode({
+        if (topicHint != null && topicHint.isNotEmpty) 'topic_hint': topicHint,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate overheard gossip');
+  }
+
+  // ==========================================
+  // 💌 9. SECRET LOCKED DIARY & HER PRIVATE INNER THOUGHTS
+  // ==========================================
+  static Future<List<dynamic>> getCharacterDiary(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/characters/$characterId/diary'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load character diary');
+  }
+
+  static Future<Map<String, dynamic>> generateCharacterDiary(String characterId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/diary/generate'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to write character diary entry');
+  }
+
+  static Future<Map<String, dynamic>> unlockDiaryEntry(String entryId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/diary/$entryId/unlock'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to unlock diary entry');
   }
 }

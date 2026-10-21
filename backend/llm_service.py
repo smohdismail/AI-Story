@@ -3703,3 +3703,175 @@ Format STRICTLY as JSON:
             "flags": [],
             "auto_aligned_prompt": proposed_prompt
         }
+
+
+# ==============================================================================
+# 👥 AUTONOMOUS GOSSIP & CHARACTER-TO-CHARACTER DRAMA
+# ==============================================================================
+
+async def generate_autonomous_gossip(
+    character1_name: str,
+    character1_role: str,
+    character1_personality: str,
+    character2_name: str,
+    character2_role: str,
+    character2_personality: str,
+    story_title: str,
+    story_summary: str,
+    recent_chapter_text: str = "",
+    recent_chat_summary: str = "",
+    topic_hint: str = ""
+) -> dict:
+    prompt = f"""You are the Autonomous Drama & Character Life Engine for the story '{story_title}'.
+The user has closed the app, and the characters are living their own private lives in the world, talking and gossiping behind the user's back!
+
+CHARACTER 1:
+Name: {character1_name}
+Role: {character1_role}
+Personality: {character1_personality}
+
+CHARACTER 2:
+Name: {character2_name}
+Role: {character2_role}
+Personality: {character2_personality}
+
+STORY SUMMARY:
+{story_summary}
+
+RECENT NOVEL EVENTS & CANON:
+{recent_chapter_text[-1200:] if recent_chapter_text else "They share an ongoing journey together."}
+
+RECENT PRIVATE 1-ON-1 CHAT WITH USER (Secret context Character 1 might be hiding or overthinking):
+{recent_chat_summary[-800:] if recent_chat_summary else "Character 1 has had private interactions with the user recently."}
+
+TOPIC HINT:
+{topic_hint or "Spontaneous gossip about the user's recent actions, glances, late-night texting, or romantic tension"}
+
+TASK:
+Write an authentic, secretive hallway/balcony conversation where {character1_name} and {character2_name} talk about the user while believing the user isn't around to hear!
+Include teasing, genuine emotional vulnerability, blushing, protective warnings, or jealousy.
+
+Format strictly as JSON:
+{{
+  "topic": "Short spicy summary of what they are whispering about (e.g., 'How he looked at her during lunch', 'Her flushed face after his late-night text')",
+  "location": "Atmospheric secret location (e.g., 'Hallway near the lockers', 'Dim corner of the library archive', 'Balcony overlooking the rain')",
+  "dialogue": [
+    {{
+      "speaker": "{character1_name}",
+      "text": "Dialogue line...",
+      "action": "Physical action in asterisks (e.g. *fidgets with her sleeve, glancing away with red cheeks*)"
+    }},
+    {{
+      "speaker": "{character2_name}",
+      "text": "Dialogue line...",
+      "action": "Physical action in asterisks (e.g. *smirks leaning against the brick wall*)"
+    }}
+  ],
+  "blush_comment_for_user": "What {character1_name} will flusteredly blurt out if the user chats with her next (e.g., 'Wait... did {character2_name} say anything to you earlier? Please tell me you didn\'t talk to them...')"
+}}
+Generate between 4 and 6 total dialogue turns."""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=800,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating autonomous gossip: {e}")
+        return {
+            "topic": f"Whispers between {character1_name} and {character2_name}",
+            "location": "Quiet Hallway",
+            "dialogue": [
+                {"speaker": character1_name, "text": f"Keep your voice down... what if they hear us?", "action": "*glances over shoulder nervously*"},
+                {"speaker": character2_name, "text": "You're overthinking it again. Just be honest with how you feel.", "action": "*chuckles with a knowing smirk*"},
+                {"speaker": character1_name, "text": "I can't just say that to their face! You don't understand...", "action": "*hides her blushing face in her hands*"},
+                {"speaker": character2_name, "text": "Then I guess I'll have to drop a subtle hint next time I see them.", "action": "*winks and crosses arms*"}
+            ],
+            "blush_comment_for_user": f"Wait... did {character2_name} tell you anything? Please tell me you didn't talk to them!"
+        }
+
+
+# ==============================================================================
+# 💌 SECRET LOCKED DIARY & HER PRIVATE INNER THOUGHTS
+# ==============================================================================
+
+async def generate_character_diary_entry(
+    character_name: str,
+    character_role: str,
+    character_personality: str,
+    intimacy_score: int,
+    story_title: str,
+    story_summary: str,
+    recent_chapter_text: str = "",
+    recent_chat_history: str = "",
+    active_wardrobe: str = "",
+    current_time_str: str = ""
+) -> dict:
+    prompt = f"""You are the Private Inner Diary of {character_name} in the story '{story_title}'.
+Late at night, in the quiet safety of her private room, {character_name} opens an antique leather-bound journal and writes down her raw, vulnerable, unfiltered secret thoughts that she would DIE if the user ever found out.
+
+CHARACTER INFO:
+Name: {character_name}
+Role: {character_role}
+Personality: {character_personality}
+Intimacy with User: {intimacy_score}/100
+Current Outfit / Wardrobe: {active_wardrobe or 'Cozy casual'}
+Current Time: {current_time_str or 'Late Night'}
+
+STORY CONTEXT:
+{story_summary}
+
+RECENT NOVEL & CHAT BEATS:
+{recent_chapter_text[-1000:] if recent_chapter_text else "A growing bond with the user."}
+Recent Private Words:
+{recent_chat_history[-600:] if recent_chat_history else "Quiet conversations late at night."}
+
+DIARY WRITING STYLE & FORMAT RULES:
+1. RAW UNFILTERED HONESTY: She reveals what she was actually feeling when talking to the user. If she acted tough, she admits she was terrified or blushing. If she teased him, she admits her heart was racing.
+2. CROSSED-OUT TEXT: Use '~' for crossed-out words she wrote in hesitation and scratched out! (e.g. "~I love him so much~ I mean, he's just a good friend.", or "~I wanted him to grab my waist~ I almost lost my composure.").
+3. MARGIN NOTES & DOODLES: Small emotional scribbles in the margins.
+4. REQUIRED INTIMACY TIER: Set a required intimacy threshold (between 15 and 85) for the user to be able to pick the lock and read this page.
+
+Format strictly as JSON:
+{{
+  "title": "Poetic, private title (e.g., 'Why did my hands shake?', 'Midnight in the rain', 'Don\'t let Marcus see this page')",
+  "mood_emoji": "Single expressive emoji (e.g. '🥺', '😳', '🖤', '🌧️', '✨')",
+  "raw_content": "The full handwritten diary entry (between 80 and 150 words). Include 1 or 2 realistic crossed-out hesitations with ~strikethrough text~, handwritten intimate confessions, and honest feelings about the user.",
+  "required_intimacy": 25,
+  "doodle_type": "One of: 'heart', 'cloud', 'rose', 'coffee', 'stars', 'torn_paper'",
+  "secret_level": "One of: 'crush', 'vulnerability', 'jealousy', 'unfiltered_desire'"
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=700,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating character diary entry: {e}")
+        return {
+            "title": "Why can't I just say it?",
+            "mood_emoji": "🥺",
+            "raw_content": f"He asked if I ate lunch today. ~My heart stopped for three whole seconds~ I pretended not to care and texted back something casual. But honestly? Nobody else checks up on me like that. I sat there staring at my phone for ten minutes with a ridiculous smile on my face. ~I wish he was sitting next to me right now~ If anyone ever reads this, I'm burning this entire book.",
+            "required_intimacy": max(20, min(80, intimacy_score)),
+            "doodle_type": "heart",
+            "secret_level": "crush"
+        }

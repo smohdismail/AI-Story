@@ -30,6 +30,7 @@ import '../widgets/story_romance_boutique_sheet.dart';
 import '../widgets/photobooth_strip_sheet.dart';
 import '../widgets/room_inspection_sheet.dart';
 import '../widgets/synced_chapter_studio_sheet.dart';
+import '../widgets/autonomous_gossip_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -631,6 +632,19 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     _showPlotAnalyzerDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.hearing, color: Color(0xFFA78BFA)),
+                  title: const Text('Overheard Hallway Whispers 👥'),
+                  subtitle: const Text('Living world autonomous gossip between characters'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    AutonomousGossipSheet.show(
+                      context,
+                      storyId: widget.storyId,
+                      storyTitle: story?['title'] ?? 'Novel',
+                    );
                   },
                 ),
                 ListTile(

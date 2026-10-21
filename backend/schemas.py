@@ -518,3 +518,50 @@ class ContinuityCheckResponse(BaseModel):
     is_consistent: bool
     flags: List[str] = []
     auto_aligned_prompt: str
+
+
+# --- 👥 Autonomous Gossip & Character-to-Character Drama ---
+class GossipTurn(BaseModel):
+    speaker: str
+    text: str
+    action: Optional[str] = None
+
+class AutonomousGossipResponse(BaseModel):
+    id: UUID4
+    story_id: UUID4
+    character1_id: Optional[UUID4] = None
+    character2_id: Optional[UUID4] = None
+    character1_name: str
+    character2_name: str
+    topic: str
+    location: str
+    dialogue: List[GossipTurn] = []
+    user_referenced: bool = True
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class GenerateGossipRequest(BaseModel):
+    topic_hint: Optional[str] = None
+
+# --- 💌 Secret Locked Diary & Her Private Inner Thoughts ---
+class CharacterDiaryResponse(BaseModel):
+    id: UUID4
+    character_id: UUID4
+    story_id: Optional[UUID4] = None
+    entry_date: str
+    title: str
+    raw_content: str
+    mood_emoji: str = "🥺"
+    required_intimacy: int = 20
+    is_unlocked: bool = False
+    doodle_type: str = "heart"
+    secret_level: str = "crush"
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UnlockDiaryResponse(BaseModel):
+    success: bool
+    message: str
+    entry: Optional[CharacterDiaryResponse] = None

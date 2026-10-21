@@ -425,3 +425,33 @@ class CharacterRoomInspection(Base):
     hotspots_json = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+
+class AutonomousGossip(Base):
+    __tablename__ = "autonomous_gossips"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=False)
+    character1_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True)
+    character2_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=True)
+    character1_name = Column(String, nullable=False)
+    character2_name = Column(String, nullable=False)
+    topic = Column(String, nullable=False)
+    location = Column(String, default="Hallway")
+    dialogue_json = Column(Text, default="[]")
+    user_referenced = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CharacterDiary(Base):
+    __tablename__ = "character_diaries"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    story_id = Column(Uuid(as_uuid=True), ForeignKey("stories.id"), nullable=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), nullable=False)
+    entry_date = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    raw_content = Column(Text, nullable=False)
+    mood_emoji = Column(String, default="🥺")
+    required_intimacy = Column(Integer, default=20)
+    is_unlocked = Column(Boolean, default=False)
+    doodle_type = Column(String, default="heart")
+    secret_level = Column(String, default="crush")
+    created_at = Column(DateTime, default=datetime.utcnow)

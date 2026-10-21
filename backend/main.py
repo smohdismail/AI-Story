@@ -4728,3 +4728,332 @@ async def get_synced_chapter_prompts(story_id: uuid.UUID, db: AsyncSession = Dep
             for gm in g_msgs:
                 t_turns.append(f"{gm.character_name or 'User'}: {gm.message[:100]}")
             tavern_summary_str = "--- Tavern Lounge Banter ---\n" + "\n".join(t_turns)
+
+    # 4. Generate 5 Synced Prompts with LLM
+    data = await llm_service.generate_synced_next_chapter_prompts(
+        story_title=story.title,
+        story_summary=story.story_summary or story.synopsis or "",
+        last_chapter_title=last_chap_title,
+        last_chapter_text=last_chap_text,
+        characters_chats_summary=characters_chats_summary_str,
+        tavern_chats_summary=tavern_summary_str,
+        characters_info=characters_info_str
+    )
+    
+    prompts_list = []
+    for p in data.get("prompts", []):
+        prompts_list.append(schemas.SyncedChapterPromptItem(
+            category=p.get("category", "General Continuation"),
+            title=p.get("title", "Next Chapter"),
+            prompt_text=p.get("prompt_text", ""),
+            synced_elements=p.get("synced_elements", [])
+        ))
+        
+    return schemas.SyncedChapterPromptsResponse(
+        prompts=prompts_list,
+        recent_canon_summary=data.get("recent_canon_summary", "Characters remember your recent words.")
+    )
+
+@app.post("/api/v1/stories/{story_id}/check_chapter_continuity", response_model=schemas.ContinuityCheckResponse)
+async def check_chapter_continuity(
+    story_id: uuid.UUID,
+    request: schemas.ContinuityCheckRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    last_chap_res = await db.execute(
+        select(models.Chapter)
+        .where(models.Chapter.story_id == story_id)
+        .order_by(models.Chapter.chapter_number.desc())
+        .limit(1)
+    )
+    last_chap = last_chap_res.scalars().first()
+    last_chap_text = last_chap.content if last_chap else ""
+    
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    characters = chars_res.scalars().all()
+    chars_info_str = ", ".join([f"{c.name} ({c.role})" for c in characters])
+    
+    chats_summary = []
+    for c in characters:
+        res = await db.execute(
+            select(models.CharacterChat)
+            .where(models.CharacterChat.character_id == c.id)
+            .order_by(models.CharacterChat.created_at.desc())
+            .limit(4)
+        )
+        msgs = res.scalars().all()
+        for m in msgs:
+            chats_summary.append(f"{c.name if m.is_ai else 'User'}: {m.message[:60]}")
+    chats_summary_str = "; ".join(chats_summary)
+    
+    audit_data = await llm_service.audit_chapter_continuity(
+        proposed_prompt=request.proposed_prompt,
+        story_summary=story.story_summary or story.synopsis or "",
+        last_chapter_text=last_chap_text,
+        characters_chats_summary=chats_summary_str,
+        characters_info=chars_info_str
+    )
+    
+    return schemas.ContinuityCheckResponse(
+        is_consistent=audit_data.get("is_consistent", True),
+        flags=audit_data.get("flags", []),
+        auto_aligned_prompt=audit_data.get("auto_aligned_prompt", request.proposed_prompt)
+    )
+
+# ==============================================================================
+# 👥 AUTONOMOUS GOSSIP & CHARACTER-TO-CHARACTER DRAMA ENDPOINTS
+# ==============================================================================
+
+@app.get("/api/v1/stories/{story_id}/gossip", response_model=list[schemas.AutonomousGossipResponse])
+async def list_story_gossip(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.AutonomousGossip)
+        .where(models.AutonomousGossip.story_id == story_id)
+        .order_by(models.AutonomousGossip.created_at.desc())
+        .limit(20)
+    )
+    items = res.scalars().all()
+    resp = []
+    for g in items:
+        dialogue_list = []
+        try:
+            raw_d = json.loads(g.dialogue_json or "[]")
+            for d in raw_d:
+                dialogue_list.append(schemas.GossipTurn(
+                    speaker=d.get("speaker", "Character"),
+                    text=d.get("text", ""),
+                    action=d.get("action")
+                ))
+        except Exception:
+            pass
+        resp.append(schemas.AutonomousGossipResponse(
+            id=g.id,
+            story_id=g.story_id,
+            character1_id=g.character1_id,
+            character2_id=g.character2_id,
+            character1_name=g.character1_name,
+            character2_name=g.character2_name,
+            topic=g.topic,
+            location=g.location or "Hallway",
+            dialogue=dialogue_list,
+            user_referenced=g.user_referenced if g.user_referenced is not None else True,
+            created_at=g.created_at
+        ))
+    return resp
+
+@app.post("/api/v1/stories/{story_id}/gossip/generate", response_model=schemas.AutonomousGossipResponse)
+async def generate_story_gossip(
+    story_id: uuid.UUID,
+    req: schemas.GenerateGossipRequest = None,
+    db: AsyncSession = Depends(get_db)
+):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    characters = chars_res.scalars().all()
+    if len(characters) < 2:
+        c1 = characters[0] if characters else None
+        c1_name = c1.name if c1 else "Aisha"
+        c1_role = c1.role if c1 else "Heroine"
+        c1_pers = c1.personality if c1 else "Spirited and shy"
+        c2_name = "Marcus"
+        c2_role = "Rival / Companion"
+        c2_pers = "Witty, sharp, observant"
+        c1_id = c1.id if c1 else None
+        c2_id = None
+    else:
+        c1 = characters[0]
+        c2 = characters[1]
+        c1_name, c1_role, c1_pers, c1_id = c1.name, c1.role, c1.personality, c1.id
+        c2_name, c2_role, c2_pers, c2_id = c2.name, c2.role, c2.personality, c2.id
+
+    last_chap_res = await db.execute(
+        select(models.Chapter)
+        .where(models.Chapter.story_id == story_id)
+        .order_by(models.Chapter.chapter_number.desc())
+        .limit(1)
+    )
+    last_chap = last_chap_res.scalars().first()
+    last_chap_text = last_chap.content if last_chap else ""
+
+    recent_chat_str = ""
+    if c1_id:
+        chat_res = await db.execute(
+            select(models.CharacterChat)
+            .where(models.CharacterChat.character_id == c1_id)
+            .order_by(models.CharacterChat.created_at.desc())
+            .limit(6)
+        )
+        c_msgs = list(reversed(chat_res.scalars().all()))
+        recent_chat_str = "\n".join([f"{'User' if not m.is_ai else c1_name}: {m.message[:100]}" for m in c_msgs])
+
+    topic_hint = req.topic_hint if req else ""
+    data = await llm_service.generate_autonomous_gossip(
+        character1_name=c1_name,
+        character1_role=c1_role,
+        character1_personality=c1_pers,
+        character2_name=c2_name,
+        character2_role=c2_role,
+        character2_personality=c2_pers,
+        story_title=story.title,
+        story_summary=story.story_summary or story.synopsis or "",
+        recent_chapter_text=last_chap_text,
+        recent_chat_summary=recent_chat_str,
+        topic_hint=topic_hint
+    )
+
+    dialogue_raw = data.get("dialogue", [])
+    dialogue_json = json.dumps(dialogue_raw)
+    
+    gossip = models.AutonomousGossip(
+        story_id=story_id,
+        character1_id=c1_id,
+        character2_id=c2_id,
+        character1_name=c1_name,
+        character2_name=c2_name,
+        topic=data.get("topic", "Whispered conversation"),
+        location=data.get("location", "Hallway"),
+        dialogue_json=dialogue_json,
+        user_referenced=True
+    )
+    db.add(gossip)
+    await db.commit()
+    await db.refresh(gossip)
+
+    dialogue_list = []
+    for d in dialogue_raw:
+        dialogue_list.append(schemas.GossipTurn(
+            speaker=d.get("speaker", "Character"),
+            text=d.get("text", ""),
+            action=d.get("action")
+        ))
+
+    return schemas.AutonomousGossipResponse(
+        id=gossip.id,
+        story_id=gossip.story_id,
+        character1_id=gossip.character1_id,
+        character2_id=gossip.character2_id,
+        character1_name=gossip.character1_name,
+        character2_name=gossip.character2_name,
+        topic=gossip.topic,
+        location=gossip.location,
+        dialogue=dialogue_list,
+        user_referenced=True,
+        created_at=gossip.created_at
+    )
+
+# ==============================================================================
+# 💌 SECRET LOCKED DIARY & HER PRIVATE INNER THOUGHTS ENDPOINTS
+# ==============================================================================
+
+@app.get("/api/v1/characters/{character_id}/diary", response_model=list[schemas.CharacterDiaryResponse])
+async def list_character_diary(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(models.CharacterDiary)
+        .where(models.CharacterDiary.character_id == character_id)
+        .order_by(models.CharacterDiary.created_at.desc())
+    )
+    entries = res.scalars().all()
+    return entries
+
+@app.post("/api/v1/characters/{character_id}/diary/generate", response_model=schemas.CharacterDiaryResponse)
+async def generate_character_diary(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    story = await db.get(models.Story, char.story_id) if char.story_id else None
+    story_title = story.title if story else "Novel"
+    story_summary = story.story_summary or story.synopsis or "" if story else ""
+
+    last_chap_text = ""
+    if char.story_id:
+        chap_res = await db.execute(
+            select(models.Chapter)
+            .where(models.Chapter.story_id == char.story_id)
+            .order_by(models.Chapter.chapter_number.desc())
+            .limit(1)
+        )
+        last_chap = chap_res.scalars().first()
+        if last_chap:
+            last_chap_text = last_chap.content or ""
+
+    chat_res = await db.execute(
+        select(models.CharacterChat)
+        .where(models.CharacterChat.character_id == character_id)
+        .order_by(models.CharacterChat.created_at.desc())
+        .limit(8)
+    )
+    c_msgs = list(reversed(chat_res.scalars().all()))
+    chat_summary = "\n".join([f"{'User' if not m.is_ai else char.name}: {m.message[:100]}" for m in c_msgs])
+
+    now_str = datetime.utcnow().strftime("%b %d, %I:%M %p")
+    intimacy = char.intimacy_score or 0
+
+    data = await llm_service.generate_character_diary_entry(
+        character_name=char.name,
+        character_role=char.role,
+        character_personality=char.personality or "Guarded, caring",
+        intimacy_score=intimacy,
+        story_title=story_title,
+        story_summary=story_summary,
+        recent_chapter_text=last_chap_text,
+        recent_chat_history=chat_summary,
+        active_wardrobe=char.active_wardrobe or "",
+        current_time_str=now_str
+    )
+
+    req_intimacy = data.get("required_intimacy", 20)
+    is_unlocked = intimacy >= req_intimacy
+
+    diary_entry = models.CharacterDiary(
+        story_id=char.story_id,
+        character_id=character_id,
+        entry_date=now_str,
+        title=data.get("title", "Secret Thoughts"),
+        raw_content=data.get("raw_content", "No words tonight..."),
+        mood_emoji=data.get("mood_emoji", "🥺"),
+        required_intimacy=req_intimacy,
+        is_unlocked=is_unlocked,
+        doodle_type=data.get("doodle_type", "heart"),
+        secret_level=data.get("secret_level", "crush")
+    )
+    db.add(diary_entry)
+    await db.commit()
+    await db.refresh(diary_entry)
+    return diary_entry
+
+@app.post("/api/v1/diary/{entry_id}/unlock", response_model=schemas.UnlockDiaryResponse)
+async def unlock_diary_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    entry = await db.get(models.CharacterDiary, entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Diary entry not found")
+        
+    char = await db.get(models.Character, entry.character_id)
+    intimacy = char.intimacy_score if char else 0
+
+    if entry.is_unlocked or intimacy >= entry.required_intimacy:
+        entry.is_unlocked = True
+        await db.commit()
+        await db.refresh(entry)
+        return schemas.UnlockDiaryResponse(
+            success=True,
+            message="Brass lock unlatched! Her secret page is revealed.",
+            entry=schemas.CharacterDiaryResponse.model_validate(entry)
+        )
+    else:
+        return schemas.UnlockDiaryResponse(
+            success=False,
+            message=f"Locked tight! Requires Intimacy {entry.required_intimacy} to unlock (Current: {intimacy}/100)."
+        )
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
