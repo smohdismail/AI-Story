@@ -3695,18 +3695,18 @@ async def get_character_mailbox(character_id: uuid.UUID, db: AsyncSession = Depe
                 story_summary = story.story_summary or ""
 
         chats_res = await db.execute(
-            select(models.ChatMessage)
-            .where(models.ChatMessage.character_id == character_id)
-            .order_by(models.ChatMessage.created_at.desc())
+            select(models.CharacterChat)
+            .where(models.CharacterChat.character_id == character_id)
+            .order_by(models.CharacterChat.created_at.desc())
             .limit(10)
         )
         recent_chats_list = list(chats_res.scalars().all())
         recent_chats_list.reverse()
-        recent_chats_text = "\n".join([f"{'User' if m.is_user else char.name}: {m.message}" for m in recent_chats_list])
+        recent_chats_text = "\n".join([f"{'User' if not m.is_ai else char.name}: {m.message}" for m in recent_chats_list])
 
         data = await llm_service.generate_vintage_mailbox_letter(
             character_name=char.name,
-            persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+            persona=f"{char.role}. {char.personality}. {char.dialogue_style or ''}",
             relationship=char.relationship_status or "Close",
             intimacy_score=char.intimacy_score or 0,
             story_summary=story_summary,
@@ -3766,18 +3766,18 @@ async def generate_new_mailbox_letter(character_id: uuid.UUID, db: AsyncSession 
             story_summary = story.story_summary or ""
 
     chats_res = await db.execute(
-        select(models.ChatMessage)
-        .where(models.ChatMessage.character_id == character_id)
-        .order_by(models.ChatMessage.created_at.desc())
+        select(models.CharacterChat)
+        .where(models.CharacterChat.character_id == character_id)
+        .order_by(models.CharacterChat.created_at.desc())
         .limit(10)
     )
     recent_chats_list = list(chats_res.scalars().all())
     recent_chats_list.reverse()
-    recent_chats_text = "\n".join([f"{'User' if m.is_user else char.name}: {m.message}" for m in recent_chats_list])
+    recent_chats_text = "\n".join([f"{'User' if not m.is_ai else char.name}: {m.message}" for m in recent_chats_list])
 
     data = await llm_service.generate_vintage_mailbox_letter(
         character_name=char.name,
-        persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+        persona=f"{char.role}. {char.personality}. {char.dialogue_style or ''}",
         relationship=char.relationship_status or "Close",
         intimacy_score=char.intimacy_score or 0,
         story_summary=story_summary,
@@ -3897,18 +3897,18 @@ async def dream_together_endpoint(character_id: uuid.UUID, db: AsyncSession = De
             story_summary = story.story_summary or ""
 
     chats_res = await db.execute(
-        select(models.ChatMessage)
-        .where(models.ChatMessage.character_id == character_id)
-        .order_by(models.ChatMessage.created_at.desc())
+        select(models.CharacterChat)
+        .where(models.CharacterChat.character_id == character_id)
+        .order_by(models.CharacterChat.created_at.desc())
         .limit(10)
     )
     recent_chats_list = list(chats_res.scalars().all())
     recent_chats_list.reverse()
-    recent_chats_text = "\n".join([f"{'User' if m.is_user else char.name}: {m.message}" for m in recent_chats_list])
+    recent_chats_text = "\n".join([f"{'User' if not m.is_ai else char.name}: {m.message}" for m in recent_chats_list])
 
     dream_data = await llm_service.generate_shared_dream(
         character_name=char.name,
-        persona=f"{char.role}. {char.personality}. {char.dialogue_style}",
+        persona=f"{char.role}. {char.personality}. {char.dialogue_style or ''}",
         intimacy_score=char.intimacy_score or 0,
         story_summary=story_summary,
         recent_chats=recent_chats_text
