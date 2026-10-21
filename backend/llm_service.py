@@ -3477,3 +3477,189 @@ Format STRICTLY as JSON with 3 interactive hotspots (coordinates in percent 10-8
                 }
             ]
         }
+
+
+# ==============================================================================
+# OMNISCIENT CONTINUITY & CANON SYNC ENGINE
+# ==============================================================================
+
+async def generate_synced_next_chapter_prompts(
+    story_title: str,
+    story_summary: str,
+    last_chapter_title: str,
+    last_chapter_text: str,
+    characters_chats_summary: str,
+    tavern_chats_summary: str,
+    characters_info: str
+) -> dict:
+    prompt = f"""You are the Master Story Architect and Continuity Director for the novel '{story_title}'.
+Analyze the entire multi-dimensional story canon across chapters, 1-on-1 private character chats, and tavern group chats.
+
+STORY CONTEXT:
+{story_summary}
+
+LATEST CANON CHAPTER ({last_chapter_title}):
+{last_chapter_text[-2500:] if last_chapter_text else "Story beginning"}
+
+CHARACTERS IN STORY:
+{characters_info}
+
+RECENT 1-ON-1 CHARACTER CHATS & PRIVATE PROMISES:
+{characters_chats_summary if characters_chats_summary else "No recent 1-on-1 chats"}
+
+RECENT TAVERN GROUP CHAT & SHARED BANTER:
+{tavern_chats_summary if tavern_chats_summary else "No recent group tavern sessions"}
+
+TASK:
+Synthesize EXACTLY 5 DISTINCT, COMPELLING, HIGH-STAKES narrative prompts for the NEXT chapter that seamlessly continue what just happened across ALL mediums (connecting private chats, promises made to characters, and chapter events together).
+
+Categories to generate:
+1. "Romance & Deepening Bond": Directly continues a private moment, confession, or promise made in 1-on-1 chat.
+2. "Jealousy & Cross-Character Friction": Multiple heroines/characters react to where the user spent time or tension from group banter.
+3. "High-Stakes Plot Escalation": Outside danger, rival threat, or kingdom crisis building on what was discussed.
+4. "Domestic Wholesomeness & Shared Promise": Sweet slice-of-life morning or afternoon following through on a specific promise (e.g. market, tea, garden walk).
+5. "Shocking Revelation / Secret Uncovered": A character discovers something hidden, a past secret, or a dramatic truth.
+
+Format STRICTLY as JSON:
+{{
+  "recent_canon_summary": "A 2-sentence summary of the active timeline, who you last spoke with, and what is at stake.",
+  "prompts": [
+    {{
+      "category": "Romance & Deepening Bond",
+      "title": "Short Catchy Title (3-5 words)",
+      "prompt_text": "Detailed, rich 2-3 sentence prompt guiding the next chapter, specifically mentioning the character, the setting, and the emotional continuation.",
+      "synced_elements": ["Private confession with Aisha", "Promise made in 1-on-1 chat"]
+    }},
+    {{
+      "category": "Jealousy & Cross-Character Friction",
+      "title": "Title",
+      "prompt_text": "Detailed prompt text...",
+      "synced_elements": ["Arzoo noticing time spent with Aisha", "Tavern banter"]
+    }},
+    {{
+      "category": "High-Stakes Plot Escalation",
+      "title": "Title",
+      "prompt_text": "Detailed prompt text...",
+      "synced_elements": ["Outside threat", "Recent discussion"]
+    }},
+    {{
+      "category": "Domestic Wholesomeness & Shared Promise",
+      "title": "Title",
+      "prompt_text": "Detailed prompt text...",
+      "synced_elements": ["Morning tea promise", "Cozy atmosphere"]
+    }},
+    {{
+      "category": "Shocking Revelation / Secret Uncovered",
+      "title": "Title",
+      "prompt_text": "Detailed prompt text...",
+      "synced_elements": ["Discovered letter", "Unspoken truth"]
+    }}
+  ]
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=1000,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error generating synced chapter prompts: {e}")
+        return {
+            "recent_canon_summary": "The characters remember your recent conversations and are waiting for what happens next.",
+            "prompts": [
+                {
+                    "category": "Romance & Deepening Bond",
+                    "title": "Morning After Confession",
+                    "prompt_text": "The morning sun filters into the estate. Following your intimate conversation last night, you meet again in private, where unspoken feelings come to the surface as you fulfill your promise to stay close.",
+                    "synced_elements": ["Recent private chat", "Deepening bond"]
+                },
+                {
+                    "category": "Jealousy & Cross-Character Friction",
+                    "title": "Crossed Glances at Breakfast",
+                    "prompt_text": "During morning tea in the grand dining room, the other characters notice the subtle change in how you and your companion look at each other, stirring quiet tension and playful jealousy.",
+                    "synced_elements": ["Multi-character awareness", "Group banter"]
+                },
+                {
+                    "category": "High-Stakes Plot Escalation",
+                    "title": "A Messenger at the Gates",
+                    "prompt_text": "A sudden urgent letter arrives bearing the wax seal of a rival family, demanding an answer to the events of the previous chapter and forcing you and the characters to stand together.",
+                    "synced_elements": ["Kingdom conflict", "Previous chapter aftermath"]
+                },
+                {
+                    "category": "Domestic Wholesomeness",
+                    "title": "Stroll Through the Market",
+                    "prompt_text": "Taking a break from kingdom politics, you accompany the heroine on a peaceful stroll through the bustling market square, sharing sweets and laughter away from prying eyes.",
+                    "synced_elements": ["Fulfilling promise", "Cozy date"]
+                },
+                {
+                    "category": "Shocking Revelation",
+                    "title": "The Hidden Journal",
+                    "prompt_text": "While looking for an old map in the estate library, you stumble across a locked journal that reveals a secret past connection between your families.",
+                    "synced_elements": ["Secret lore", "Plot mystery"]
+                }
+            ]
+        }
+
+async def audit_chapter_continuity(
+    proposed_prompt: str,
+    story_summary: str,
+    last_chapter_text: str,
+    characters_chats_summary: str,
+    characters_info: str
+) -> dict:
+    prompt = f"""You are the Continuity Auditor for an interactive novel.
+Check the user's proposed chapter prompt for any timeline, character state, physical injury, promise, or emotional contradictions against established canon.
+
+PROPOSED CHAPTER PROMPT:
+"{proposed_prompt}"
+
+LIVING CANON & FACTS:
+Story Context: {story_summary}
+Latest Chapter Climax: {last_chapter_text[-1200:] if last_chapter_text else "Beginning"}
+Recent 1-on-1 Chat Promises & Character Moments: {characters_chats_summary if characters_chats_summary else "Normal"}
+Character Profiles: {characters_info}
+
+AUDIT RULES:
+1. Check if any character mentioned is supposed to be elsewhere, asleep, injured, or angry.
+2. Check if a promise made in recent chat is ignored or contradicted.
+3. Check if the time of day or location contradicts the end of the previous chapter without a transition.
+
+Format STRICTLY as JSON:
+{{
+  "is_consistent": true or false,
+  "flags": [
+    "Optional bullet point explaining a contradiction found (e.g. '⚠️ Contradiction: Aisha was resting with a fever at the end of last chapter, but this prompt shows her running in the courtyard without recovery.')"
+  ],
+  "auto_aligned_prompt": "A polished, perfectly continuity-aligned version of the prompt that resolves any contradictions while preserving 100% of the user's original creative vision."
+}}
+"""
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=600,
+        )
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(content)
+        raise ValueError("Empty response")
+    except Exception as e:
+        print(f"Error auditing continuity: {e}")
+        return {
+            "is_consistent": True,
+            "flags": [],
+            "auto_aligned_prompt": proposed_prompt
+        }

@@ -4633,11 +4633,73 @@ async def list_room_inspections(character_id: uuid.UUID, db: AsyncSession = Depe
 
 
 
-if __name__ == "__main__":
 
-    import uvicorn
-    port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+# ==============================================================================
+# OMNISCIENT CONTINUITY & SYNCHRONIZED CHAPTER PROMPTS
+# ==============================================================================
 
-
-
+@app.get("/api/v1/stories/{story_id}/synced_chapter_prompts", response_model=schemas.SyncedChapterPromptsResponse)
+async def get_synced_chapter_prompts(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    # 1. Fetch latest chapter
+    last_chap_res = await db.execute(
+        select(models.Chapter)
+        .where(models.Chapter.story_id == story_id)
+        .order_by(models.Chapter.chapter_number.desc())
+        .limit(1)
+    )
+    last_chap = last_chap_res.scalars().first()
+    last_chap_title = last_chap.title if last_chap else "Beginning"
+    last_chap_text = last_chap.content if last_chap else ""
+    
+    # 2. Fetch all characters
+    chars_res = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    characters = chars_res.scalars().all()
+    chars_info_list = []
+    
+    characters_chats_summary_list = []
+    for c in characters:
+        chars_info_list.append(f"• {c.name} ({c.role}, {c.gender or 'N/A'}, Intimacy: {c.intimacy_score or 0}/100, Attire: {c.active_wardrobe or 'Default'})")
+        
+        # Fetch up to 8 recent chat messages with this character
+        recent_chats_res = await db.execute(
+            select(models.CharacterChat)
+            .where(models.CharacterChat.character_id == c.id)
+            .order_by(models.CharacterChat.created_at.desc())
+            .limit(8)
+        )
+        recent_chats = list(reversed(recent_chats_res.scalars().all()))
+        if recent_chats:
+            turns = []
+            for m in recent_chats:
+                sender = c.name if m.is_ai else "User"
+                turns.append(f"{sender}: {m.message[:100]}")
+            summary_block = f"--- 1-on-1 Chat with {c.name} ---\n" + "\n".join(turns)
+            characters_chats_summary_list.append(summary_block)
+    characters_info_str = "\n".join(chars_info_list)
+    characters_chats_summary_str = "\n\n".join(characters_chats_summary_list)
+    # 3. Fetch recent Tavern Group Chat messages
+    tavern_summary_str = ""
+    group_sess_res = await db.execute(
+        select(models.GroupChatSession)
+        .where(models.GroupChatSession.story_id == story_id)
+        .order_by(models.GroupChatSession.created_at.desc())
+        .limit(1)
+    )
+    group_sess = group_sess_res.scalars().first()
+    if group_sess:
+        group_msgs_res = await db.execute(
+            select(models.GroupChatMessage)
+            .where(models.GroupChatMessage.session_id == group_sess.id)
+            .order_by(models.GroupChatMessage.created_at.desc())
+            .limit(8)
+        )
+        g_msgs = list(reversed(group_msgs_res.scalars().all()))
+        if g_msgs:
+            t_turns = []
+            for gm in g_msgs:
+                t_turns.append(f"{gm.character_name or 'User'}: {gm.message[:100]}")
+            tavern_summary_str = "--- Tavern Lounge Banter ---\n" + "\n".join(t_turns)

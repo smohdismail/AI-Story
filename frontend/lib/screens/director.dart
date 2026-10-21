@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../streak_service.dart';
+import '../widgets/synced_chapter_studio_sheet.dart';
 
 class DirectorScreen extends StatefulWidget {
   final String storyId;
@@ -589,6 +590,37 @@ class _DirectorScreenState extends State<DirectorScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Chapter Prompt:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    TextButton.icon(
+                      onPressed: () {
+                        SyncedChapterStudioSheet.show(
+                          context,
+                          storyId: widget.storyId,
+                          chapterCount: widget.currentChapterCount,
+                          onPromptSelected: (prompt) {
+                            setState(() {
+                              _promptController.text = prompt;
+                            });
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.hub_outlined, size: 16, color: Color(0xFFA78BFA)),
+                      label: const Text(
+                        '🪄 5 Synced Prompts & Canon Audit',
+                        style: TextStyle(color: Color(0xFFA78BFA), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 TextField(
                   controller: _promptController,
                   maxLines: 3,

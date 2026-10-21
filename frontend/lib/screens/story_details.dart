@@ -29,6 +29,7 @@ import '../widgets/vhs_memory_clips_sheet.dart';
 import '../widgets/story_romance_boutique_sheet.dart';
 import '../widgets/photobooth_strip_sheet.dart';
 import '../widgets/room_inspection_sheet.dart';
+import '../widgets/synced_chapter_studio_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -1003,7 +1004,11 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () async {
-            await context.push('/story/${widget.storyId}/director', extra: {'chapterCount': chapters.length});
+            await SyncedChapterStudioSheet.show(
+              context,
+              storyId: widget.storyId,
+              chapterCount: chapters.length,
+            );
             _loadData();
           },
           label: const Text('Create Chapter'),

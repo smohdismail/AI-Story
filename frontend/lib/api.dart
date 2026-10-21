@@ -2012,4 +2012,39 @@ class ApiService {
     }
     throw Exception('Failed to load room inspections');
   }
+
+  // ==========================================
+  // ⚡ 7. STORY CONTINUITY & SYNCHRONIZED CHAPTER PROMPTS
+  // ==========================================
+  static Future<Map<String, dynamic>> getSyncedChapterPrompts(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/synced_chapter_prompts'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load synchronized chapter prompts');
+  }
+
+  static Future<Map<String, dynamic>> checkChapterContinuity(
+    String storyId,
+    String proposedPrompt,
+  ) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/check_chapter_continuity'),
+      headers: headers,
+      body: jsonEncode({
+        'proposed_prompt': proposedPrompt,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to check chapter continuity');
+  }
 }

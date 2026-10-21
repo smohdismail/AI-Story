@@ -495,3 +495,23 @@ class RoomInspectionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+
+
+# --- 🔄 Omniscient Continuity & Synced Chapter Prompts ---
+class SyncedChapterPromptItem(BaseModel):
+    category: str
+    title: str
+    prompt_text: str
+    synced_elements: List[str] = []
+
+class SyncedChapterPromptsResponse(BaseModel):
+    prompts: List[SyncedChapterPromptItem] = []
+    recent_canon_summary: str = ""
+
+class ContinuityCheckRequest(BaseModel):
+    proposed_prompt: str
+
+class ContinuityCheckResponse(BaseModel):
+    is_consistent: bool
+    flags: List[str] = []
+    auto_aligned_prompt: str
