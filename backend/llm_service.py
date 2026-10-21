@@ -221,7 +221,7 @@ async def chat_with_character(
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=150,
+            max_tokens=200,
             presence_penalty=0.5,
             frequency_penalty=0.6,
         )
@@ -374,7 +374,7 @@ async def continue_chat(
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=150,
+            max_tokens=200,
             presence_penalty=0.5,
             frequency_penalty=0.6,
         )
