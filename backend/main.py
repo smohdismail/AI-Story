@@ -861,6 +861,7 @@ class GenerateRequest(BaseModel):
     prophecy: str | None = None
     ambient_weather: str | None = None
     local_time_desc: str | None = None
+    real_world_context: str | None = None
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
@@ -915,7 +916,14 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                     f"--------------------------------------------------------------------\n\n"
                 )
 
-            if request.ambient_weather or request.local_time_desc:
+            if request.real_world_context:
+                story_context += (
+                    f"--- REAL-WORLD SYNCHRONIZED REALITY ---\n"
+                    f"{request.real_world_context}\n"
+                    f"Subtly ground the chapter's sensory atmosphere and time-of-day moods in this real-world setting.\n"
+                    f"----------------------------------------\n\n"
+                )
+            elif request.ambient_weather or request.local_time_desc:
                 story_context += (
                     f"--- REAL-WORLD SYNCHRONIZED ATMOSPHERE & WEATHER ---\n"
                     f"Atmosphere: {request.ambient_weather or 'Normal'}\n"
@@ -1279,7 +1287,8 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
         chat_history=chat_history_turns,
         chapter_chronicle=chapter_chronicle,
         ambient_weather=request.ambient_weather or "",
-        local_time_desc=request.local_time_desc or ""
+        local_time_desc=request.local_time_desc or "",
+        real_world_context=request.real_world_context or ""
     )
     
     # Parse intimacy delta and sanitize text
@@ -1839,7 +1848,8 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
         persona_info,
         chapter_chronicle=chapter_chronicle,
         ambient_weather=request.ambient_weather or "",
-        local_time_desc=request.local_time_desc or ""
+        local_time_desc=request.local_time_desc or "",
+        real_world_context=request.real_world_context or ""
     )
     
     # 5. Save AI responses with multi-paragraph support

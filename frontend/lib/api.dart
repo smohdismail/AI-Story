@@ -432,6 +432,7 @@ class ApiService {
     String? prophecy,
     String? ambientWeather,
     String? localTimeDesc,
+    String? realWorldContext,
   }) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
@@ -448,6 +449,7 @@ class ApiService {
       if (prophecy != null && prophecy.isNotEmpty) 'prophecy': prophecy,
       if (ambientWeather != null && ambientWeather.isNotEmpty) 'ambient_weather': ambientWeather,
       if (localTimeDesc != null && localTimeDesc.isNotEmpty) 'local_time_desc': localTimeDesc,
+      if (realWorldContext != null && realWorldContext.isNotEmpty) 'real_world_context': realWorldContext,
     });
 
     final client = http.Client();
@@ -556,6 +558,7 @@ class ApiService {
     String message, {
     String? ambientWeather,
     String? localTimeDesc,
+    String? realWorldContext,
   }) async {
     final headers = await _getHeaders();
     final body = <String, dynamic>{
@@ -566,6 +569,9 @@ class ApiService {
     }
     if (localTimeDesc != null && localTimeDesc.isNotEmpty) {
       body['local_time_desc'] = localTimeDesc;
+    }
+    if (realWorldContext != null && realWorldContext.isNotEmpty) {
+      body['real_world_context'] = realWorldContext;
     }
     final response = await http.post(
       Uri.parse('$baseUrl/characters/$characterId/chat'),
@@ -784,6 +790,7 @@ class ApiService {
     String message, {
     String? ambientWeather,
     String? localTimeDesc,
+    String? realWorldContext,
   }) async {
     final headers = await _getHeaders();
     final response = await http.post(
@@ -793,6 +800,7 @@ class ApiService {
         'message': message,
         if (ambientWeather != null && ambientWeather.isNotEmpty) 'ambient_weather': ambientWeather,
         if (localTimeDesc != null && localTimeDesc.isNotEmpty) 'local_time_desc': localTimeDesc,
+        if (realWorldContext != null && realWorldContext.isNotEmpty) 'real_world_context': realWorldContext,
       }),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {

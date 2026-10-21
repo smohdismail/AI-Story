@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/ambient_sound_service.dart';
+import '../services/real_world_sync_service.dart';
 
 class AmbienceWeatherSheet extends StatefulWidget {
   const AmbienceWeatherSheet({super.key});
@@ -24,6 +25,7 @@ class _AmbienceWeatherSheetState extends State<AmbienceWeatherSheet> {
   void initState() {
     super.initState();
     _soundService.addListener(_onServiceChanged);
+    RealWorldSyncService.instance.addListener(_onServiceChanged);
   }
 
   void _onServiceChanged() {
@@ -33,6 +35,7 @@ class _AmbienceWeatherSheetState extends State<AmbienceWeatherSheet> {
   @override
   void dispose() {
     _soundService.removeListener(_onServiceChanged);
+    RealWorldSyncService.instance.removeListener(_onServiceChanged);
     super.dispose();
   }
 
@@ -163,52 +166,96 @@ class _AmbienceWeatherSheetState extends State<AmbienceWeatherSheet> {
   }
 
   Widget _buildRealWorldSyncCard() {
+    final reality = RealWorldSyncService.instance;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1B2036),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _soundService.autoSyncWithRealWorld
+          color: reality.syncEnabled
               ? const Color(0xFF38BDF8).withValues(alpha: 0.4)
               : Colors.white.withValues(alpha: 0.08),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.access_time_rounded, color: Color(0xFF38BDF8), size: 22),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.public, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Live Real-World Reality Sync',
+                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('LIVE GPS/IP', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${reality.displayLocation}${reality.temperatureDisplay.isNotEmpty ? ' • ${reality.temperatureDisplay}' : ''} (${reality.weatherDescription})',
+                      style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      '${reality.localTimeFormatted} • ${reality.humanRoutinePhase}',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: reality.isLoading
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                    : const Icon(Icons.refresh, color: Color(0xFF38BDF8), size: 20),
+                tooltip: 'Refresh Live Location & Weather',
+                onPressed: reality.isLoading ? null : () => reality.refreshReality(),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Real-World Clock Sync',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Characters in 1-on-1 & Tavern lounge know your real city, live weather, and time',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _soundService.localTimeDesc,
-                  style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  'Transitions atmosphere automatically by time of day',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: _soundService.autoSyncWithRealWorld,
-            activeColor: const Color(0xFF38BDF8),
-            onChanged: (val) => _soundService.toggleAutoSync(val),
+              ),
+              Switch(
+                value: reality.syncEnabled,
+                activeColor: const Color(0xFF38BDF8),
+                onChanged: (val) => reality.toggleSync(val),
+              ),
+            ],
           ),
         ],
       ),

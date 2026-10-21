@@ -21,10 +21,12 @@ import 'theme_provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'api.dart';
+import 'services/real_world_sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.initApiConfig();
+  RealWorldSyncService.instance.init();
   final prefs = await SharedPreferences.getInstance();
   final hasToken = prefs.getString('token') != null;
 

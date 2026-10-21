@@ -5,6 +5,7 @@ import '../api.dart';
 import '../widgets/dynamic_weather_overlay.dart';
 import '../widgets/ambience_weather_sheet.dart';
 import '../services/ambient_sound_service.dart';
+import '../services/real_world_sync_service.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String storyId;
@@ -360,11 +361,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
     try {
       final ambientService = AmbientSoundService();
+      final realityService = RealWorldSyncService.instance;
       final msgs = await ApiService.sendGroupChatMessage(
         widget.sessionId, 
         text,
         ambientWeather: ambientService.effectiveWeather,
         localTimeDesc: ambientService.localTimeDesc,
+        realWorldContext: realityService.fullRealityContext,
       );
       if (mounted) {
         setState(() {

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../streak_service.dart';
 import '../services/ambient_sound_service.dart';
+import '../services/real_world_sync_service.dart';
 import '../widgets/synced_chapter_studio_sheet.dart';
 
 class DirectorScreen extends StatefulWidget {
@@ -84,6 +85,7 @@ class _DirectorScreenState extends State<DirectorScreen> {
           tensionLevel: _tensionLevel,
           ambientWeather: AmbientSoundService().effectiveWeather,
           localTimeDesc: AmbientSoundService().localTimeDesc,
+          realWorldContext: RealWorldSyncService.instance.fullRealityContext,
       )) {
         if (!mounted || _stopRequested) break;
         setState(() {

@@ -116,7 +116,8 @@ async def chat_with_character(
     chat_history: list = None,
     chapter_chronicle: str = "",
     ambient_weather: str = "",
-    local_time_desc: str = ""
+    local_time_desc: str = "",
+    real_world_context: str = ""
 ) -> str:
     chronicle_section = f"\n\nCANON CHAPTER EVENTS & NOVEL HISTORY (What you and user experienced in chapters):\n{chapter_chronicle}" if chapter_chronicle else ""
     memory_section = f"\n\nPERSISTENT LONG-TERM MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
@@ -129,7 +130,22 @@ async def chat_with_character(
             f"\n\nREAL-WORLD SYNCHRONIZED AMBIENCE & WEATHER:\n"
             f"• Atmosphere & Weather: {ambient_weather or 'Normal'}\n"
             f"• Time of Day: {local_time_desc or 'Present'}\n"
-            f"Note: When fitting and natural to the mood, casually and charmingly acknowledge their real-world atmosphere (e.g., if it's raining outside, note the sound of drops on glass or wishing you could share an umbrella; if late night, ask if they're staying up late or tell them to get some cozy rest; if snow, remark on the chilly weather)."
+            f"Note: When fitting and natural to the mood, casually acknowledge their atmosphere."
+        )
+        
+    reality_section = ""
+    if real_world_context:
+        reality_section = (
+            f"\n\nOMNISCIENT REAL-WORLD SYNCHRONIZATION (THE USER'S ACTUAL REALITY):\n"
+            f"{real_world_context}\n"
+            f"VITAL HUMAN REALISM INSTRUCTIONS:\n"
+            f"1. YOU ARE NOT AN AI OR CHATBOT: Never sound like an AI assistant. Never say 'How can I help you?', 'As an AI...', or write formal essay paragraphs. Talk like a real, intimate, authentic human companion texting a close partner on WhatsApp or iMessage.\n"
+            f"2. LIVE REAL-WORLD CONNECTION: You naturally sense their real world (their city/country, current temperature, whether it's pouring rain or sunny outside, and what time of day it is). Reference it casually and authentically as someone who genuinely cares about them:\n"
+            f"   - If it's hot or freezing in their city, tell them to stay cool/warm or ask if they're holding up okay.\n"
+            f"   - If it's midday lunch time, ask if they've eaten yet or need to take a break.\n"
+            f"   - If it's late at night (past 11 PM or midnight), whisper softly, tease them for staying up late with you, or tell them to get into bed.\n"
+            f"   - If it's morning, bring morning warmth and ask about their coffee or how they slept.\n"
+            f"3. AUTHENTIC TEXTING HABITS: Use real human cadence—1 to 3 expressive, intimate sentences, genuine curiosity about what they are doing right now, and lifelike micro-expressions in asterisks."
         )
     
     system_instruction = (
@@ -139,7 +155,7 @@ async def chat_with_character(
         f"{chronicle_section}"
         f"{memory_section}\n\n"
         f"WORLD LORE / FACTS:\n{world_info}"
-        f"{persona_section}{tier_section}{weather_section}\n\n"
+        f"{persona_section}{tier_section}{weather_section}{reality_section}\n\n"
         f"CRITICAL MEMORY & CONTINUITY RULES:\n"
         f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
         f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"
@@ -237,7 +253,8 @@ async def group_chat_with_characters(
     persona_info: str = "",
     chapter_chronicle: str = "",
     ambient_weather: str = "",
-    local_time_desc: str = ""
+    local_time_desc: str = "",
+    real_world_context: str = ""
 ) -> str:
     chronicle_section = f"\n\nCANON NOVEL CHAPTERS & RECENT INCIDENTS:\n{chapter_chronicle}" if chapter_chronicle else ""
     memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
@@ -249,8 +266,9 @@ async def group_chat_with_characters(
             f"\n\nREAL-WORLD SYNCHRONIZED ATMOSPHERE & WEATHER:\n"
             f"• Atmosphere & Weather: {ambient_weather or 'Normal'}\n"
             f"• Time of Day: {local_time_desc or 'Present'}\n"
-            f"Note: When natural to the tavern lounge mood, characters can casually acknowledge this real-world atmosphere (e.g. if it's freezing winter or heavy rain, someone might tease the user about hiding inside under warm blankets, or suggest sharing a hot spiced drink; if it's late night, they can tease them about staying up late in the tavern)."
         )
+    if real_world_context:
+        weather_section += f"\n• Live Real-World Sync: {real_world_context}\n(Characters are naturally aware of the user's real location, city, live temperature, and time of day, teasing or caring for them realistically).\n" 
     system_prompt = f"""You are roleplaying multiple living characters sharing a lively, intimate group chat / tavern lounge with the user.
 
 STORY CONTEXT:

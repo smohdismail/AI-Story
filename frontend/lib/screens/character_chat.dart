@@ -22,6 +22,7 @@ import '../widgets/room_inspection_sheet.dart';
 import '../widgets/dynamic_weather_overlay.dart';
 import '../widgets/ambience_weather_sheet.dart';
 import '../services/ambient_sound_service.dart';
+import '../services/real_world_sync_service.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -101,11 +102,13 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
     try {
       final ambientService = AmbientSoundService();
+      final realityService = RealWorldSyncService.instance;
       final msgs = await ApiService.chatWithCharacter(
         widget.characterId, 
         text,
         ambientWeather: ambientService.effectiveWeather,
         localTimeDesc: ambientService.localTimeDesc,
+        realWorldContext: realityService.fullRealityContext,
       );
       final charInfo = await ApiService.getCharacter(widget.characterId);
       setState(() {
@@ -755,10 +758,25 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         elevation: 2,
         shadowColor: Colors.black54,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          widget.characterName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
-          overflow: TextOverflow.ellipsis,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.characterName,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              overflow: TextOverflow.ellipsis,
+            ),
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 10, color: Color(0xFF38BDF8)),
+                const SizedBox(width: 2),
+                Text(
+                  '${RealWorldSyncService.instance.displayLocation}${RealWorldSyncService.instance.temperatureDisplay.isNotEmpty ? ' • ${RealWorldSyncService.instance.temperatureDisplay}' : ''}',
+                  style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 10, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ],
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4.0),
