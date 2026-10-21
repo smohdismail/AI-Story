@@ -105,6 +105,42 @@ async def update_master_summary(current_summary: str, new_chapter_text: str) -> 
         print(f"Error updating summary: {e}")
         return current_summary
 
+def _clean_character_chat_reply(raw: str) -> str:
+    if not raw:
+        return "*remains silent*"
+    text = raw.strip()
+    
+    # Extract intimacy tag if present
+    intimacy_match = re.search(r'\[INTIMACY:\s*([+-]?\d+)\]', text, re.IGNORECASE)
+    intimacy_tag = ""
+    if intimacy_match:
+        intimacy_tag = f" [INTIMACY:{intimacy_match.group(1)}]"
+        text = text[:intimacy_match.start()] + text[intimacy_match.end():]
+        text = text.strip()
+        
+    # If the text was cut off mid-asterisk (odd number of asterisks)
+    if text.count('*') % 2 != 0:
+        last_asterisk = text.rfind('*')
+        text = text[:last_asterisk].strip()
+        
+    # If the text ends abruptly without terminal punctuation, trim to the last sentence or closing asterisk/quote
+    if text and text[-1] not in ('.', '!', '?', '"', "'", '*', '~', '…'):
+        match = re.search(r'([.!?*"])\s*[^.!?*"]*$', text)
+        if match:
+            text = text[:match.start() + 1].strip()
+            
+    # Collapse runaway repetitive asterisks if more than 2 distinct action clauses exist
+    asterisk_blocks = re.findall(r'\*[^*]+\*', text)
+    if len(asterisk_blocks) > 2:
+        for block in asterisk_blocks[2:]:
+            text = text.replace(block, '', 1)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+    if intimacy_tag and intimacy_tag.strip() not in text:
+        text = f"{text}{intimacy_tag}"
+        
+    return text.strip() or "*looks at you softly*"
+
 async def chat_with_character(
     character_info: str,
     story_summary: str,
@@ -160,10 +196,10 @@ async def chat_with_character(
         f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
         f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"
         f"3. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required.\n"
-        f"STYLE & CONVERSATIONAL REALISM RULES:\n"
-        f"1. BALANCED NATURAL CHAT LENGTH: Keep your response natural, expressive, and engaging (around 45 to 85 words, about 2 to 4 well-crafted sentences). Avoid 4-paragraph novel essays, but do NOT give dry, one-word, or overly brief replies. Provide a satisfying, emotionally rich conversational turn.\n"
-        f"2. HUMAN MICRO-EXPRESSIONS & GESTURES: Weave in lifelike human behavior inside *asterisks* (e.g. *chuckles softly, tilting her head with a teasing glance*, *pauses and bites her lower lip, stepping a little closer*, *a gentle warmth in her eyes*).\n"
-        f"3. AUTHENTIC CHEMISTRY & DIALOGUE: Speak with genuine cadence, teasing banter, warmth, or vulnerability. React meaningfully to what the user said, share your own thoughts or questions, and keep the emotional connection vibrant.\n"
+        f"CRITICAL CHAT BREVITY & HUMAN TEXTING RULES:\n"
+        f"1. SHORT TEXTING CADENCE: You are texting in a chat window, NOT writing a book or novel chapter! Keep your entire message concise, punchy, and natural (1 to 3 short sentences, between 25 and 55 words max). Never write novel essays or walls of text.\n"
+        f"2. AT MOST ONE ACTION IN ASTERISKS: Include at most ONE brief action/expression in *asterisks* (e.g. *chuckles softly* or *blushes and looks down*). NEVER chain multiple asterisks together or narrate repetitive actions.\n"
+        f"3. ZERO REPETITION: Never repeat words or phrases like 'my eyes never leaving yours', 'desire in your eyes', or endless internal monologue. Speak directly and genuinely to the user.\n"
         f"4. INTIMACY TAG: At the very end of your response, you MUST append an affection delta tag in the format [INTIMACY:X] where X is an integer (e.g. [INTIMACY:+1], [INTIMACY:-1], or [INTIMACY:0]). This is required."
     )
     
@@ -183,10 +219,12 @@ async def chat_with_character(
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=350,
+            max_tokens=150,
+            presence_penalty=0.5,
+            frequency_penalty=0.6,
         )
         if response.choices and response.choices[0].message.content:
-            return response.choices[0].message.content.strip()
+            return _clean_character_chat_reply(response.choices[0].message.content)
         return "*remains silent*"
     except Exception as e:
         print(f"Error chatting with character: {e}")
@@ -334,10 +372,12 @@ async def continue_chat(
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=350,
+            max_tokens=150,
+            presence_penalty=0.5,
+            frequency_penalty=0.6,
         )
         if response.choices and response.choices[0].message.content:
-            return response.choices[0].message.content.strip()
+            return _clean_character_chat_reply(response.choices[0].message.content)
         return "*continues*"
     except Exception as e:
         print(f"Error continuing chat: {e}")
