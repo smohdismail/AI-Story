@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../streak_service.dart';
+import '../services/ambient_sound_service.dart';
 import '../widgets/synced_chapter_studio_sheet.dart';
 
 class DirectorScreen extends StatefulWidget {
@@ -81,6 +82,8 @@ class _DirectorScreenState extends State<DirectorScreen> {
           povCharacter: _selectedPovCharacter,
           narrativeSpark: _selectedNarrativeSpark,
           tensionLevel: _tensionLevel,
+          ambientWeather: AmbientSoundService().effectiveWeather,
+          localTimeDesc: AmbientSoundService().localTimeDesc,
       )) {
         if (!mounted || _stopRequested) break;
         setState(() {

@@ -430,6 +430,8 @@ class ApiService {
     String? narrativeSpark,
     int? tensionLevel,
     String? prophecy,
+    String? ambientWeather,
+    String? localTimeDesc,
   }) async* {
     final headers = await _getHeaders();
     final request = http.Request('POST', Uri.parse('$baseUrl/generate/chapter'));
@@ -444,6 +446,8 @@ class ApiService {
       if (narrativeSpark != null && narrativeSpark.isNotEmpty) 'narrative_spark': narrativeSpark,
       if (tensionLevel != null) 'tension_level': tensionLevel,
       if (prophecy != null && prophecy.isNotEmpty) 'prophecy': prophecy,
+      if (ambientWeather != null && ambientWeather.isNotEmpty) 'ambient_weather': ambientWeather,
+      if (localTimeDesc != null && localTimeDesc.isNotEmpty) 'local_time_desc': localTimeDesc,
     });
 
     final client = http.Client();
@@ -775,12 +779,21 @@ class ApiService {
     }
   }
 
-  static Future<List<dynamic>> sendGroupChatMessage(String sessionId, String message) async {
+  static Future<List<dynamic>> sendGroupChatMessage(
+    String sessionId, 
+    String message, {
+    String? ambientWeather,
+    String? localTimeDesc,
+  }) async {
     final headers = await _getHeaders();
     final response = await http.post(
       Uri.parse('$baseUrl/group_chats/$sessionId/messages'),
       headers: headers,
-      body: jsonEncode({'message': message}),
+      body: jsonEncode({
+        'message': message,
+        if (ambientWeather != null && ambientWeather.isNotEmpty) 'ambient_weather': ambientWeather,
+        if (localTimeDesc != null && localTimeDesc.isNotEmpty) 'local_time_desc': localTimeDesc,
+      }),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);

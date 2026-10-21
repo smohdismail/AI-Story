@@ -859,6 +859,8 @@ class GenerateRequest(BaseModel):
     narrative_spark: str | None = None
     tension_level: int | None = None
     prophecy: str | None = None
+    ambient_weather: str | None = None
+    local_time_desc: str | None = None
 
 @app.post("/api/v1/generate/chapter")
 async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
@@ -913,8 +915,17 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                     f"--------------------------------------------------------------------\n\n"
                 )
 
+            if request.ambient_weather or request.local_time_desc:
+                story_context += (
+                    f"--- REAL-WORLD SYNCHRONIZED ATMOSPHERE & WEATHER ---\n"
+                    f"Atmosphere: {request.ambient_weather or 'Normal'}\n"
+                    f"Time of Day: {request.local_time_desc or 'Present'}\n"
+                    f"Harmonize the chapter's sensory environment with this atmosphere (e.g. if it's freezing winter or heavy rain, weave in subtle sensory details like rain drumming on windows, crisp cold air, or cozy hearth warmth).\n"
+                    f"-----------------------------------------------------\n\n"
+                )
+                
             if story.tone:
-                story_context += f"--- STORY THEME & NARRATIVE MOOD PRESET ---\nSelected Theme & Mood: {story.tone}\nYou MUST strictly write dialogue, pacing, action, and scene descriptions to honor this exact story theme and atmosphere.\n---------------------------------------------\n\n"
+                story_context += f"--- STORY THEME & NARRATIVE MOOD PRESET ---\nSelected Theme & Mood: {story.tone}\nYou MUST strictly write dialogue, pacing, action, and scene descriptions to honor this exact story theme and atmosphere.\n---------------------------------------------\n\n" 
             story_context += f"Story Metadata: Genre: {story.genre}, Subgenre: {story.subgenre}, Tone: {story.tone}, Title: {story.title}, Synopsis: {story.synopsis}\n"
             
             # Fetch and inject characters
@@ -1826,7 +1837,9 @@ async def send_group_chat_message(session_id: uuid.UUID, request: schemas.ChatRe
         chat_history_str,
         combined_memories,
         persona_info,
-        chapter_chronicle=chapter_chronicle
+        chapter_chronicle=chapter_chronicle,
+        ambient_weather=request.ambient_weather or "",
+        local_time_desc=request.local_time_desc or ""
     )
     
     # 5. Save AI responses with multi-paragraph support

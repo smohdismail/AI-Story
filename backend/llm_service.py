@@ -235,11 +235,22 @@ async def group_chat_with_characters(
     chat_history: str,
     relevant_memories: str = "",
     persona_info: str = "",
-    chapter_chronicle: str = ""
+    chapter_chronicle: str = "",
+    ambient_weather: str = "",
+    local_time_desc: str = ""
 ) -> str:
     chronicle_section = f"\n\nCANON NOVEL CHAPTERS & RECENT INCIDENTS:\n{chapter_chronicle}" if chapter_chronicle else ""
     memory_section = f"\n\nRELEVANT PAST MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA (Who you are interacting with):\n{persona_info}" if persona_info else ""
+    
+    weather_section = ""
+    if ambient_weather or local_time_desc:
+        weather_section = (
+            f"\n\nREAL-WORLD SYNCHRONIZED ATMOSPHERE & WEATHER:\n"
+            f"• Atmosphere & Weather: {ambient_weather or 'Normal'}\n"
+            f"• Time of Day: {local_time_desc or 'Present'}\n"
+            f"Note: When natural to the tavern lounge mood, characters can casually acknowledge this real-world atmosphere (e.g. if it's freezing winter or heavy rain, someone might tease the user about hiding inside under warm blankets, or suggest sharing a hot spiced drink; if it's late night, they can tease them about staying up late in the tavern)."
+        )
     system_prompt = f"""You are roleplaying multiple living characters sharing a lively, intimate group chat / tavern lounge with the user.
 
 STORY CONTEXT:
@@ -247,7 +258,7 @@ STORY CONTEXT:
 {chronicle_section}
 
 CHARACTERS IN CHAT:
-{characters_info}{memory_section}{persona_section}
+{characters_info}{memory_section}{persona_section}{weather_section}
 
 CRITICAL RULES FOR ULTRA-NATURAL & ORGANIC REPLIES:
 1. HUMAN GROUP DYNAMICS: Characters do not give isolated monologues. They react directly to what the user said AND to each other (teasing, bouncing off each other's remarks, friendly banter, eye contact, interruptions, protective warmth).

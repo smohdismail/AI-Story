@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../api.dart';
+import '../widgets/dynamic_weather_overlay.dart';
+import '../widgets/ambience_weather_sheet.dart';
+import '../services/ambient_sound_service.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String storyId;
@@ -356,7 +359,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _scrollToBottom();
 
     try {
-      final msgs = await ApiService.sendGroupChatMessage(widget.sessionId, text);
+      final ambientService = AmbientSoundService();
+      final msgs = await ApiService.sendGroupChatMessage(
+        widget.sessionId, 
+        text,
+        ambientWeather: ambientService.effectiveWeather,
+        localTimeDesc: ambientService.localTimeDesc,
+      );
       if (mounted) {
         setState(() {
           _messages = msgs;
@@ -604,6 +613,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
+            icon: const Icon(Icons.cloudy_snowing, color: Color(0xFF38BDF8)),
+            tooltip: 'Atmosphere & Ambience Soundscapes',
+            onPressed: () => AmbienceWeatherSheet.show(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.person_add_alt_1, color: Colors.amber),
             tooltip: 'Add / Manage Characters',
             onPressed: _showManageMembersSheet,
@@ -636,9 +650,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 ),
               )
             : null,
-        child: Column(
-          children: [
-            // Character quick pill bar
+        child: DynamicWeatherOverlay(
+          child: Column(
+            children: [
+              // Character quick pill bar
             if (_members.isNotEmpty)
               Container(
                 height: 44,
@@ -995,6 +1010,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }
