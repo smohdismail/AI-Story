@@ -19,6 +19,9 @@ import '../widgets/vhs_memory_clips_sheet.dart';
 import '../widgets/story_romance_boutique_sheet.dart';
 import '../widgets/photobooth_strip_sheet.dart';
 import '../widgets/room_inspection_sheet.dart';
+import '../widgets/dynamic_weather_overlay.dart';
+import '../widgets/ambience_weather_sheet.dart';
+import '../services/ambient_sound_service.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -97,7 +100,13 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     _scrollToBottom();
 
     try {
-      final msgs = await ApiService.chatWithCharacter(widget.characterId, text);
+      final ambientService = AmbientSoundService();
+      final msgs = await ApiService.chatWithCharacter(
+        widget.characterId, 
+        text,
+        ambientWeather: ambientService.effectiveWeather,
+        localTimeDesc: ambientService.localTimeDesc,
+      );
       final charInfo = await ApiService.getCharacter(widget.characterId);
       setState(() {
         _messages = msgs;
@@ -762,6 +771,11 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.cloudy_snowing, color: Color(0xFF38BDF8)),
+            tooltip: 'Atmosphere & Weather Soundscapes',
+            onPressed: () => AmbienceWeatherSheet.show(context),
+          ),
           GestureDetector(
             onTap: _showIntimacyMilestones,
             child: Center(
@@ -944,11 +958,12 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                         ),
                       )
                     : null, // Note: For Cyberpunk/Fantasy/Romance, we can also tint this if background is null
-                child: Column(
-                  children: [
-                    if (!_isImmersionMode)
-                      Expanded(
-                      child: ListView.builder(
+                child: DynamicWeatherOverlay(
+                  child: Column(
+                    children: [
+                      if (!_isImmersionMode)
+                        Expanded(
+                        child: ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(16),
                         itemCount: _messages.length,
@@ -1269,7 +1284,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                           ],
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -114,12 +114,23 @@ async def chat_with_character(
     persona_info: str = "",
     intimacy_tier_prompt: str = "",
     chat_history: list = None,
-    chapter_chronicle: str = ""
+    chapter_chronicle: str = "",
+    ambient_weather: str = "",
+    local_time_desc: str = ""
 ) -> str:
     chronicle_section = f"\n\nCANON CHAPTER EVENTS & NOVEL HISTORY (What you and user experienced in chapters):\n{chapter_chronicle}" if chapter_chronicle else ""
     memory_section = f"\n\nPERSISTENT LONG-TERM MEMORIES & PAST CONFESSIONS:\n{relevant_memories}" if relevant_memories else ""
     persona_section = f"\n\nUSER PERSONA (Who you are talking to):\n{persona_info}" if persona_info else ""
     tier_section = f"\n\nRELATIONSHIP DYNAMICS:\n{intimacy_tier_prompt}" if intimacy_tier_prompt else ""
+    
+    weather_section = ""
+    if ambient_weather or local_time_desc:
+        weather_section = (
+            f"\n\nREAL-WORLD SYNCHRONIZED AMBIENCE & WEATHER:\n"
+            f"• Atmosphere & Weather: {ambient_weather or 'Normal'}\n"
+            f"• Time of Day: {local_time_desc or 'Present'}\n"
+            f"Note: When fitting and natural to the mood, casually and charmingly acknowledge their real-world atmosphere (e.g., if it's raining outside, note the sound of drops on glass or wishing you could share an umbrella; if late night, ask if they're staying up late or tell them to get some cozy rest; if snow, remark on the chilly weather)."
+        )
     
     system_instruction = (
         f"You are playing the role of a character in a living story novel. You must stay entirely in character and converse with the user with deep realism, charm, emotional vulnerability, and unwavering continuity.\n\n"
@@ -128,7 +139,7 @@ async def chat_with_character(
         f"{chronicle_section}"
         f"{memory_section}\n\n"
         f"WORLD LORE / FACTS:\n{world_info}"
-        f"{persona_section}{tier_section}\n\n"
+        f"{persona_section}{tier_section}{weather_section}\n\n"
         f"CRITICAL MEMORY & CONTINUITY RULES:\n"
         f"1. YOU HAVE A LIVING MEMORY: You vividly remember all canon chapter events, past incidents, confessions, and promises listed above. Act like someone who truly lived through those events! Never contradict past chapter facts or pretend you don't know what happened between you and the user.\n"
         f"2. CONVERSATIONAL CONTINUITY: Follow the active flow of recent conversation turns provided. React directly to what was said, keeping emotional momentum.\n"

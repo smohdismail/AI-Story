@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../services/ambient_sound_service.dart';
 import '../widgets/audio_drama_sheet.dart';
+import '../widgets/dynamic_weather_overlay.dart';
+import '../widgets/ambience_weather_sheet.dart';
 import '../api.dart';
 
 enum ReaderTheme {
@@ -2910,16 +2912,16 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                   onPressed: _isLoadingAfterHours ? null : _toggleAfterHours,
                 ),
 
-                // 2. Sensory Ambient Soundscapes
+                // 2. Sensory Ambient Soundscapes & Weather
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   icon: Icon(
-                    _ambientService.isPlaying ? Icons.music_note : Icons.music_note_outlined,
-                    color: _ambientService.isPlaying ? Colors.tealAccent : textColor,
+                    _ambientService.isPlaying ? Icons.cloudy_snowing : Icons.cloud_outlined,
+                    color: _ambientService.isPlaying ? const Color(0xFF38BDF8) : textColor,
                   ),
-                  tooltip: _ambientService.isPlaying ? 'Sensory Ambient (Playing)' : 'Sensory Ambient Soundscapes',
-                  onPressed: _showAmbientSoundSheet,
+                  tooltip: _ambientService.isPlaying ? 'Atmosphere & Soundscape (Active)' : 'Atmosphere & Ambience Soundscapes',
+                  onPressed: () => AmbienceWeatherSheet.show(context),
                 ),
 
                 // 3. Audiobook Reader
@@ -3189,6 +3191,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
                 ),
               ),
             ),
+          const DynamicWeatherOverlay(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

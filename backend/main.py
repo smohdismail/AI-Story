@@ -1266,7 +1266,9 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
         persona_info=persona_info,
         intimacy_tier_prompt=tier_prompt,
         chat_history=chat_history_turns,
-        chapter_chronicle=chapter_chronicle
+        chapter_chronicle=chapter_chronicle,
+        ambient_weather=request.ambient_weather or "",
+        local_time_desc=request.local_time_desc or ""
     )
     
     # Parse intimacy delta and sanitize text

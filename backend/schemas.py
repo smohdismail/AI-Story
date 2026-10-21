@@ -233,6 +233,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    ambient_weather: Optional[str] = None
+    local_time_desc: Optional[str] = None
 
 class ImageGenRequest(BaseModel):
     prompt: str

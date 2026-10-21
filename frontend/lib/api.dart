@@ -547,17 +547,31 @@ class ApiService {
     }
   }
 
-  static Future<List<dynamic>> chatWithCharacter(String characterId, String message) async {
+  static Future<List<dynamic>> chatWithCharacter(
+    String characterId,
+    String message, {
+    String? ambientWeather,
+    String? localTimeDesc,
+  }) async {
     final headers = await _getHeaders();
+    final body = <String, dynamic>{
+      'message': message,
+    };
+    if (ambientWeather != null && ambientWeather.isNotEmpty) {
+      body['ambient_weather'] = ambientWeather;
+    }
+    if (localTimeDesc != null && localTimeDesc.isNotEmpty) {
+      body['local_time_desc'] = localTimeDesc;
+    }
     final response = await http.post(
       Uri.parse('$baseUrl/characters/$characterId/chat'),
       headers: headers,
-      body: jsonEncode({'message': message}),
+      body: jsonEncode(body),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to send message');
+      throw Exception('Failed to send message: ${response.body}');
     }
   }
 
