@@ -5117,6 +5117,184 @@ async def unlock_diary_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get
             message=f"Locked tight! Requires Intimacy {entry.required_intimacy} to unlock (Current: {intimacy}/100)."
         )
 
+
+
+# ==========================================
+# 🎙️ DIRECT HIGH-FIDELITY SPOKEN VOICE &
+# 📱 NATIVE SPONTANEOUS NOTIFICATIONS
+# ==========================================
+
+@app.get("/api/v1/voice/voices")
+async def list_available_voices():
+    """List of available high-fidelity neural voices for characters."""
+    return [
+        {
+            "voice_id": "en-US-JennyNeural",
+            "name": "Jenny (US)",
+            "gender": "Female",
+            "locale": "en-US",
+            "style": "Warm, affectionate, sweet natural female",
+            "recommended_roles": "Heroine, Sweetheart, Confidante"
+        },
+        {
+            "voice_id": "en-US-AriaNeural",
+            "name": "Aria (US)",
+            "gender": "Female",
+            "locale": "en-US",
+            "style": "Expressive, playful, sultry female",
+            "recommended_roles": "Femme fatale, Tease, Seductive, Confident"
+        },
+        {
+            "voice_id": "en-US-AnaNeural",
+            "name": "Ana (US)",
+            "gender": "Female",
+            "locale": "en-US",
+            "style": "Soft, youthful, gentle whispering female",
+            "recommended_roles": "Shy girl, Gentle lover, Childhood friend"
+        },
+        {
+            "voice_id": "en-US-GuyNeural",
+            "name": "Guy (US)",
+            "gender": "Male",
+            "locale": "en-US",
+            "style": "Deep, confident, calm male",
+            "recommended_roles": "Alpha male, Protector, CEO, Stern lover"
+        },
+        {
+            "voice_id": "en-US-ChristopherNeural",
+            "name": "Christopher (US)",
+            "gender": "Male",
+            "locale": "en-US",
+            "style": "Warm, romantic, intimate conversational male",
+            "recommended_roles": "Romantic lead, Devoted lover, Best friend"
+        },
+        {
+            "voice_id": "en-GB-SoniaNeural",
+            "name": "Sonia (UK)",
+            "gender": "Female",
+            "locale": "en-GB",
+            "style": "Sophisticated, aristocratic British female",
+            "recommended_roles": "Aristocrat, Elegant lady, Royalty"
+        },
+        {
+            "voice_id": "en-GB-RyanNeural",
+            "name": "Ryan (UK)",
+            "gender": "Male",
+            "locale": "en-GB",
+            "style": "Charismatic, cultured British gentleman",
+            "recommended_roles": "British billionaire, Gentleman, Scholar"
+        }
+    ]
+
+@app.post("/api/v1/characters/{character_id}/speak", response_model=schemas.CharacterSpeechResponse)
+async def speak_character_dialogue(
+    character_id: uuid.UUID,
+    req: schemas.CharacterSpeechRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Synthesize high-fidelity spoken voice audio for character dialogue."""
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Priority: explicit request voice -> character assigned voice -> default Jenny
+    voice = req.voice_id or char.voice_id or "en-US-JennyNeural"
+    
+    try:
+        audio_b64 = await llm_service.generate_character_speech(
+            text=req.text,
+            voice_id=voice,
+            rate=req.rate or "+0%",
+            pitch=req.pitch or "+0Hz"
+        )
+        return schemas.CharacterSpeechResponse(
+            audio_base64=audio_b64,
+            mime_type="audio/mpeg",
+            voice_id=voice
+        )
+    except Exception as e:
+        print(f"Error synthesizing speech with voice {voice}: {e}")
+        if voice != "en-US-JennyNeural":
+            try:
+                audio_b64 = await llm_service.generate_character_speech(
+                    text=req.text,
+                    voice_id="en-US-JennyNeural",
+                    rate=req.rate or "+0%",
+                    pitch=req.pitch or "+0Hz"
+                )
+                return schemas.CharacterSpeechResponse(
+                    audio_base64=audio_b64,
+                    mime_type="audio/mpeg",
+                    voice_id="en-US-JennyNeural"
+                )
+            except Exception as err2:
+                raise HTTPException(status_code=500, detail=f"TTS synthesis fallback failed: {err2}")
+        raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {e}")
+
+@app.put("/api/v1/characters/{character_id}/voice")
+async def update_character_voice(
+    character_id: uuid.UUID,
+    voice_id: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    """Assign a persistent neural voice to a character."""
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    char.voice_id = voice_id
+    await db.commit()
+    await db.refresh(char)
+    return {"status": "success", "voice_id": char.voice_id}
+
+@app.post("/api/v1/characters/{character_id}/proactive_ping", response_model=schemas.ProactiveNotificationResponse)
+async def generate_proactive_notification_endpoint(
+    character_id: uuid.UUID,
+    user_persona_name: Optional[str] = None,
+    local_time_str: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate a realistic spontaneous lock screen notification from character to user."""
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Fetch recent chat context (up to 4 recent messages)
+    q = (
+        select(models.ChatMessage)
+        .filter(models.ChatMessage.character_id == character_id)
+        .order_by(models.ChatMessage.timestamp.desc())
+        .limit(4)
+    )
+    res = await db.execute(q)
+    recent_chats = res.scalars().all()
+    recent_chats.reverse()
+    chat_context = "\n".join([f"{c.sender}: {c.content[:120]}" for c in recent_chats]) if recent_chats else "Recent sweet connection"
+    
+    data = await llm_service.generate_proactive_notification(
+        character_name=char.name,
+        character_role=char.role or "Companion",
+        personality=char.personality or "Affectionate, devoted",
+        intimacy_score=char.intimacy_score or 30,
+        user_persona_name=user_persona_name or "",
+        current_time_str=local_time_str or "Afternoon",
+        recent_context=chat_context
+    )
+    
+    title = data.get("notification_title", f"{char.name} ❤️")
+    body = data.get("notification_body", "Thinking about you...")
+    subtext = data.get("subtext", "1-on-1 Whisper")
+    
+    return schemas.ProactiveNotificationResponse(
+        notification_title=title,
+        notification_body=body,
+        subtext=subtext,
+        character_id=char.id,
+        character_name=char.name,
+        avatar_base64=char.avatar_base64,
+        action_route=f"/character_chat/{char.id}"
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))

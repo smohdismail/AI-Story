@@ -97,6 +97,7 @@ class Character(Base):
     wardrobe_json = Column(Text, default="[]") # JSON array of saved outfits
     cached_routine_json = Column(Text, nullable=True) # 24-Hour live ambient routine snapshot
     routine_updated_at = Column(DateTime, nullable=True)
+    voice_id = Column(String, default="en-US-JennyNeural", nullable=True) # Neural TTS Voice (e.g. en-US-JennyNeural)
     cached_vault_json = Column(Text, nullable=True) # Memory Vault & Relationship analysis cache
     vault_updated_at = Column(DateTime, nullable=True)
  

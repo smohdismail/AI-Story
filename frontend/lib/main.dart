@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'services/notification_service.dart';
+import 'services/character_voice_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/creator.dart';
@@ -27,6 +30,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.initApiConfig();
   RealWorldSyncService.instance.init();
+  try {
+    await NotificationService().init();
+    await CharacterVoiceService().init();
+  } catch (e) {
+    debugPrint('Init notification/voice error: ');
+  }
   final prefs = await SharedPreferences.getInstance();
   final hasToken = prefs.getString('token') != null;
 
@@ -165,6 +174,26 @@ void main() async {
     ),
   ],
   );
+
+  NotificationService.onNotificationTapped = (payload) {
+    if (payload != null && payload.isNotEmpty) {
+      try {
+        final data = jsonDecode(payload) as Map<String, dynamic>;
+        final charId = data['character_id']?.toString();
+        final charName = data['character_name']?.toString() ?? 'Character';
+        final avatar = data['avatar_base64']?.toString();
+        if (charId != null && charId.isNotEmpty) {
+          router.push('/character_chat', extra: {
+            'characterId': charId,
+            'characterName': charName,
+            'backgroundImage': avatar,
+          });
+        }
+      } catch (e) {
+        debugPrint('Error navigating from notification tap: ');
+      }
+    }
+  };
   
   runApp(
     ChangeNotifierProvider(

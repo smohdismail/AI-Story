@@ -2143,4 +2143,83 @@ class ApiService {
     }
     throw Exception('Failed to unlock diary entry');
   }
+
+  // ==========================================
+  // 🎙️ 10. DIRECT HIGH-FIDELITY SPOKEN VOICE &
+  // 📱 NATIVE SPONTANEOUS NOTIFICATIONS
+  // ==========================================
+  static Future<List<dynamic>> getAvailableVoices() async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('/voice/voices'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load available voices');
+  }
+
+  static Future<Map<String, dynamic>> getCharacterSpeech(
+    String characterId,
+    String text, {
+    String? voiceId,
+    String? rate,
+    String? pitch,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('/characters//speak'),
+      headers: headers,
+      body: jsonEncode({
+        'text': text,
+        if (voiceId != null && voiceId.isNotEmpty) 'voice_id': voiceId,
+        if (rate != null) 'rate': rate,
+        if (pitch != null) 'pitch': pitch,
+      }),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to synthesize character speech');
+  }
+
+  static Future<Map<String, dynamic>> setCharacterVoice(String characterId, String voiceId) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('/characters//voice'),
+      headers: headers,
+      body: jsonEncode({'voice_id': voiceId}),
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to update character voice');
+  }
+
+  static Future<Map<String, dynamic>> getProactiveNotification(
+    String characterId, {
+    String? userPersonaName,
+    String? localTimeStr,
+  }) async {
+    final headers = await _getHeaders();
+    final uri = Uri.parse('/characters//proactive_ping').replace(
+      queryParameters: {
+        if (userPersonaName != null) 'user_persona_name': userPersonaName,
+        if (localTimeStr != null) 'local_time_str': localTimeStr,
+      },
+    );
+    final response = await http.post(
+      uri,
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to generate spontaneous notification');
+  }
 }

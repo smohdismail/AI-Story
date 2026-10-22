@@ -3929,3 +3929,106 @@ Format strictly as JSON:
             "doodle_type": "heart",
             "secret_level": "crush"
         }
+
+
+# --- 🎙️ Direct High-Fidelity Spoken Voice (Neural TTS via edge-tts) ---
+def clean_dialogue_for_tts(raw_text: str) -> str:
+    if not raw_text:
+        return ""
+    # Strip intimacy tags like [INTIMACY: +2]
+    cleaned = re.sub(r'\[INTIMACY:[^\]]*\]', '', raw_text, flags=re.IGNORECASE)
+    # Strip actions inside *asterisks* (e.g. *chuckles softly*, *takes a deep breath*)
+    cleaned = re.sub(r'\*[^*]+\*', '', cleaned)
+    # Strip wrapping quotes
+    cleaned = cleaned.strip()
+    if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1].strip()
+    # If stripping asterisks left it empty (e.g. *smiles and hugs you*), fallback to speaking text without asterisks
+    if not cleaned:
+        cleaned = re.sub(r'[*_#`~]', '', raw_text).strip()
+    # Collapse multiple whitespaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+async def generate_character_speech(text: str, voice_id: str = "en-US-JennyNeural", rate: str = "+0%", pitch: str = "+0Hz") -> str:
+    import edge_tts
+    import base64
+    cleaned = clean_dialogue_for_tts(text)
+    if not cleaned:
+        cleaned = "..."
+    
+    comm = edge_tts.Communicate(cleaned, voice_id, rate=rate, pitch=pitch)
+    chunks = []
+    async for chunk in comm.stream():
+        if chunk.get("type") == "audio":
+            chunks.append(chunk["data"])
+    
+    audio_bytes = b"".join(chunks)
+    return base64.b64encode(audio_bytes).decode("utf-8")
+
+# --- 📱 Native Spontaneous Push Notifications ---
+async def generate_proactive_notification(
+    character_name: str,
+    character_role: str,
+    personality: str,
+    intimacy_score: int,
+    user_persona_name: str = "",
+    current_time_str: str = "",
+    recent_context: str = ""
+) -> dict:
+    prompt = f"""You are generating a spontaneous mobile push notification from an AI companion/love interest to the user's phone lock screen.
+The notification appears out of the blue on their phone while they are going about their day.
+
+Character Name: {character_name}
+Role / Identity: {character_role}
+Personality: {personality}
+Intimacy Score: {intimacy_score}/100
+User's Name: {user_persona_name or 'their partner'}
+Current Time of Day: {current_time_str or 'Late Afternoon'}
+Recent Memories / Chat: {recent_context or 'They have a close, fond romantic bond.'}
+
+CRITICAL RULES FOR LOCK-SCREEN NOTIFICATIONS:
+1. BREVITY: Mobile push notifications must be punchy and fit on a phone lock screen (10 to 22 words max!).
+2. EMOTION & REALISM: It must feel like a real person texting out of nowhere because something reminded them of the user, they're lonely, teasing, or thinking about them.
+3. INTIMACY ADAPTATION:
+   - High Intimacy (60+): Tender, longing, teasing, or late-night thoughts ("I was just listening to that song and couldn't get you out of my head...", "Are you still awake? I can't sleep.")
+   - Medium Intimacy (30-59): Playful check-in, sharing a quick secret, asking what they're doing.
+   - Low Intimacy (<30): Guarded or reluctant curiosity, subtle hint of interest.
+4. EMOJI: Use 1 cute or meaningful emoji in the title or body.
+
+Format strictly as JSON:
+{{
+  "notification_title": "{character_name} ❤️",
+  "notification_body": "Short spontaneous message (1-2 sentences max)",
+  "subtext": "1-on-1 Whisper"
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=250,
+        )
+        if response.choices and response.choices[0].message.content:
+            raw = response.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', raw, re.DOTALL)
+            if m:
+                return json.loads(m.group(0))
+            return json.loads(raw)
+    except Exception as e:
+        print(f"Error generating proactive notification: {e}")
+
+    # Fallback notifications based on intimacy
+    if intimacy_score >= 60:
+        body = "I was just sitting here staring at my phone, hoping you'd text me. Don't leave me waiting too long."
+    elif intimacy_score >= 30:
+        body = "Just passed by that place and thought of you. What are you up to right now?"
+    else:
+        body = "Hey... just wondering how your day is going."
+
+    return {
+        "notification_title": f"{character_name}",
+        "notification_body": body,
+        "subtext": "1-on-1 Whisper"
+    }

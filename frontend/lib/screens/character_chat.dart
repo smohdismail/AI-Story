@@ -24,6 +24,9 @@ import '../widgets/ambience_weather_sheet.dart';
 import '../widgets/secret_locked_diary_sheet.dart';
 import '../services/ambient_sound_service.dart';
 import '../services/real_world_sync_service.dart';
+import '../services/character_voice_service.dart';
+import '../services/notification_service.dart';
+import '../widgets/character_voice_settings_sheet.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -41,7 +44,8 @@ class CharacterChatScreen extends StatefulWidget {
   State<CharacterChatScreen> createState() => _CharacterChatScreenState();
 }
 
-class _CharacterChatScreenState extends State<CharacterChatScreen> {
+class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsBindingObserver {
+  final CharacterVoiceService _voiceService = CharacterVoiceService();
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
@@ -60,6 +64,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _voiceService.removeListener(_onVoiceUpdate);
+    _voiceService.stop();
     _audioPlayer.dispose();
     _msgController.dispose();
     _scrollController.dispose();
@@ -69,7 +76,50 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _voiceService.addListener(_onVoiceUpdate);
     _loadChat();
+  }
+
+  void _onVoiceUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _scheduleSpontaneousPingOnBackground();
+    }
+  }
+
+  Future<void> _scheduleSpontaneousPingOnBackground() async {
+    try {
+      final hour = DateTime.now().hour;
+      final timeDesc = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : hour < 22 ? 'Evening' : 'Late Night';
+      Future.delayed(const Duration(seconds: 15), () async {
+        try {
+          final ping = await ApiService.getProactiveNotification(
+            widget.characterId,
+            localTimeStr: timeDesc,
+          );
+          await NotificationService().showCharacterPing(
+            id: widget.characterId.hashCode,
+            title: ping['notification_title'] ?? widget.characterName,
+            body: ping['notification_body'] ?? 'Thinking about you right now...',
+            subtext: ping['subtext'] ?? '1-on-1 Whisper',
+            payloadData: {
+              'character_id': widget.characterId,
+              'character_name': widget.characterName,
+              'avatar_base64': widget.backgroundImage,
+            },
+          );
+        } catch (e) {
+          debugPrint('Background proactive ping error: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('Schedule ping error: $e');
+    }
   }
 
   Future<void> _loadChat() async {
@@ -118,6 +168,18 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         _isSending = false;
       });
       _scrollToBottom();
+      if (_voiceService.autoVoiceEnabled && msgs.isNotEmpty) {
+        final last = msgs.last;
+        if (last['is_ai'] == true || last['is_ai'] == 1) {
+          final msgText = last['message']?.toString() ?? '';
+          final msgId = last['id']?.toString() ?? 'last';
+          _voiceService.playDialogue(
+            characterId: widget.characterId,
+            text: msgText,
+            messageId: msgId,
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error sending message: $e')));
@@ -797,6 +859,23 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         ),
         actions: [
           IconButton(
+            icon: Icon(
+              _voiceService.isPlaying
+                  ? Icons.graphic_eq
+                  : (_voiceService.autoVoiceEnabled ? Icons.volume_up : Icons.record_voice_over),
+              color: _voiceService.isPlaying
+                  ? Colors.pinkAccent
+                  : (_voiceService.autoVoiceEnabled ? Colors.pinkAccent : Colors.tealAccent),
+            ),
+            tooltip: 'Neural Voice & Spontaneous Whispers 🎙️',
+            onPressed: () => CharacterVoiceSettingsSheet.show(
+              context,
+              characterId: widget.characterId,
+              characterName: widget.characterName,
+              avatarBase64: widget.backgroundImage,
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.cloudy_snowing, color: Color(0xFF38BDF8)),
             tooltip: 'Atmosphere & Weather Soundscapes',
             onPressed: () => AmbienceWeatherSheet.show(context),
@@ -870,7 +949,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             icon: const Icon(Icons.more_vert, color: Colors.white),
             tooltip: 'More options',
             onSelected: (String choice) {
-              if (choice == 'Mailbox') {
+              if (choice == 'Voice Settings') {
+                CharacterVoiceSettingsSheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Mailbox') {
                 VintageMailboxSheet.show(
                   context,
                   characterId: widget.characterId,
@@ -950,6 +1036,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             },
             itemBuilder: (BuildContext context) {
               return [
+                const PopupMenuItem(value: 'Voice Settings', child: Row(children: [Icon(Icons.record_voice_over, color: Colors.tealAccent), SizedBox(width: 8), Text('Voice & Whispers 🎙️')])),
                 const PopupMenuItem(value: 'Mailbox', child: Row(children: [Icon(Icons.markunread_mailbox, color: Colors.amber), SizedBox(width: 8), Text('Vintage Mailbox 📬')])),
                 const PopupMenuItem(value: 'Dreamworld', child: Row(children: [Icon(Icons.nightlight_round, color: Colors.purpleAccent), SizedBox(width: 8), Text('Shared Dreamworld 🌙')])),
                 const PopupMenuItem(value: 'Domestic Bliss', child: Row(children: [Icon(Icons.cottage, color: Colors.orangeAccent), SizedBox(width: 8), Text('Domestic Bliss 🏡')])),

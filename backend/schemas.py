@@ -135,6 +135,7 @@ class CharacterBase(BaseModel):
     passion_level: Optional[int] = 50
     vulnerability_level: Optional[int] = 30
     romantic_status: Optional[str] = "Guarded"
+    voice_id: Optional[str] = "en-US-JennyNeural"
 
 class CharacterCreate(CharacterBase):
     pass
@@ -155,6 +156,7 @@ class CharacterUpdate(BaseModel):
     passion_level: Optional[int] = None
     vulnerability_level: Optional[int] = None
     romantic_status: Optional[str] = None
+    voice_id: Optional[str] = None
 
 class CharacterResponse(CharacterBase):
     id: UUID4
@@ -565,3 +567,25 @@ class UnlockDiaryResponse(BaseModel):
     success: bool
     message: str
     entry: Optional[CharacterDiaryResponse] = None
+
+# --- 🎙️ Direct High-Fidelity Spoken Voice (TTS) ---
+class CharacterSpeechRequest(BaseModel):
+    text: str
+    voice_id: Optional[str] = None
+    rate: Optional[str] = "+0%"
+    pitch: Optional[str] = "+0Hz"
+
+class CharacterSpeechResponse(BaseModel):
+    audio_base64: str
+    mime_type: str = "audio/mpeg"
+    voice_id: str
+
+# --- 📱 Native Spontaneous Push Notifications ---
+class ProactiveNotificationResponse(BaseModel):
+    notification_title: str
+    notification_body: str
+    subtext: str = "1-on-1 Whisper"
+    character_id: UUID4
+    character_name: str
+    avatar_base64: Optional[str] = None
+    action_route: str
