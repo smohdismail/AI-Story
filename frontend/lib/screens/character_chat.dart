@@ -827,28 +827,54 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
         elevation: 2,
         shadowColor: Colors.black54,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        titleSpacing: 0,
+        title: Row(
           children: [
-            Text(
-              widget.characterName,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-              overflow: TextOverflow.ellipsis,
-            ),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 10, color: Color(0xFF38BDF8)),
-                const SizedBox(width: 2),
-                Text(
-                  '${RealWorldSyncService.instance.displayLocation}${RealWorldSyncService.instance.temperatureDisplay.isNotEmpty ? ' • ${RealWorldSyncService.instance.temperatureDisplay}' : ''}',
-                  style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 10, fontWeight: FontWeight.w500),
-                ),
-              ],
+            if (widget.backgroundImage != null && widget.backgroundImage!.isNotEmpty) ...[
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: Colors.white12,
+                backgroundImage: widget.backgroundImage!.startsWith('http')
+                    ? NetworkImage(widget.backgroundImage!)
+                    : MemoryImage(base64Decode(widget.backgroundImage!)) as ImageProvider,
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.characterName,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, size: 10, color: Color(0xFF38BDF8)),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          '${RealWorldSyncService.instance.displayLocation}${RealWorldSyncService.instance.temperatureDisplay.isNotEmpty ? ' • ${RealWorldSyncService.instance.temperatureDisplay}' : ''}',
+                          style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 10, fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4.0),
+          preferredSize: const Size.fromHeight(3.0),
           child: LinearProgressIndicator(
             value: (_intimacyScore >= 100) ? 1.0 : (_intimacyScore / 100.0),
             backgroundColor: Colors.white24,
@@ -858,6 +884,31 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
           ),
         ),
         actions: [
+          // 1. Intimacy score badge
+          GestureDetector(
+            onTap: _showIntimacyMilestones,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.pinkAccent.withOpacity(0.4), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.favorite, color: Colors.pinkAccent, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$_intimacyScore',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // 2. Direct voice audio button
           IconButton(
             icon: Icon(
               _voiceService.isPlaying
@@ -866,6 +917,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
               color: _voiceService.isPlaying
                   ? Colors.pinkAccent
                   : (_voiceService.autoVoiceEnabled ? Colors.pinkAccent : Colors.tealAccent),
+              size: 22,
             ),
             tooltip: 'Neural Voice & Spontaneous Whispers 🎙️',
             onPressed: () => CharacterVoiceSettingsSheet.show(
@@ -875,79 +927,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
               avatarBase64: widget.backgroundImage,
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.cloudy_snowing, color: Color(0xFF38BDF8)),
-            tooltip: 'Atmosphere & Weather Soundscapes',
-            onPressed: () => AmbienceWeatherSheet.show(context),
-          ),
-          GestureDetector(
-            onTap: _showIntimacyMilestones,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.favorite, color: Colors.pink, size: 20),
-                    const SizedBox(width: 4),
-                    Text('$_intimacyScore', style: const TextStyle(fontSize: 16, color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.menu_book, color: Color(0xFFFDE68A)),
-            tooltip: 'Secret Locked Diary 💌',
-            onPressed: () => SecretLockedDiarySheet.show(
-              context,
-              characterId: widget.characterId,
-              characterName: widget.characterName,
-              intimacyScore: _intimacyScore,
-              avatarBase64: widget.backgroundImage,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.markunread_mailbox, color: Colors.amber),
-            tooltip: 'Vintage Mailbox 📬',
-            onPressed: () => VintageMailboxSheet.show(
-              context,
-              characterId: widget.characterId,
-              characterName: widget.characterName,
-              avatarBase64: widget.backgroundImage,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.nightlight_round, color: Colors.purpleAccent),
-            tooltip: 'Shared Dreamworld 🌙',
-            onPressed: () => SharedDreamSheet.show(
-              context,
-              characterId: widget.characterId,
-              characterName: widget.characterName,
-              avatarBase64: widget.backgroundImage,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.psychology, color: Colors.cyanAccent),
-            tooltip: 'Memory Vault & Feelings',
-            onPressed: () => CharacterMemoryVaultSheet.show(
-              context,
-              characterId: widget.characterId,
-              characterName: widget.characterName,
-              avatarBase64: widget.backgroundImage,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.mic, color: Colors.tealAccent),
-            tooltip: 'Midnight Voicemails',
-            onPressed: () => CharacterVoicemailsSheet.show(context, {
-              'id': widget.characterId,
-              'name': widget.characterName,
-            }),
-          ),
+          // 3. Full Features 3-Dots Menu Button
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            tooltip: 'More options',
+            icon: const Icon(Icons.more_vert, color: Colors.white, size: 24),
+            tooltip: 'All Features & Options',
             onSelected: (String choice) {
               if (choice == 'Voice Settings') {
                 CharacterVoiceSettingsSheet.show(
@@ -956,6 +939,19 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   characterName: widget.characterName,
                   avatarBase64: widget.backgroundImage,
                 );
+              } else if (choice == 'Diary') {
+                SecretLockedDiarySheet.show(
+                  context,
+                  characterId: widget.characterId,
+                  characterName: widget.characterName,
+                  intimacyScore: _intimacyScore,
+                  avatarBase64: widget.backgroundImage,
+                );
+              } else if (choice == 'Voicemails') {
+                CharacterVoicemailsSheet.show(context, {
+                  'id': widget.characterId,
+                  'name': widget.characterName,
+                });
               } else if (choice == 'Mailbox') {
                 VintageMailboxSheet.show(
                   context,
@@ -970,15 +966,17 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   characterName: widget.characterName,
                   avatarBase64: widget.backgroundImage,
                 );
-              } else if (choice == 'Domestic Bliss') {
-                DomesticBlissSheet.show(
+              } else if (choice == 'Memory Vault') {
+                CharacterMemoryVaultSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
                   avatarBase64: widget.backgroundImage,
                 );
-              } else if (choice == 'Memory Vault') {
-                CharacterMemoryVaultSheet.show(
+              } else if (choice == 'Weather') {
+                AmbienceWeatherSheet.show(context);
+              } else if (choice == 'Domestic Bliss') {
+                DomesticBlissSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
@@ -1028,34 +1026,39 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                 setState(() => _showBackgroundImage = !_showBackgroundImage);
               } else if (choice == 'Download Image') {
                 _downloadImage();
-              } else if (choice == 'View Diary') {
-                if (!_isSending) _viewDiary();
+              } else if (choice == 'Clear Chat') {
+                _clearChat();
               } else if (choice.startsWith('Theme:')) {
                 setState(() => _currentTheme = choice.split(': ')[1]);
               }
             },
             itemBuilder: (BuildContext context) {
               return [
-                const PopupMenuItem(value: 'Voice Settings', child: Row(children: [Icon(Icons.record_voice_over, color: Colors.tealAccent), SizedBox(width: 8), Text('Voice & Whispers 🎙️')])),
-                const PopupMenuItem(value: 'Mailbox', child: Row(children: [Icon(Icons.markunread_mailbox, color: Colors.amber), SizedBox(width: 8), Text('Vintage Mailbox 📬')])),
-                const PopupMenuItem(value: 'Dreamworld', child: Row(children: [Icon(Icons.nightlight_round, color: Colors.purpleAccent), SizedBox(width: 8), Text('Shared Dreamworld 🌙')])),
-                const PopupMenuItem(value: 'Domestic Bliss', child: Row(children: [Icon(Icons.cottage, color: Colors.orangeAccent), SizedBox(width: 8), Text('Domestic Bliss 🏡')])),
-                const PopupMenuItem(value: 'Memory Vault', child: Row(children: [Icon(Icons.psychology, color: Colors.cyanAccent), SizedBox(width: 8), Text('Memory Vault & Feelings')])),
-                const PopupMenuItem(value: 'Candid Selfies', child: Row(children: [Icon(Icons.camera_alt, color: Colors.pinkAccent), SizedBox(width: 8), Text('Candid Camera Roll 📸')])),
-                const PopupMenuItem(value: 'VHS Tape', child: Row(children: [Icon(Icons.videocam, color: Colors.redAccent), SizedBox(width: 8), Text('VHS Camcorder Vault 📹')])),
-                const PopupMenuItem(value: 'Boutique Gifts', child: Row(children: [Icon(Icons.card_giftcard, color: Colors.amberAccent), SizedBox(width: 8), Text('Romance Boutique 🛍️')])),
-                const PopupMenuItem(value: 'Photobooth Strip', child: Row(children: [Icon(Icons.crop_portrait, color: Colors.purpleAccent), SizedBox(width: 8), Text('4-Cut Photobooth 🧳')])),
-                const PopupMenuItem(value: 'Inspect Sanctuary', child: Row(children: [Icon(Icons.search, color: Colors.tealAccent), SizedBox(width: 8), Text('Inspect Sanctuary 🔍')])),
-                const PopupMenuItem(value: 'Intimacy Unlocks', child: Row(children: [Icon(Icons.stars, color: Colors.pinkAccent), SizedBox(width: 8), Text('Intimacy Unlocks')])),
-                PopupMenuItem(value: 'Toggle Audio', child: Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')),
-                PopupMenuItem(value: 'Toggle Background', child: Text(_showBackgroundImage ? 'Hide Background' : 'Show Background')),
-                if (widget.backgroundImage != null) const PopupMenuItem(value: 'Download Image', child: Text('Download Image')),
-                const PopupMenuItem(value: 'View Diary', child: Text('View Diary')),
+                const PopupMenuItem(value: 'Voice Settings', child: Row(children: [Icon(Icons.record_voice_over, color: Colors.tealAccent, size: 20), SizedBox(width: 10), Text('Voice & Whispers 🎙️')])),
+                const PopupMenuItem(value: 'Diary', child: Row(children: [Icon(Icons.menu_book, color: Color(0xFFFDE68A), size: 20), SizedBox(width: 10), Text('Secret Locked Diary 💌')])),
+                const PopupMenuItem(value: 'Voicemails', child: Row(children: [Icon(Icons.mic, color: Colors.tealAccent, size: 20), SizedBox(width: 10), Text('Midnight Voicemails 🎙️')])),
+                const PopupMenuItem(value: 'Mailbox', child: Row(children: [Icon(Icons.markunread_mailbox, color: Colors.amber, size: 20), SizedBox(width: 10), Text('Vintage Mailbox 📬')])),
+                const PopupMenuItem(value: 'Dreamworld', child: Row(children: [Icon(Icons.nightlight_round, color: Colors.purpleAccent, size: 20), SizedBox(width: 10), Text('Shared Dreamworld 🌙')])),
+                const PopupMenuItem(value: 'Memory Vault', child: Row(children: [Icon(Icons.psychology, color: Colors.cyanAccent, size: 20), SizedBox(width: 10), Text('Memory Vault & Feelings 🧠')])),
+                const PopupMenuItem(value: 'Weather', child: Row(children: [Icon(Icons.cloudy_snowing, color: Color(0xFF38BDF8), size: 20), SizedBox(width: 10), Text('Atmosphere & Weather 🌦️')])),
+                const PopupMenuItem(value: 'Domestic Bliss', child: Row(children: [Icon(Icons.cottage, color: Colors.orangeAccent, size: 20), SizedBox(width: 10), Text('Domestic Bliss 🏡')])),
+                const PopupMenuItem(value: 'Candid Selfies', child: Row(children: [Icon(Icons.camera_alt, color: Colors.pinkAccent, size: 20), SizedBox(width: 10), Text('Candid Camera Roll 📸')])),
+                const PopupMenuItem(value: 'VHS Tape', child: Row(children: [Icon(Icons.videocam, color: Colors.redAccent, size: 20), SizedBox(width: 10), Text('VHS Camcorder Vault 📹')])),
+                const PopupMenuItem(value: 'Boutique Gifts', child: Row(children: [Icon(Icons.card_giftcard, color: Colors.amberAccent, size: 20), SizedBox(width: 10), Text('Romance Boutique 🛍️')])),
+                const PopupMenuItem(value: 'Photobooth Strip', child: Row(children: [Icon(Icons.crop_portrait, color: Colors.purpleAccent, size: 20), SizedBox(width: 10), Text('4-Cut Photobooth 🧳')])),
+                const PopupMenuItem(value: 'Inspect Sanctuary', child: Row(children: [Icon(Icons.search, color: Colors.tealAccent, size: 20), SizedBox(width: 10), Text('Inspect Sanctuary 🔍')])),
+                const PopupMenuItem(value: 'Intimacy Unlocks', child: Row(children: [Icon(Icons.stars, color: Colors.pinkAccent, size: 20), SizedBox(width: 10), Text('Intimacy Milestones 🌟')])),
+                const PopupMenuDivider(),
+                PopupMenuItem(value: 'Toggle Audio', child: Row(children: [Icon(_isAudioPlaying ? Icons.volume_off : Icons.volume_up, size: 20), const SizedBox(width: 10), Text(_isAudioPlaying ? 'Mute Audio' : 'Play Ambient Sound')])),
+                PopupMenuItem(value: 'Toggle Background', child: Row(children: [Icon(_showBackgroundImage ? Icons.image_not_supported : Icons.image, size: 20), const SizedBox(width: 10), Text(_showBackgroundImage ? 'Hide Background' : 'Show Background')])),
+                if (widget.backgroundImage != null) const PopupMenuItem(value: 'Download Image', child: Row(children: [Icon(Icons.download, size: 20), SizedBox(width: 10), Text('Download Avatar')])),
+                const PopupMenuItem(value: 'Clear Chat', child: Row(children: [Icon(Icons.delete_outline, color: Colors.redAccent, size: 20), SizedBox(width: 10), Text('Clear Chat History 🧹', style: TextStyle(color: Colors.redAccent))])),
                 const PopupMenuDivider(),
                 ...['Dark Mode', 'Cyberpunk', 'Fantasy', 'Romance'].map((t) => PopupMenuItem(value: 'Theme: $t', child: Text('Theme: $t'))),
               ];
             },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: _isLoading
