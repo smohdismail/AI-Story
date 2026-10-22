@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class QuotaExceededException implements Exception {
   final String message;
@@ -7,7 +8,6 @@ class QuotaExceededException implements Exception {
   @override
   String toString() => message;
 }
-import 'package:shared_preferences/shared_preferences.dart';
 
 class UnauthenticatedException implements Exception {
   final String message;
