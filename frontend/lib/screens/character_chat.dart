@@ -27,6 +27,7 @@ import '../services/real_world_sync_service.dart';
 import '../services/character_voice_service.dart';
 import '../services/notification_service.dart';
 import '../widgets/character_voice_settings_sheet.dart';
+import '../widgets/chat_background_picker_sheet.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -51,6 +52,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
   bool _isSending = false;
   bool _isImmersionMode = false;
   bool _showBackgroundImage = true;
+  String? _activeBackgroundPath;
+  double _backgroundDimOpacity = 0.6;
   List<String> _suggestions = [];
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -79,6 +82,56 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     WidgetsBinding.instance.addObserver(this);
     _voiceService.addListener(_onVoiceUpdate);
     _loadChat();
+    _loadCustomBackgroundPreferences();
+  }
+
+  Future<void> _loadCustomBackgroundPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final active = prefs.getString('active_bg_${widget.characterId}');
+    final dim = prefs.getDouble('bg_dim_${widget.characterId}') ?? 0.6;
+    if (mounted) {
+      setState(() {
+        _activeBackgroundPath = active ?? widget.backgroundImage;
+        _backgroundDimOpacity = dim;
+      });
+    }
+  }
+
+  void _openWallpaperPicker() {
+    ChatBackgroundPickerSheet.show(
+      context,
+      characterId: widget.characterId,
+      characterName: widget.characterName,
+      defaultAvatarBase64: widget.backgroundImage,
+      currentBackground: _activeBackgroundPath,
+      currentDim: _backgroundDimOpacity,
+      onBackgroundSelected: (newBg, newDim) {
+        setState(() {
+          _activeBackgroundPath = newBg;
+          _backgroundDimOpacity = newDim;
+          _showBackgroundImage = true;
+        });
+      },
+    );
+  }
+
+  ImageProvider? _resolveBackgroundImage() {
+    if (!_showBackgroundImage) return null;
+    final bg = _activeBackgroundPath ?? widget.backgroundImage;
+    if (bg == null || bg.isEmpty) return null;
+
+    if (bg.startsWith('http://') || bg.startsWith('https://')) {
+      return NetworkImage(bg);
+    }
+    final file = File(bg);
+    if (file.existsSync()) {
+      return FileImage(file);
+    }
+    try {
+      return MemoryImage(base64Decode(bg));
+    } catch (_) {
+      return null;
+    }
   }
 
   void _onVoiceUpdate() {
@@ -932,7 +985,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
             icon: const Icon(Icons.more_vert, color: Colors.white, size: 24),
             tooltip: 'All Features & Options',
             onSelected: (String choice) {
-              if (choice == 'Voice Settings') {
+              if (choice == 'Change Wallpaper') {
+                _openWallpaperPicker();
+              } else if (choice == 'Voice Settings') {
                 CharacterVoiceSettingsSheet.show(
                   context,
                   characterId: widget.characterId,
@@ -1034,6 +1089,16 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
             },
             itemBuilder: (BuildContext context) {
               return [
+                const PopupMenuItem(
+                  value: 'Change Wallpaper',
+                  child: Row(
+                    children: [
+                      Icon(Icons.wallpaper_rounded, color: Colors.pinkAccent, size: 20),
+                      SizedBox(width: 10),
+                      Text('Chat Wallpapers 🖼️', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(value: 'Voice Settings', child: Row(children: [Icon(Icons.record_voice_over, color: Colors.tealAccent, size: 20), SizedBox(width: 10), Text('Voice & Whispers 🎙️')])),
                 const PopupMenuItem(value: 'Diary', child: Row(children: [Icon(Icons.menu_book, color: Color(0xFFFDE68A), size: 20), SizedBox(width: 10), Text('Secret Locked Diary 💌')])),
                 const PopupMenuItem(value: 'Voicemails', child: Row(children: [Icon(Icons.mic, color: Colors.tealAccent, size: 20), SizedBox(width: 10), Text('Midnight Voicemails 🎙️')])),
@@ -1068,17 +1133,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
               child: Container(
                 width: double.infinity,
                 height: double.infinity,
-                decoration: widget.backgroundImage != null && _showBackgroundImage
+                decoration: _resolveBackgroundImage() != null
                     ? BoxDecoration(
                         image: DecorationImage(
-                          image: widget.backgroundImage!.startsWith('http')
-                              ? NetworkImage(widget.backgroundImage!)
-                              : MemoryImage(base64Decode(widget.backgroundImage!)) as ImageProvider,
+                          image: _resolveBackgroundImage()!,
                           fit: BoxFit.cover,
                           colorFilter: _isImmersionMode
                               ? null
                               : ColorFilter.mode(
-                                  Colors.black.withOpacity(0.6),
+                                  Colors.black.withOpacity(_backgroundDimOpacity),
                                   BlendMode.darken,
                                 ),
                         ),
@@ -1305,6 +1368,11 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                                   TextButton.icon(icon: const Icon(Icons.lightbulb, size: 16), label: const Text('Suggest'), onPressed: _isSending ? null : _getSuggestions),
                                   TextButton.icon(icon: const Icon(Icons.psychology, size: 16), label: const Text('Thought'), onPressed: _isSending ? null : _generateThought),
                                   TextButton.icon(icon: const Icon(Icons.refresh, size: 16), label: const Text('Regenerate'), onPressed: _isSending ? null : _regenerateChat),
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.wallpaper, size: 16, color: Colors.cyanAccent),
+                                    label: const Text('Wallpaper 🖼️', style: TextStyle(color: Colors.cyanAccent)),
+                                    onPressed: _openWallpaperPicker,
+                                  ),
                                   TextButton.icon(
                                     icon: const Icon(Icons.camera_alt, size: 16, color: Colors.pinkAccent),
                                     label: const Text('Photo 📸', style: TextStyle(color: Colors.pinkAccent)),
