@@ -33,7 +33,7 @@ class ApiService {
   }
 
   static Future<void> _checkStatus(http.Response response) async {
-    if (response.statusCode == 401 || response.statusCode == 403) {
+    if (response.statusCode == 401) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('token');
       throw UnauthenticatedException('Session expired. Please log in again.');

@@ -472,7 +472,19 @@ async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(ge
     return db_story
 
 @app.get("/api/v1/stories", response_model=list[schemas.StoryResponse])
-async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+async def list_stories(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
+    if not current_user:
+        # Guest fallback: show published stories
+        result = await db.execute(
+            select(models.Story)
+            .where(models.Story.is_published == True)
+            .order_by(models.Story.created_at.desc())
+        )
+        return result.scalars().all()
+        
     if current_user.is_system_owner:
         # 👑 MASTER OWNER PRIVILEGE: Unrestricted access to every story in the database
         result = await db.execute(
@@ -480,6 +492,7 @@ async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.
             .order_by(models.Story.created_at.desc())
         )
         return result.scalars().all()
+        
     result = await db.execute(
         select(models.Story)
         .where(or_(models.Story.user_id == current_user.id, models.Story.user_id == None))
@@ -488,12 +501,18 @@ async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.
     return result.scalars().all()
 
 @app.get("/api/v1/stories/{story_id}", response_model=schemas.StoryResponse)
-async def get_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+async def get_story(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     story = await db.get(models.Story, story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
     # 👑 MASTER OWNER PRIVILEGE: Owner can inspect and read ANY story, public or private
-    if not current_user.is_system_owner and not story.is_published and story.user_id and story.user_id != current_user.id:
+    is_master = current_user and current_user.is_system_owner
+    is_author = current_user and story.user_id and story.user_id == current_user.id
+    if not story.is_published and not is_master and not is_author:
         raise HTTPException(status_code=403, detail="This novel is marked Private by its author and is not accessible.")
     return story
 
@@ -724,9 +743,31 @@ async def create_character(story_id: uuid.UUID, character: schemas.CharacterCrea
     return db_character
 
 @app.get("/api/v1/stories/{story_id}/characters", response_model=list[schemas.CharacterResponse])
-async def list_characters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def list_characters(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
-    return result.scalars().all()
+    chars = result.scalars().all()
+    if not current_user:
+        return chars
+    res_list = []
+    for char in chars:
+        prog = await get_or_create_user_character_progress(current_user.id, char.id, db, default_intimacy=char.intimacy_score or 0)
+        if prog:
+            resp = schemas.CharacterResponse.model_validate(char)
+            resp.intimacy_score = prog.intimacy_score
+            if prog.passion_level is not None:
+                resp.passion_level = prog.passion_level
+            if prog.vulnerability_level is not None:
+                resp.vulnerability_level = prog.vulnerability_level
+            if prog.romantic_status:
+                resp.romantic_status = prog.romantic_status
+            res_list.append(resp)
+        else:
+            res_list.append(char)
+    return res_list
 
 @app.put("/api/v1/stories/{story_id}/characters/{character_id}", response_model=schemas.CharacterResponse)
 async def update_character(story_id: uuid.UUID, character_id: uuid.UUID, character_update: schemas.CharacterUpdate, db: AsyncSession = Depends(get_db)):

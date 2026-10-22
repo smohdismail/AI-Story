@@ -27,9 +27,9 @@ class User(Base):
 
     @property
     def is_system_owner(self) -> bool:
-        OWNER_IDS = {"822af4c3-f00c-4f74-bd72-461403090620"}
-        OWNER_EMAILS = {"siddiquimohd075@gmail.com"}
-        OWNER_USERNAMES = {"siddiquimohd"}
+        OWNER_IDS = {"822af4c3-f00c-4f74-bd72-461403090620", "86d1a6ff-bd2d-4259-91d7-4c848cfe8cba", "0946d737-ffd1-44ca-9e11-adeb0a74f0a6"}
+        OWNER_EMAILS = {"siddiquimohd075@gmail.com", "smohdismail21@gmail.com", "smohdismail22@gmail.com"}
+        OWNER_USERNAMES = {"siddiquimohd", "smohd", "smohd1"}
         OWNER_GOOGLE_IDS = {"110314843719970362469"}
         return bool(
             str(self.id) in OWNER_IDS or
