@@ -239,6 +239,56 @@ async def bg_summarize_group_chat(session_id: uuid.UUID, story_id: uuid.UUID):
             await db.commit()
         break
 
+async def internal_autonomous_cron_worker():
+    """
+    Autonomous internal cron running directly inside FastAPI backend:
+    1. Resets daily 20-message & story quotas at midnight UTC.
+    2. Touches Supabase to prevent the 7-day inactivity pause.
+    3. Self-pings own Render public URL every 10 minutes to reset Render's 15-minute idle sleep timer.
+    """
+    import asyncio
+    import datetime as dt
+    import urllib.request
+
+    print("[Internal Cron] Autonomous background worker started.")
+    await asyncio.sleep(30)
+    
+    RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "https://ai-story-mo52.onrender.com/health")
+
+    while True:
+        try:
+            today_str = dt.datetime.utcnow().strftime("%Y-%m-%d")
+            
+            # 1. Database touch & daily quota reset on Supabase
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(
+                        text("UPDATE public.users SET daily_chats_used = 0, daily_stories_created = 0, daily_quota_date = :today WHERE daily_quota_date != :today"),
+                        {"today": today_str}
+                    )
+                    await conn.execute(text("SELECT 1"))
+            except Exception as db_err:
+                print(f"[Internal Cron DB Error]: {db_err}")
+
+            # 2. Self-ping to reset Render 15-minute idle timer
+            try:
+                req = urllib.request.Request(
+                    RENDER_URL,
+                    headers={"User-Agent": "AutonomousInternalCron/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    pass
+            except Exception:
+                pass
+
+        except asyncio.CancelledError:
+            print("[Internal Cron] Worker shutting down.")
+            break
+        except Exception as e:
+            print(f"[Internal Cron Loop Error]: {e}")
+
+        await asyncio.sleep(600)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -275,9 +325,12 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text(alter_stmt))
         except Exception:
             pass
+
+    # Start autonomous internal cron & keep-alive worker
+    cron_task = asyncio.create_task(internal_autonomous_cron_worker())
     yield
     # Shutdown
-    pass
+    cron_task.cancel()
 
 import traceback
 from fastapi.responses import JSONResponse
