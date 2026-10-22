@@ -4,7 +4,7 @@ from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete, or_, text, func
+from sqlalchemy import delete, or_, and_, text, func, desc, asc, not_
 from sqlalchemy.orm import selectinload
 from contextlib import asynccontextmanager
 import uuid
