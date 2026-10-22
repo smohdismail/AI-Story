@@ -23,6 +23,7 @@ from ebooklib import epub
 import tempfile
 import os
 import re
+import asyncio
 import urllib.parse
 import hashlib
 import random
