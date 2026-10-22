@@ -19,6 +19,162 @@ class _AuthScreenState extends State<AuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  Future<bool> _verifyAgeConsent() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('is_age_verified_18') == true) {
+      return true;
+    }
+
+    if (!mounted) return false;
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1228),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFFFF2D55), width: 1.5),
+        ),
+        title: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF2D55).withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Text('🔞', style: TextStyle(fontSize: 32)),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Age Verification (18+)',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Mature & Romantic Content Warning',
+              style: TextStyle(
+                color: Color(0xFFFF2D55),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: const Text(
+                'AI Story contains deep emotional roleplay, passionate romantic themes, intimate conversations, and adult character interactions.\n\nThis application is strictly intended for individuals 18 years of age or older.',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Are you 18 years of age or older?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF2D55),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Yes, I am 18 or Older',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white60,
+                  side: const BorderSide(color: Colors.white24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('No, I am Under 18 (Exit)', style: TextStyle(fontSize: 13)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await prefs.setBool('is_age_verified_18', true);
+      return true;
+    } else {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            backgroundColor: const Color(0xFF1E1228),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: const Row(
+              children: [
+                Icon(Icons.block, color: Colors.redAccent),
+                SizedBox(width: 10),
+                Text('Access Restricted', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              'You must be at least 18 years old to access AI Story. Access has been restricted.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Understood', style: TextStyle(color: Colors.pinkAccent)),
+              ),
+            ],
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
   Future<void> _submit() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
@@ -36,6 +192,9 @@ class _AuthScreenState extends State<AuthScreen> {
       );
       return;
     }
+
+    final isAdult = await _verifyAgeConsent();
+    if (!isAdult) return;
 
     setState(() => _isLoading = true);
     try {
@@ -86,6 +245,9 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _handleGoogleSignIn() async {
+    final isAdult = await _verifyAgeConsent();
+    if (!isAdult) return;
+
     setState(() => _isLoading = true);
     try {
       // NOTE: serverClientId must be replaced with the user's actual Google OAuth Web Client ID.
