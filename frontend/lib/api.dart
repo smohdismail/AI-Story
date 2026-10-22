@@ -1,5 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
+class QuotaExceededException implements Exception {
+  final String message;
+  QuotaExceededException(this.message);
+  @override
+  String toString() => message;
+}
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UnauthenticatedException implements Exception {
@@ -580,6 +587,15 @@ class ApiService {
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
+    } else if (response.statusCode == 402) {
+      String msg = 'Daily free message limit reached (20/20). Upgrade to VIP for unlimited chatting!';
+      try {
+        final d = jsonDecode(response.body);
+        if (d is Map && d['detail'] != null) {
+          msg = d['detail'].toString();
+        }
+      } catch (_) {}
+      throw QuotaExceededException(msg);
     } else {
       throw Exception('Failed to send message: ${response.body}');
     }
@@ -2237,5 +2253,63 @@ class ApiService {
       return jsonDecode(response.body);
     }
     throw Exception('Failed to load user profile');
+  }
+
+  // ==========================================
+  // 👑 12. SUBSCRIPTION & DAILY QUOTA
+  // ==========================================
+  static Future<Map<String, dynamic>> getUserQuota() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/me/quota'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {}
+    return {
+      'is_vip': false,
+      'is_owner': false,
+      'daily_chats_remaining': 20,
+      'max_daily_chats': 20,
+      'daily_chats_used': 0,
+      'daily_stories_remaining': 2,
+    };
+  }
+
+  static Future<Map<String, dynamic>> getSubscriptionPlans() async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/subscription/plans'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load subscription plans');
+  }
+
+  static Future<Map<String, dynamic>> upgradeSubscription(String planId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/subscription/upgrade'),
+      headers: headers,
+      body: jsonEncode({'plan_id': planId}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to upgrade subscription');
+  }
+
+  static Future<bool> pingHeartbeat() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/system/heartbeat')).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 }

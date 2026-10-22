@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import 'ambient_sound_service.dart';
+import '../api.dart';
 
 class RealWorldSyncService extends ChangeNotifier {
   static final RealWorldSyncService _instance = RealWorldSyncService._internal();
@@ -86,12 +88,22 @@ class RealWorldSyncService extends ChangeNotifier {
 • Daily Biological Routine: $humanRoutinePhase''';
   }
 
+  Timer? _periodicSyncTimer;
+
   Future<void> init() async {
     if (_isInitialized) return;
     _isInitialized = true;
 
     await _loadFromPrefs();
     refreshReality();
+    _startPeriodicSync();
+  }
+
+  void _startPeriodicSync() {
+    _periodicSyncTimer?.cancel();
+    _periodicSyncTimer = Timer.periodic(const Duration(minutes: 10), (_) {
+      refreshReality();
+    });
   }
 
   Future<void> _loadFromPrefs() async {
@@ -159,6 +171,9 @@ class RealWorldSyncService extends ChangeNotifier {
 
       // Automatically sync with AmbientSoundService visual overlay
       AmbientSoundService().setWeather(_weatherCategory, syncSound: false);
+
+      // Ping backend heartbeat to keep Render and Supabase alive
+      ApiService.pingHeartbeat();
 
     } catch (e) {
       debugPrint('RealWorldSyncService: refresh error $e (using cached values)');

@@ -402,24 +402,220 @@ async def get_effective_persona_info(story: models.Story, db: AsyncSession) -> s
             return f"Name: {persona.name}\nAge: {persona.age}\nAppearance: {persona.appearance}\nPersonality: {persona.personality}\nBackstory: {persona.backstory}"
     return ""
 
-# --- PERSONA ENDPOINTS ---
+# --- QUOTA & SUBSCRIPTION HELPERS ---
+
+def sync_user_daily_quota(user: models.User) -> None:
+    """Ensure user's daily quota matches today's UTC date."""
+    import datetime as dt
+    today_str = dt.datetime.utcnow().strftime("%Y-%m-%d")
+    if user.daily_quota_date != today_str:
+        user.daily_quota_date = today_str
+        user.daily_chats_used = 0
+        user.daily_stories_created = 0
+
+# --- USER PROFILE & QUOTA ENDPOINTS ---
 
 @app.get("/api/v1/users/me", response_model=schemas.UserProfileResponse)
-async def get_my_profile(current_user: models.User = Depends(auth.get_current_user)):
-    """Return user profile with master owner and subscription permissions."""
+async def get_my_profile(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Return user profile with master owner, daily quota, and subscription permissions."""
     is_owner = current_user.is_system_owner
+    is_vip = current_user.is_vip
+    sync_user_daily_quota(current_user)
+    await db.commit()
+
+    chats_used = current_user.daily_chats_used or 0
+    max_chats = 999999 if is_vip else 20
+    chats_rem = 999999 if is_vip else max(0, 20 - chats_used)
+
+    stories_used = current_user.daily_stories_created or 0
+    max_stories = 999999 if is_vip else 2
+    stories_rem = 999999 if is_vip else max(0, 2 - stories_used)
+
+    tier = "OWNER_LIFETIME_VIP" if is_owner else (current_user.subscription_tier or "FREE")
+    is_active = True if is_owner else (current_user.is_subscription_active or False)
+
     return schemas.UserProfileResponse(
         id=current_user.id,
         username=current_user.username,
         email=current_user.email,
         role="owner" if is_owner else (current_user.role or "user"),
         is_owner=is_owner,
-        subscription_tier="OWNER_LIFETIME_VIP" if is_owner else "FREE",
-        is_subscription_active=True if is_owner else False,
-        unlimited_access=is_owner,
+        subscription_tier=tier,
+        is_subscription_active=is_active,
+        unlimited_access=is_vip,
         can_access_all_stories=is_owner,
         can_access_all_characters=is_owner,
+        daily_chats_used=chats_used,
+        max_daily_chats=max_chats,
+        daily_chats_remaining=chats_rem,
+        daily_stories_created=stories_used,
+        max_daily_stories=max_stories,
+        daily_stories_remaining=stories_rem,
+        is_vip=is_vip,
     )
+
+@app.get("/api/v1/users/me/quota", response_model=schemas.UserQuotaResponse)
+async def get_my_quota(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Return quick daily quota status for chat badge and paywall checks."""
+    is_owner = current_user.is_system_owner
+    is_vip = current_user.is_vip
+    sync_user_daily_quota(current_user)
+    await db.commit()
+
+    chats_used = current_user.daily_chats_used or 0
+    max_chats = 999999 if is_vip else 20
+    chats_rem = 999999 if is_vip else max(0, 20 - chats_used)
+
+    stories_used = current_user.daily_stories_created or 0
+    max_stories = 999999 if is_vip else 2
+    stories_rem = 999999 if is_vip else max(0, 2 - stories_used)
+
+    import datetime as dt
+    return schemas.UserQuotaResponse(
+        is_vip=is_vip,
+        is_owner=is_owner,
+        subscription_tier="OWNER_LIFETIME_VIP" if is_owner else (current_user.subscription_tier or "FREE"),
+        daily_chats_used=chats_used,
+        max_daily_chats=max_chats,
+        daily_chats_remaining=chats_rem,
+        daily_stories_created=stories_used,
+        max_daily_stories=max_stories,
+        daily_stories_remaining=stories_rem,
+        reset_time_utc="00:00:00 UTC",
+    )
+
+# --- SUBSCRIPTION ENDPOINTS ---
+
+@app.get("/api/v1/subscription/plans", response_model=schemas.SubscriptionPlansResponse)
+async def get_subscription_plans(current_user: Optional[models.User] = Depends(auth.get_current_user_optional)):
+    """List all available VIP subscription plans with local pricing and perks."""
+    current_tier = "FREE"
+    is_vip = False
+    if current_user:
+        current_tier = "OWNER_LIFETIME_VIP" if current_user.is_system_owner else (current_user.subscription_tier or "FREE")
+        is_vip = current_user.is_vip
+
+    plans = [
+        schemas.SubscriptionPlanItem(
+            plan_id="VIP_WEEKLY",
+            name="Weekly Romance Pass",
+            price_inr="₹49",
+            price_usd="$1.49",
+            billing_period="per week",
+            popular=False,
+            badge=None,
+            features=[
+                "⚡ Unlimited 24/7 Character Chats",
+                "🎙️ High-Fidelity Whisper Voice",
+                "📖 Unlimited Stories & Chapters",
+                "🚀 Priority High-Speed LLM"
+            ]
+        ),
+        schemas.SubscriptionPlanItem(
+            plan_id="VIP_MONTHLY",
+            name="Monthly Intimacy VIP",
+            price_inr="₹199",
+            price_usd="$4.99",
+            billing_period="per month",
+            popular=True,
+            badge="MOST POPULAR ⭐",
+            features=[
+                "⚡ Everything in Weekly Pass",
+                "🔒 Unlocked Secret Locked Diary",
+                "📸 Candid Camera Roll Selfies",
+                "🌙 Shared Dreamscape & Domestic Bliss",
+                "💖 Max Intimacy Level Progression",
+                "✨ Cancel Anytime"
+            ]
+        ),
+        schemas.SubscriptionPlanItem(
+            plan_id="VIP_YEARLY",
+            name="Annual Lifetime VIP",
+            price_inr="₹1,499",
+            price_usd="$39.99",
+            billing_period="per year",
+            popular=False,
+            badge="SAVE 40% 👑",
+            features=[
+                "👑 All Monthly VIP Features",
+                "🎖️ Exclusive VIP Profile Badge",
+                "🌟 Priority Beta Access to New Characters",
+                "💰 Lowest Cost Per Day"
+            ]
+        ),
+    ]
+    return schemas.SubscriptionPlansResponse(
+        plans=plans,
+        current_tier=current_tier,
+        is_vip=is_vip
+    )
+
+@app.post("/api/v1/subscription/upgrade", response_model=schemas.SubscriptionUpgradeResponse)
+async def upgrade_subscription(
+    req: schemas.SubscriptionUpgradeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """Instantly activate VIP plan for current user."""
+    import datetime as dt
+    now = dt.datetime.utcnow()
+    days = 7 if req.plan_id == "VIP_WEEKLY" else (365 if req.plan_id == "VIP_YEARLY" else 30)
+    expires_at = now + dt.timedelta(days=days)
+    
+    current_user.subscription_tier = req.plan_id
+    current_user.is_subscription_active = True
+    current_user.subscription_expires_at = expires_at
+    await db.commit()
+    await db.refresh(current_user)
+
+    return schemas.SubscriptionUpgradeResponse(
+        status="success",
+        message=f"Congratulations! You are now upgraded to {req.plan_id}.",
+        subscription_tier=current_user.subscription_tier,
+        is_subscription_active=True,
+        expires_at=expires_at.isoformat()
+    )
+
+# --- SYSTEM HEARTBEAT & KEEP-ALIVE ---
+
+@app.get("/health")
+@app.get("/api/v1/system/heartbeat")
+async def system_heartbeat(db: AsyncSession = Depends(get_db)):
+    """Keep-alive ping for Render & Supabase. Prevents 15m Render sleep and 7-day Supabase pause."""
+    import datetime as dt
+    now = dt.datetime.utcnow()
+    db_alive = False
+    try:
+        res = await db.execute(text("SELECT 1"))
+        db_alive = bool(res.scalar() == 1)
+    except Exception:
+        db_alive = False
+    
+    return {
+        "status": "online",
+        "render": "awake",
+        "supabase_connected": db_alive,
+        "server_time_utc": now.isoformat(),
+        "living_world": {
+            "hour_utc": now.hour,
+            "quota_date_utc": now.strftime("%Y-%m-%d"),
+        }
+    }
+
+@app.post("/api/v1/system/daily-reset")
+async def system_daily_reset(db: AsyncSession = Depends(get_db)):
+    """Midnight cron trigger to reset daily counters for all free users and keep Supabase live."""
+    import datetime as dt
+    today_str = dt.datetime.utcnow().strftime("%Y-%m-%d")
+    try:
+        result = await db.execute(
+            text("UPDATE public.users SET daily_chats_used = 0, daily_stories_created = 0, daily_quota_date = :today WHERE daily_quota_date != :today"),
+            {"today": today_str}
+        )
+        await db.commit()
+        return {"status": "success", "reset_date": today_str, "rows_updated": result.rowcount}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/v1/users/me/persona", response_model=schemas.PersonaResponse)
 async def get_persona(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -462,6 +658,15 @@ def read_root():
 
 @app.post("/api/v1/stories", response_model=schemas.StoryResponse)
 async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if not current_user.is_vip:
+        sync_user_daily_quota(current_user)
+        if (current_user.daily_stories_created or 0) >= 2:
+            raise HTTPException(
+                status_code=402,
+                detail="Daily free story creation limit reached (2/2 stories today). Upgrade to VIP for unlimited stories!"
+            )
+        current_user.daily_stories_created = (current_user.daily_stories_created or 0) + 1
+
     data = story.model_dump()
     if data.get("is_published") is None:
         data["is_published"] = True
@@ -1388,6 +1593,16 @@ async def chat_with_character(
     if user_id:
         user_prog = await get_or_create_user_character_progress(user_id, character_id, db, default_intimacy=char.intimacy_score or 0)
         
+    # Check daily chat quota for non-VIP users (20 free messages / day)
+    if current_user and not current_user.is_vip:
+        sync_user_daily_quota(current_user)
+        if (current_user.daily_chats_used or 0) >= 20:
+            raise HTTPException(
+                status_code=402,
+                detail="Daily free limit reached (20/20 messages). Upgrade to VIP for unlimited chatting!"
+            )
+        current_user.daily_chats_used = (current_user.daily_chats_used or 0) + 1
+
     # Save user message tagged with user_id
     user_msg = models.CharacterChat(character_id=character_id, user_id=user_id, message=request.message, is_ai=False)
     db.add(user_msg)

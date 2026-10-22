@@ -19,6 +19,12 @@ class User(Base):
     role = Column(String, default="user", nullable=True)
     is_owner = Column(Boolean, default=False, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    subscription_tier = Column(String, default="FREE", nullable=True)
+    is_subscription_active = Column(Boolean, default=False, nullable=True)
+    subscription_expires_at = Column(DateTime, nullable=True)
+    daily_chats_used = Column(Integer, default=0, nullable=False)
+    daily_stories_created = Column(Integer, default=0, nullable=False)
+    daily_quota_date = Column(String, default="", nullable=True)
     
     stories = relationship("Story", back_populates="user")
     persona = relationship("Persona", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -39,6 +45,24 @@ class User(Base):
             self.role == "owner" or
             self.is_owner is True
         )
+
+    @property
+    def is_vip(self) -> bool:
+        if self.is_system_owner:
+            return True
+        if self.is_subscription_active:
+            if self.subscription_expires_at and self.subscription_expires_at < datetime.utcnow():
+                return False
+            return True
+        return self.subscription_tier in ("VIP_WEEKLY", "VIP_MONTHLY", "VIP_YEARLY", "OWNER_LIFETIME_VIP")
+
+    @property
+    def max_daily_chats(self) -> int:
+        return 999999 if self.is_vip else 20
+
+    @property
+    def max_daily_stories(self) -> int:
+        return 999999 if self.is_vip else 2
 
 class Persona(Base):
     __tablename__ = "personas"

@@ -29,6 +29,7 @@ import '../services/character_voice_service.dart';
 import '../services/notification_service.dart';
 import '../widgets/character_voice_settings_sheet.dart';
 import '../widgets/chat_background_picker_sheet.dart';
+import '../widgets/vip_subscription_sheet.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
@@ -53,6 +54,24 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
   bool _isSending = false;
   bool _isImmersionMode = false;
   bool _showBackgroundImage = true;
+  Map<String, dynamic>? _quotaData;
+  bool _isVip = false;
+  bool _isOwner = false;
+  int _remainingChats = 20;
+
+  Future<void> _loadQuota() async {
+    try {
+      final quota = await ApiService.getUserQuota();
+      if (mounted) {
+        setState(() {
+          _quotaData = quota;
+          _isVip = quota['is_vip'] == true;
+          _isOwner = quota['is_owner'] == true;
+          _remainingChats = (quota['daily_chats_remaining'] as num?)?.toInt() ?? 20;
+        });
+      }
+    } catch (_) {}
+  }
   String? _activeBackgroundPath;
   double _backgroundDimOpacity = 0.6;
   List<String> _suggestions = [];
@@ -84,6 +103,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     _voiceService.addListener(_onVoiceUpdate);
     _loadChat();
     _loadCustomBackgroundPreferences();
+    _loadQuota();
   }
 
   Future<void> _loadCustomBackgroundPreferences() async {
@@ -197,6 +217,18 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
+
+    if (!_isVip && !_isOwner && _remainingChats <= 0) {
+      VipSubscriptionSheet.show(
+        context,
+        currentQuota: _quotaData,
+        onUpgraded: () {
+          _loadChat();
+          _loadQuota();
+        },
+      );
+      return;
+    }
     
     setState(() {
       _isSending = true;
@@ -220,6 +252,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
         _messages = msgs;
         _intimacyScore = charInfo['intimacy_score'] ?? 0;
         _isSending = false;
+        if (!_isVip && !_isOwner && _remainingChats > 0) {
+          _remainingChats--;
+        }
       });
       _scrollToBottom();
       if (_voiceService.autoVoiceEnabled && msgs.isNotEmpty) {
@@ -233,6 +268,24 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
             messageId: msgId,
           );
         }
+      }
+    } on QuotaExceededException catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _remainingChats = 0;
+          if (_messages.isNotEmpty && _messages.last['message'] == text && _messages.last['is_ai'] == false) {
+            _messages.removeLast();
+          }
+        });
+        VipSubscriptionSheet.show(
+          context,
+          currentQuota: _quotaData,
+          onUpgraded: () {
+            _loadChat();
+            _loadQuota();
+          },
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -986,7 +1039,16 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
             icon: const Icon(Icons.more_vert, color: Colors.white, size: 24),
             tooltip: 'All Features & Options',
             onSelected: (String choice) {
-              if (choice == 'Change Wallpaper') {
+              if (choice == 'VIP Plans') {
+                VipSubscriptionSheet.show(
+                  context,
+                  currentQuota: _quotaData,
+                  onUpgraded: () {
+                    _loadChat();
+                    _loadQuota();
+                  },
+                );
+              } else if (choice == 'Change Wallpaper') {
                 _openWallpaperPicker();
               } else if (choice == 'Voice Settings') {
                 CharacterVoiceSettingsSheet.show(
@@ -1090,6 +1152,20 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
             },
             itemBuilder: (BuildContext context) {
               return [
+                PopupMenuItem(
+                  value: 'VIP Plans',
+                  child: Row(
+                    children: [
+                      Icon(
+                        (_isVip || _isOwner) ? Icons.diamond : Icons.stars,
+                        color: Colors.amber,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Text((_isVip || _isOwner) ? 'VIP Active 👑' : 'Upgrade to VIP 💖', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
                   value: 'Change Wallpaper',
                   child: Row(
@@ -1369,6 +1445,31 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                                   TextButton.icon(icon: const Icon(Icons.lightbulb, size: 16), label: const Text('Suggest'), onPressed: _isSending ? null : _getSuggestions),
                                   TextButton.icon(icon: const Icon(Icons.psychology, size: 16), label: const Text('Thought'), onPressed: _isSending ? null : _generateThought),
                                   TextButton.icon(icon: const Icon(Icons.refresh, size: 16), label: const Text('Regenerate'), onPressed: _isSending ? null : _regenerateChat),
+                                  // VIP / Quota Action Pill
+                                  TextButton.icon(
+                                    icon: Icon(
+                                      (_isVip || _isOwner) ? Icons.diamond : Icons.bolt,
+                                      size: 16,
+                                      color: (_isVip || _isOwner) ? Colors.amber : (_remainingChats <= 3 ? Colors.redAccent : Colors.orangeAccent),
+                                    ),
+                                    label: Text(
+                                      (_isVip || _isOwner)
+                                          ? 'VIP 👑'
+                                          : '$_remainingChats/20 Free ⚡',
+                                      style: TextStyle(
+                                        color: (_isVip || _isOwner) ? Colors.amber : (_remainingChats <= 3 ? Colors.redAccent : Colors.orangeAccent),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    onPressed: () => VipSubscriptionSheet.show(
+                                      context,
+                                      currentQuota: _quotaData,
+                                      onUpgraded: () {
+                                        _loadChat();
+                                        _loadQuota();
+                                      },
+                                    ),
+                                  ),
                                   TextButton.icon(
                                     icon: const Icon(Icons.wallpaper, size: 16, color: Colors.cyanAccent),
                                     label: const Text('Wallpaper 🖼️', style: TextStyle(color: Colors.cyanAccent)),

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../streak_service.dart';
+import '../widgets/vip_subscription_sheet.dart';
 
 class ProfileStudioScreen extends StatefulWidget {
   const ProfileStudioScreen({super.key});
@@ -250,6 +251,170 @@ class _ProfileStudioScreenState extends State<ProfileStudioScreen> {
                           _buildOwnerRow(Icons.auto_stories, 'Master Library: Access ALL stories (Public & Private)'),
                           const SizedBox(height: 6),
                           _buildOwnerRow(Icons.people_alt, 'Character Lounge: Full access to EVERY character on platform'),
+                        ],
+                      ),
+                    ),
+                  ] else if (_userProfile?['is_vip'] == true) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF831843), Color(0xFF4C1D95)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.pinkAccent, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.pinkAccent.withOpacity(0.2),
+                            blurRadius: 14,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Colors.pinkAccent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.diamond, color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '👑 ${_userProfile?['subscription_tier'] ?? 'VIP'} ACTIVE',
+                                      style: const TextStyle(
+                                        color: Colors.pinkAccent,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'Unlimited Chats & Spoken Voices 24/7',
+                                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    // Free Tier Status & Upgrade Prompt
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.bolt, color: Colors.amber, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Free Daily Allowance',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white12,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'FREE TIER',
+                                  style: TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Daily Chats', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${_userProfile?['daily_chats_remaining'] ?? 20} / 20 Left',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Daily Stories', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${_userProfile?['daily_stories_remaining'] ?? 2} / 2 Left',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.flash_on, color: Colors.white, size: 18),
+                              label: const Text('Upgrade to Unlimited VIP', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF2D55),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => VipSubscriptionSheet.show(
+                                context,
+                                onUpgraded: _loadData,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

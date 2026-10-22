@@ -36,6 +36,51 @@ class UserProfileResponse(BaseModel):
     unlimited_access: bool
     can_access_all_stories: bool
     can_access_all_characters: bool
+    daily_chats_used: int = 0
+    max_daily_chats: int = 20
+    daily_chats_remaining: int = 20
+    daily_stories_created: int = 0
+    max_daily_stories: int = 2
+    daily_stories_remaining: int = 2
+    is_vip: bool = False
+
+class UserQuotaResponse(BaseModel):
+    is_vip: bool
+    is_owner: bool
+    subscription_tier: str
+    daily_chats_used: int
+    max_daily_chats: int
+    daily_chats_remaining: int
+    daily_stories_created: int
+    max_daily_stories: int
+    daily_stories_remaining: int
+    reset_time_utc: str
+
+class SubscriptionPlanItem(BaseModel):
+    plan_id: str
+    name: str
+    price_inr: str
+    price_usd: str
+    billing_period: str
+    popular: bool = False
+    badge: Optional[str] = None
+    features: list[str]
+
+class SubscriptionPlansResponse(BaseModel):
+    plans: list[SubscriptionPlanItem]
+    current_tier: str
+    is_vip: bool
+
+class SubscriptionUpgradeRequest(BaseModel):
+    plan_id: str
+    payment_reference: Optional[str] = None
+
+class SubscriptionUpgradeResponse(BaseModel):
+    status: str
+    message: str
+    subscription_tier: str
+    is_subscription_active: bool
+    expires_at: Optional[str] = None
 
 class PersonaBase(BaseModel):
     name: str
