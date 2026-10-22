@@ -634,18 +634,11 @@ async def delete_illustration(story_id: uuid.UUID, illustration_id: uuid.UUID, d
     await db.commit()
     return {"status": "success"}
 
-@app.post("/api/v1/stories/{story_id}/fork", response_model=schemas.StoryResponse)
-async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # Fetch original story
-    result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
-    original_story = result.scalars().first()
-    if not original_story:
-        raise HTTPException(status_code=404, detail="Story not found")
-        
-    # Duplicate story
+async def clone_story_for_user(original_story: models.Story, target_user_id: uuid.UUID, db: AsyncSession) -> models.Story:
+    """Safely clone a public story into a user's private library branch so author is never affected."""
     new_story = models.Story(
-        user_id=current_user.id,
-        title=f"{original_story.title} (Fork)",
+        user_id=target_user_id,
+        title=f"{original_story.title} (My Branch)",
         synopsis=original_story.synopsis,
         genre=original_story.genre,
         subgenre=original_story.subgenre,
@@ -662,14 +655,15 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         user_persona_backstory=original_story.user_persona_backstory,
         intimacy_level=original_story.intimacy_level,
         jealousy_trigger=original_story.jealousy_trigger,
-        pov_mode=original_story.pov_mode
+        pov_mode=original_story.pov_mode,
+        is_published=False
     )
     db.add(new_story)
     await db.commit()
     await db.refresh(new_story)
     
     # Duplicate characters
-    chars_result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
+    chars_result = await db.execute(select(models.Character).where(models.Character.story_id == original_story.id))
     for char in chars_result.scalars().all():
         new_char = models.Character(
             story_id=new_story.id,
@@ -678,12 +672,13 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
             weaknesses=char.weaknesses, relationship_status=char.relationship_status,
             dialogue_style=char.dialogue_style, avatar_base64=char.avatar_base64,
             passion_level=char.passion_level, vulnerability_level=char.vulnerability_level,
-            romantic_status=char.romantic_status
+            romantic_status=char.romantic_status,
+            voice_id=getattr(char, "voice_id", "en-US-JennyNeural")
         )
         db.add(new_char)
         
     # Duplicate world items
-    world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == story_id))
+    world_result = await db.execute(select(models.WorldItem).where(models.WorldItem.story_id == original_story.id))
     for item in world_result.scalars().all():
         new_item = models.WorldItem(
             story_id=new_story.id,
@@ -692,17 +687,31 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         db.add(new_item)
         
     # Duplicate chapters
-    chapters_result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id))
+    chapters_result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == original_story.id).order_by(models.Chapter.chapter_number.asc()))
     for chap in chapters_result.scalars().all():
         new_chap = models.Chapter(
             story_id=new_story.id,
             chapter_number=chap.chapter_number, title=chap.title,
-            content=chap.content, summary=chap.summary, status=chap.status
+            content=chap.content, summary=chap.summary, status=chap.status,
+            choices_json=chap.choices_json, choice_prompt=chap.choice_prompt
         )
         db.add(new_chap)
         
     await db.commit()
     return new_story
+
+@app.post("/api/v1/stories/{story_id}/fork", response_model=schemas.StoryResponse)
+async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Any user can fork if story is public, owned by user, or user is master owner!
+    result = await db.execute(select(models.Story).where(models.Story.id == story_id))
+    original_story = result.scalars().first()
+    if not original_story:
+        raise HTTPException(status_code=404, detail="Story not found")
+        
+    if not original_story.is_published and original_story.user_id != current_user.id and not current_user.is_system_owner:
+        raise HTTPException(status_code=403, detail="Cannot fork a private story")
+        
+    return await clone_story_for_user(original_story, current_user.id, db)
 
 @app.post("/api/v1/stories/{story_id}/characters", response_model=schemas.CharacterResponse)
 async def create_character(story_id: uuid.UUID, character: schemas.CharacterCreate, db: AsyncSession = Depends(get_db)):
@@ -792,7 +801,31 @@ async def reorder_chapters(story_id: uuid.UUID, request: ChapterReorderRequest, 
     return {"status": "success"}
 
 @app.post("/api/v1/stories/{story_id}/chapters", response_model=schemas.ChapterResponse)
-async def create_chapter(story_id: uuid.UUID, chapter: schemas.ChapterCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def create_chapter(
+    story_id: uuid.UUID,
+    chapter: schemas.ChapterCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    # If the user is not the story author and not Master Owner, create their own branch
+    target_story_id = story_id
+    if current_user and story.user_id and story.user_id != current_user.id and not current_user.is_system_owner:
+        branch_res = await db.execute(
+            select(models.Story).where(
+                models.Story.user_id == current_user.id,
+                models.Story.title.like(f"{story.title}%")
+            )
+        )
+        user_branch = branch_res.scalars().first()
+        if not user_branch:
+            user_branch = await clone_story_for_user(story, current_user.id, db)
+        target_story_id = user_branch.id
+        story_id = target_story_id
     # Automatically determine the correct next chapter number
     result = await db.execute(
         select(models.Chapter)
@@ -1254,29 +1287,68 @@ def get_intimacy_tier_prompt(score: int) -> str:
     else:
         return "You are DEVOTED/OBSESSED with the user. Be intensely loyal and deeply in love."
 
-def extract_and_apply_intimacy(text: str, char: models.Character) -> str:
+def extract_and_apply_intimacy(text: str, target: Any) -> str:
     pattern = re.compile(r'\[\s*(?:S|SYSTEM\s*)?INTIMACY\s*:\s*([+-]?\d+)\s*\]', re.IGNORECASE)
     match = pattern.search(text)
     if match:
         try:
             delta = int(match.group(1))
-            current = char.intimacy_score or 0
-            char.intimacy_score = min(100, max(0, current + delta))
+            current = getattr(target, "intimacy_score", 0) or 0
+            target.intimacy_score = min(100, max(0, current + delta))
         except Exception:
             pass
     cleaned = pattern.sub('', text)
     cleaned = re.sub(r'\[.*?INTIMACY.*?\]', '', cleaned, flags=re.IGNORECASE).strip()
     return cleaned
 
+
+async def get_or_create_user_character_progress(
+    user_id: Optional[uuid.UUID],
+    character_id: uuid.UUID,
+    db: AsyncSession,
+    default_intimacy: int = 0
+) -> Optional[models.UserCharacterProgress]:
+    if not user_id:
+        return None
+    res = await db.execute(
+        select(models.UserCharacterProgress).where(
+            models.UserCharacterProgress.user_id == user_id,
+            models.UserCharacterProgress.character_id == character_id
+        )
+    )
+    prog = res.scalars().first()
+    if not prog:
+        prog = models.UserCharacterProgress(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            character_id=character_id,
+            intimacy_score=default_intimacy
+        )
+        db.add(prog)
+        await db.commit()
+        await db.refresh(prog)
+    return prog
+
 @app.post("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
-async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def chat_with_character(
+    character_id: uuid.UUID,
+    request: schemas.ChatRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     result = await db.execute(select(models.Character).where(models.Character.id == character_id))
     char = result.scalars().first()
     if not char:
         raise HTTPException(status_code=404, detail="Character not found")
         
-    # Save user message
-    user_msg = models.CharacterChat(character_id=character_id, message=request.message, is_ai=False)
+    user_id = current_user.id if current_user else None
+    user_prog = None
+    if user_id:
+        user_prog = await get_or_create_user_character_progress(user_id, character_id, db, default_intimacy=char.intimacy_score or 0)
+        
+    # Save user message tagged with user_id
+    user_msg = models.CharacterChat(character_id=character_id, user_id=user_id, message=request.message, is_ai=False)
     db.add(user_msg)
     await db.commit()
     
@@ -1300,10 +1372,14 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     if vector_mems:
         combined_memories = f"{persistent_mems}\n{vector_mems}".strip()
     
-    # Fetch recent conversation turns for multi-turn conversational memory
+    # Fetch recent conversation turns for multi-turn conversational memory (ISOLATED TO CURRENT USER)
+    hist_filter = [models.CharacterChat.character_id == character_id]
+    if user_id:
+        hist_filter.append(or_(models.CharacterChat.user_id == user_id, models.CharacterChat.user_id.is_(None)))
+        
     hist_turns_res = await db.execute(
         select(models.CharacterChat)
-        .where(models.CharacterChat.character_id == character_id)
+        .where(and_(*hist_filter))
         .order_by(models.CharacterChat.created_at.desc())
         .limit(16)
     )
@@ -1316,19 +1392,11 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
                 "content": m.message
             })
     
-    # Retrieve Persona and Intimacy Tier
+    # Retrieve Persona and Intimacy Tier (per-user progress)
     persona_info = await get_effective_persona_info(story, db)
 
-    score = char.intimacy_score or 0
-    tier_prompt = ""
-    if score <= 25:
-        tier_prompt = "You are currently NEUTRAL towards the user. Be polite but guarded."
-    elif score <= 50:
-        tier_prompt = "You are FRIENDLY towards the user. Be warm and open."
-    elif score <= 75:
-        tier_prompt = "You are ROMANTIC towards the user. Be flirtatious and affectionate."
-    else:
-        tier_prompt = "You are DEVOTED/OBSESSED with the user. Be intensely loyal and deeply in love."
+    score = user_prog.intimacy_score if user_prog else (char.intimacy_score or 0)
+    tier_prompt = get_intimacy_tier_prompt(score)
 
     # Fetch recent group banter for cross-chat sync
     group_banter = ""
@@ -1367,10 +1435,10 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     )
     
     # Parse intimacy delta and sanitize text
-    ai_reply = extract_and_apply_intimacy(ai_reply, char)
+    ai_reply = extract_and_apply_intimacy(ai_reply, user_prog if user_prog else char)
     
-    # Save AI message
-    ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=True)
+    # Save AI message tagged with user_id
+    ai_msg = models.CharacterChat(character_id=character_id, user_id=user_id, message=ai_reply, is_ai=True)
     db.add(ai_msg)
     await db.commit()
     
@@ -1378,61 +1446,112 @@ async def chat_with_character(character_id: uuid.UUID, request: schemas.ChatRequ
     background_tasks.add_task(bg_evaluate_chat_for_memory, character_id, char.name, char.story_id, request.message, ai_reply)
     background_tasks.add_task(bg_summarize_character_chat, character_id, char.story_id)
     
-    # Return history
-    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    # Return user-isolated history
+    hist = await db.execute(
+        select(models.CharacterChat)
+        .where(and_(*hist_filter))
+        .order_by(models.CharacterChat.created_at.asc())
+    )
     return hist.scalars().all()
 
 @app.get("/api/v1/characters/{character_id}/chat", response_model=list[schemas.ChatMessage])
-async def get_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+async def get_character_chat(
+    character_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
+    filt = [models.CharacterChat.character_id == character_id]
+    if current_user:
+        filt.append(or_(models.CharacterChat.user_id == current_user.id, models.CharacterChat.user_id.is_(None)))
+    hist = await db.execute(
+        select(models.CharacterChat)
+        .where(and_(*filt))
+        .order_by(models.CharacterChat.created_at.asc())
+    )
     return hist.scalars().all()
 
 @app.put("/api/v1/characters/{character_id}/chat/{chat_id}")
-async def edit_chat_message(character_id: uuid.UUID, chat_id: uuid.UUID, request: schemas.ChatRequest, db: AsyncSession = Depends(get_db)):
+async def edit_chat_message(
+    character_id: uuid.UUID,
+    chat_id: uuid.UUID,
+    request: schemas.ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.id == chat_id, models.CharacterChat.character_id == character_id))
     msg = result.scalars().first()
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
+    if msg.user_id and current_user and msg.user_id != current_user.id and not current_user.is_system_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this message")
     
     msg.message = request.message
     await db.commit()
     return {"status": "success"}
 
 @app.delete("/api/v1/characters/{character_id}/chat/{chat_id}/rewind")
-async def rewind_chat(character_id: uuid.UUID, chat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def rewind_chat(
+    character_id: uuid.UUID,
+    chat_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.id == chat_id, models.CharacterChat.character_id == character_id))
     msg = result.scalars().first()
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
     
-    # Delete this message and all messages created after it
-    await db.execute(
-        models.CharacterChat.__table__.delete().where(
-            models.CharacterChat.character_id == character_id,
-            models.CharacterChat.created_at >= msg.created_at
-        )
-    )
+    # Delete this message and all subsequent messages for this user
+    del_conds = [
+        models.CharacterChat.character_id == character_id,
+        models.CharacterChat.created_at >= msg.created_at
+    ]
+    if current_user and not current_user.is_system_owner:
+        del_conds.append(or_(models.CharacterChat.user_id == current_user.id, models.CharacterChat.user_id.is_(None)))
+        
+    await db.execute(models.CharacterChat.__table__.delete().where(and_(*del_conds)))
     await db.commit()
     return {"status": "success"}
 
 @app.delete("/api/v1/characters/{character_id}/chat/{chat_id}")
-async def delete_chat_message(character_id: uuid.UUID, chat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_chat_message(
+    character_id: uuid.UUID,
+    chat_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     result = await db.execute(select(models.CharacterChat).where(models.CharacterChat.id == chat_id, models.CharacterChat.character_id == character_id))
     msg = result.scalars().first()
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
+    if msg.user_id and current_user and msg.user_id != current_user.id and not current_user.is_system_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this message")
     
     await db.delete(msg)
     await db.commit()
     return {"status": "success"}
 
 @app.post("/api/v1/characters/{character_id}/chat/continue", response_model=list[schemas.ChatMessage])
-async def continue_character_chat(character_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def continue_character_chat(
+    character_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
     
-    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    user_id = current_user.id if current_user else None
+    user_prog = None
+    if user_id:
+        user_prog = await get_or_create_user_character_progress(user_id, character_id, db, default_intimacy=char.intimacy_score or 0)
+
+    filt = [models.CharacterChat.character_id == character_id]
+    if user_id:
+        filt.append(or_(models.CharacterChat.user_id == user_id, models.CharacterChat.user_id.is_(None)))
+        
+    hist_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.asc()))
     chat_history = hist_res.scalars().all()
     
     history_str = ""
@@ -1464,21 +1583,29 @@ async def continue_character_chat(character_id: uuid.UUID, background_tasks: Bac
         chapter_chronicle=chapter_chronicle
     )
     
-    ai_msg = extract_and_apply_intimacy(ai_msg, char)
-    chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
+    ai_msg = extract_and_apply_intimacy(ai_msg, user_prog if user_prog else char)
+    chat_ai = models.CharacterChat(character_id=character_id, user_id=user_id, message=ai_msg, is_ai=True)
     db.add(chat_ai)
     await db.commit()
     
-    final_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    final_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.asc()))
     return final_res.scalars().all()
 
 @app.post("/api/v1/characters/{character_id}/chat/suggest")
-async def suggest_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def suggest_character_chat(
+    character_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
     
-    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()).limit(10))
+    filt = [models.CharacterChat.character_id == character_id]
+    if current_user:
+        filt.append(or_(models.CharacterChat.user_id == current_user.id, models.CharacterChat.user_id.is_(None)))
+        
+    hist_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.desc()).limit(10))
     chat_history = reversed(hist_res.scalars().all())
     
     history_str = ""
@@ -1492,12 +1619,25 @@ async def suggest_character_chat(character_id: uuid.UUID, db: AsyncSession = Dep
     return {"suggestions": suggestions}
 
 @app.post("/api/v1/characters/{character_id}/chat/thought", response_model=list[schemas.ChatMessage])
-async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def thought_character_chat(
+    character_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
     
-    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    user_id = current_user.id if current_user else None
+    user_prog = None
+    if user_id:
+        user_prog = await get_or_create_user_character_progress(user_id, character_id, db, default_intimacy=char.intimacy_score or 0)
+
+    filt = [models.CharacterChat.character_id == character_id]
+    if user_id:
+        filt.append(or_(models.CharacterChat.user_id == user_id, models.CharacterChat.user_id.is_(None)))
+
+    hist_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.asc()))
     chat_history = hist_res.scalars().all()
     
     history_str = ""
@@ -1513,21 +1653,35 @@ async def thought_character_chat(character_id: uuid.UUID, db: AsyncSession = Dep
         story_summary=story_summary,
         chat_history=history_str
     )
-    ai_msg = extract_and_apply_intimacy(ai_msg, char)
-    chat_ai = models.CharacterChat(character_id=character_id, message=ai_msg, is_ai=True)
+    ai_msg = extract_and_apply_intimacy(ai_msg, user_prog if user_prog else char)
+    chat_ai = models.CharacterChat(character_id=character_id, user_id=user_id, message=ai_msg, is_ai=True)
     db.add(chat_ai)
     await db.commit()
     
-    final_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    final_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.asc()))
     return final_res.scalars().all()
 
 @app.post("/api/v1/characters/{character_id}/chat/regenerate", response_model=list[schemas.ChatMessage])
-async def regenerate_character_chat(character_id: uuid.UUID, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def regenerate_character_chat(
+    character_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id).options(selectinload(models.Character.story)))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
     
-    hist_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.desc()))
+    user_id = current_user.id if current_user else None
+    user_prog = None
+    if user_id:
+        user_prog = await get_or_create_user_character_progress(user_id, character_id, db, default_intimacy=char.intimacy_score or 0)
+
+    filt = [models.CharacterChat.character_id == character_id]
+    if user_id:
+        filt.append(or_(models.CharacterChat.user_id == user_id, models.CharacterChat.user_id.is_(None)))
+
+    hist_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.desc()))
     all_msgs = hist_res.scalars().all()
     if not all_msgs:
         return []
@@ -1576,7 +1730,8 @@ async def regenerate_character_chat(character_id: uuid.UUID, background_tasks: B
                     "content": m.message
                 })
                 
-        tier_prompt = get_intimacy_tier_prompt(char.intimacy_score or 0)
+        score = user_prog.intimacy_score if user_prog else (char.intimacy_score or 0)
+        tier_prompt = get_intimacy_tier_prompt(score)
         persona_info = await get_effective_persona_info(story, db)
         
         ai_reply = await llm_service.chat_with_character(
@@ -1591,36 +1746,50 @@ async def regenerate_character_chat(character_id: uuid.UUID, background_tasks: B
             chapter_chronicle=chapter_chronicle
         )
         
-        ai_reply = extract_and_apply_intimacy(ai_reply, char)
-        ai_msg = models.CharacterChat(character_id=character_id, message=ai_reply, is_ai=True)
+        ai_reply = extract_and_apply_intimacy(ai_reply, user_prog if user_prog else char)
+        ai_msg = models.CharacterChat(character_id=character_id, user_id=user_id, message=ai_reply, is_ai=True)
         db.add(ai_msg)
         await db.commit()
         
         background_tasks.add_task(bg_evaluate_chat_for_memory, character_id, char.name, char.story_id, last_user_msg.message, ai_reply)
         background_tasks.add_task(bg_summarize_character_chat, character_id, char.story_id)
         
-        final_res = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+        final_res = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.asc()))
         return final_res.scalars().all()
     else:
-        return await continue_character_chat(character_id, background_tasks, db)
+        return await continue_character_chat(character_id, background_tasks, db, current_user=current_user)
 
 @app.post("/api/v1/characters/{character_id}/chat/clear")
-async def clear_character_chat(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id == character_id))
+async def clear_character_chat(
+    character_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
+    del_conds = [models.CharacterChat.character_id == character_id]
+    if current_user and not current_user.is_system_owner:
+        del_conds.append(models.CharacterChat.user_id == current_user.id)
+    await db.execute(delete(models.CharacterChat).where(and_(*del_conds)))
     await db.commit()
     return {"status": "success"}
 
 @app.post("/api/v1/characters/{character_id}/chat/request_selfie", response_model=list[schemas.ChatMessage])
-async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def request_selfie(
+    character_id: uuid.UUID,
+    custom_prompt: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     char_res = await db.execute(select(models.Character).where(models.Character.id == character_id))
     char = char_res.scalars().first()
     if not char: raise HTTPException(status_code=404, detail="Character not found")
+    
+    user_id = current_user.id if current_user else None
     
     # Save a generic user message saying they requested a photo
     user_msg_text = "*Takes out phone and points it at you* Say cheese!"
     if custom_prompt:
         user_msg_text = f"*Takes out phone* {custom_prompt}"
-    user_msg = models.CharacterChat(character_id=character_id, message=user_msg_text, is_ai=False)
+    user_msg = models.CharacterChat(character_id=character_id, user_id=user_id, message=user_msg_text, is_ai=False)
     db.add(user_msg)
     
     # Generate the image prompt based on their appearance
@@ -1630,19 +1799,20 @@ async def request_selfie(character_id: uuid.UUID, custom_prompt: Optional[str] =
     prompt += f", {char.appearance}, highly detailed, photorealistic, 8k resolution, cinematic lighting"
     safe_prompt = urllib.parse.quote(prompt)
     
-    # Generate a seed based on character name so their face is somewhat consistent (and add a random element so new selfies are slightly different)
     import random
     seed_base = char.name + str(random.randint(1, 10000))
     seed = int(hashlib.md5(seed_base.encode('utf-8')).hexdigest()[:8], 16)
     
     image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?seed={seed}&nologo=true&width=512&height=768"
     
-    # Save AI message as an image
-    ai_msg = models.CharacterChat(character_id=character_id, message="Here you go! 📸", is_ai=True, is_image=True, image_url=image_url)
+    ai_msg = models.CharacterChat(character_id=character_id, user_id=user_id, message="Here you go! 📸", is_ai=True, is_image=True, image_url=image_url)
     db.add(ai_msg)
     await db.commit()
     
-    hist = await db.execute(select(models.CharacterChat).where(models.CharacterChat.character_id == character_id).order_by(models.CharacterChat.created_at.asc()))
+    filt = [models.CharacterChat.character_id == character_id]
+    if user_id:
+        filt.append(or_(models.CharacterChat.user_id == user_id, models.CharacterChat.user_id.is_(None)))
+    hist = await db.execute(select(models.CharacterChat).where(and_(*filt)).order_by(models.CharacterChat.created_at.asc()))
     return hist.scalars().all()
 
 @app.post("/api/v1/characters/{character_id}/diary")
@@ -2084,11 +2254,28 @@ async def clear_group_chat(session_id: uuid.UUID, db: AsyncSession = Depends(get
 
 
 @app.get("/api/v1/characters/{character_id}", response_model=schemas.CharacterResponse)
-async def get_character(character_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_character(
+    character_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     result = await db.execute(select(models.Character).where(models.Character.id == character_id))
     char = result.scalars().first()
     if not char:
         raise HTTPException(status_code=404, detail="Character not found")
+        
+    if current_user:
+        prog = await get_or_create_user_character_progress(current_user.id, character_id, db, default_intimacy=char.intimacy_score or 0)
+        if prog:
+            resp = schemas.CharacterResponse.model_validate(char)
+            resp.intimacy_score = prog.intimacy_score
+            if prog.passion_level is not None:
+                resp.passion_level = prog.passion_level
+            if prog.vulnerability_level is not None:
+                resp.vulnerability_level = prog.vulnerability_level
+            if prog.romantic_status:
+                resp.romantic_status = prog.romantic_status
+            return resp
     return char
 
 @app.post("/api/v1/stories/{story_id}/extract-lore", response_model=list[schemas.WorldItemResponse])

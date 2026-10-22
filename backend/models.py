@@ -22,6 +22,8 @@ class User(Base):
     
     stories = relationship("Story", back_populates="user")
     persona = relationship("Persona", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    chats = relationship("CharacterChat", back_populates="user", cascade="all, delete-orphan")
+    character_progress = relationship("UserCharacterProgress", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def is_system_owner(self) -> bool:
@@ -120,11 +122,13 @@ class Character(Base):
  
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")
+    user_progress = relationship("UserCharacterProgress", back_populates="character", cascade="all, delete-orphan")
 
 class CharacterChat(Base):
     __tablename__ = "character_chats"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"))
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     message = Column(Text)
     is_ai = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -133,6 +137,23 @@ class CharacterChat(Base):
     image_url = Column(Text, nullable=True)
 
     character = relationship("Character", back_populates="chats")
+    user = relationship("User", back_populates="chats")
+
+class UserCharacterProgress(Base):
+    __tablename__ = "user_character_progress"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), index=True)
+    character_id = Column(Uuid(as_uuid=True), ForeignKey("characters.id"), index=True)
+    intimacy_score = Column(Integer, default=0)
+    passion_level = Column(Integer, default=50)
+    vulnerability_level = Column(Integer, default=30)
+    romantic_status = Column(String, default="Guarded")
+    active_wardrobe = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="character_progress")
+    character = relationship("Character", back_populates="user_progress")
 
 class Chapter(Base):
     __tablename__ = "chapters"
