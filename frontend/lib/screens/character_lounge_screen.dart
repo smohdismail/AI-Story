@@ -20,6 +20,7 @@ class CharacterLoungeScreen extends StatefulWidget {
 class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
   List<dynamic> _characters = [];
   bool _isLoading = true;
+  bool _isOwner = false;
   String _searchQuery = '';
   String? _selectedStoryFilter;
 
@@ -31,6 +32,10 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
 
   Future<void> _loadCharacters() async {
     setState(() => _isLoading = true);
+    try {
+      final prof = await ApiService.getMyProfile();
+      if (mounted) setState(() => _isOwner = prof['is_owner'] == true);
+    } catch (_) {}
     try {
       final chars = await ApiService.getAllUserCharacters();
       if (mounted) {
@@ -80,6 +85,31 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
           ],
         ),
         actions: [
+          if (_isOwner)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 12.0),
+              child: Tooltip(
+                message: '👑 Owner Master Mode: Full Access to ALL Platform Characters',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Colors.amber, Colors.deepOrange]),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.amberAccent, blurRadius: 4, spreadRadius: 0.5),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.workspace_premium, color: Colors.black, size: 14),
+                      SizedBox(width: 4),
+                      Text('ALL CHARACTERS', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Characters',

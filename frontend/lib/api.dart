@@ -2151,7 +2151,7 @@ class ApiService {
   static Future<List<dynamic>> getAvailableVoices() async {
     final headers = await _getHeaders();
     final response = await http.get(
-      Uri.parse('/voice/voices'),
+      Uri.parse('$baseUrl/voice/voices'),
       headers: headers,
     );
     await _checkStatus(response);
@@ -2170,7 +2170,7 @@ class ApiService {
   }) async {
     final headers = await _getHeaders();
     final response = await http.post(
-      Uri.parse('/characters//speak'),
+      Uri.parse('$baseUrl/characters/$characterId/speak'),
       headers: headers,
       body: jsonEncode({
         'text': text,
@@ -2189,7 +2189,7 @@ class ApiService {
   static Future<Map<String, dynamic>> setCharacterVoice(String characterId, String voiceId) async {
     final headers = await _getHeaders();
     final response = await http.put(
-      Uri.parse('/characters//voice'),
+      Uri.parse('$baseUrl/characters/$characterId/voice'),
       headers: headers,
       body: jsonEncode({'voice_id': voiceId}),
     );
@@ -2206,7 +2206,7 @@ class ApiService {
     String? localTimeStr,
   }) async {
     final headers = await _getHeaders();
-    final uri = Uri.parse('/characters//proactive_ping').replace(
+    final uri = Uri.parse('$baseUrl/characters/$characterId/proactive_ping').replace(
       queryParameters: {
         if (userPersonaName != null) 'user_persona_name': userPersonaName,
         if (localTimeStr != null) 'local_time_str': localTimeStr,
@@ -2221,5 +2221,21 @@ class ApiService {
       return jsonDecode(response.body);
     }
     throw Exception('Failed to generate spontaneous notification');
+  }
+
+  // ==========================================
+  // 👑 11. USER PROFILE & MASTER OWNER ACCESS
+  // ==========================================
+  static Future<Map<String, dynamic>> getMyProfile() async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/users/me'),
+      headers: headers,
+    );
+    await _checkStatus(response);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load user profile');
   }
 }

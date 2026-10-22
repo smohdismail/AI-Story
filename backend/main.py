@@ -404,6 +404,23 @@ async def get_effective_persona_info(story: models.Story, db: AsyncSession) -> s
 
 # --- PERSONA ENDPOINTS ---
 
+@app.get("/api/v1/users/me", response_model=schemas.UserProfileResponse)
+async def get_my_profile(current_user: models.User = Depends(auth.get_current_user)):
+    """Return user profile with master owner and subscription permissions."""
+    is_owner = current_user.is_system_owner
+    return schemas.UserProfileResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        role="owner" if is_owner else (current_user.role or "user"),
+        is_owner=is_owner,
+        subscription_tier="OWNER_LIFETIME_VIP" if is_owner else "FREE",
+        is_subscription_active=True if is_owner else False,
+        unlimited_access=is_owner,
+        can_access_all_stories=is_owner,
+        can_access_all_characters=is_owner,
+    )
+
 @app.get("/api/v1/users/me/persona", response_model=schemas.PersonaResponse)
 async def get_persona(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     result = await db.execute(select(models.Persona).where(models.Persona.user_id == current_user.id))
@@ -456,6 +473,13 @@ async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(ge
 
 @app.get("/api/v1/stories", response_model=list[schemas.StoryResponse])
 async def list_stories(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.is_system_owner:
+        # 👑 MASTER OWNER PRIVILEGE: Unrestricted access to every story in the database
+        result = await db.execute(
+            select(models.Story)
+            .order_by(models.Story.created_at.desc())
+        )
+        return result.scalars().all()
     result = await db.execute(
         select(models.Story)
         .where(or_(models.Story.user_id == current_user.id, models.Story.user_id == None))
@@ -468,7 +492,8 @@ async def get_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cur
     story = await db.get(models.Story, story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
-    if not story.is_published and story.user_id and story.user_id != current_user.id:
+    # 👑 MASTER OWNER PRIVILEGE: Owner can inspect and read ANY story, public or private
+    if not current_user.is_system_owner and not story.is_published and story.user_id and story.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="This novel is marked Private by its author and is not accessible.")
     return story
 
@@ -488,7 +513,10 @@ async def update_story(story_id: uuid.UUID, story_update: schemas.StoryUpdate, d
 
 @app.delete("/api/v1/stories/{story_id}")
 async def delete_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
+    if current_user.is_system_owner:
+        result = await db.execute(select(models.Story).where(models.Story.id == story_id))
+    else:
+        result = await db.execute(select(models.Story).where(models.Story.id == story_id, models.Story.user_id == current_user.id))
     story = result.scalars().first()
     if not story:
         # Fallback check if user_id was null or not set
@@ -2522,19 +2550,24 @@ async def update_story_character_chemistry(story_id: uuid.UUID, db: AsyncSession
 
 @app.get("/api/v1/users/me/all-characters")
 async def get_all_user_characters(db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    stories_res = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
-    stories = stories_res.scalars().all()
-    story_ids = [s.id for s in stories] if stories else []
-    
-    chars = []
-    if story_ids:
-        chars_res = await db.execute(select(models.Character).where(models.Character.story_id.in_(story_ids)))
-        chars = chars_res.scalars().all()
-        
-    # If user has no characters tied directly, fallback to all characters so Lounge is lively
-    if not chars:
-        all_chars_res = await db.execute(select(models.Character).limit(100))
+    if current_user.is_system_owner:
+        # 👑 MASTER OWNER PRIVILEGE: Access every single character across all stories in the app
+        all_chars_res = await db.execute(select(models.Character).order_by(models.Character.name.asc()))
         chars = all_chars_res.scalars().all()
+    else:
+        stories_res = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
+        stories = stories_res.scalars().all()
+        story_ids = [s.id for s in stories] if stories else []
+        
+        chars = []
+        if story_ids:
+            chars_res = await db.execute(select(models.Character).where(models.Character.story_id.in_(story_ids)))
+            chars = chars_res.scalars().all()
+            
+        # If user has no characters tied directly, fallback to all characters so Lounge is lively
+        if not chars:
+            all_chars_res = await db.execute(select(models.Character).limit(100))
+            chars = all_chars_res.scalars().all()
 
     # Map story titles
     all_story_ids = list({c.story_id for c in chars if c.story_id})

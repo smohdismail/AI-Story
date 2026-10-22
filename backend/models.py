@@ -16,10 +16,27 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     password_hash = Column(String, nullable=True) # Nullable for Google users
     google_id = Column(String, unique=True, index=True, nullable=True)
+    role = Column(String, default="user", nullable=True)
+    is_owner = Column(Boolean, default=False, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     stories = relationship("Story", back_populates="user")
     persona = relationship("Persona", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    @property
+    def is_system_owner(self) -> bool:
+        OWNER_IDS = {"822af4c3-f00c-4f74-bd72-461403090620"}
+        OWNER_EMAILS = {"siddiquimohd075@gmail.com"}
+        OWNER_USERNAMES = {"siddiquimohd"}
+        OWNER_GOOGLE_IDS = {"110314843719970362469"}
+        return bool(
+            str(self.id) in OWNER_IDS or
+            (self.email and self.email.lower() in OWNER_EMAILS) or
+            (self.username and self.username.lower() in OWNER_USERNAMES) or
+            (self.google_id and str(self.google_id) in OWNER_GOOGLE_IDS) or
+            self.role == "owner" or
+            self.is_owner is True
+        )
 
 class Persona(Base):
     __tablename__ = "personas"

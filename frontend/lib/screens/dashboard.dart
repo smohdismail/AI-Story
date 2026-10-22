@@ -15,6 +15,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> stories = [];
   bool isLoading = true;
+  bool isOwner = false;
   String? errorMessage;
 
   bool isFolderView = false;
@@ -31,6 +32,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadData() async {
     final info = await StreakService.getStreakInfo();
+    try {
+      final prof = await ApiService.getMyProfile();
+      if (mounted) {
+        setState(() {
+          isOwner = prof['is_owner'] == true;
+        });
+      }
+    } catch (_) {}
     if (mounted) {
       setState(() {
         streakInfo = info;
@@ -107,6 +116,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )
             : null,
         actions: [
+          if (isOwner)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 12.0),
+              child: Tooltip(
+                message: '👑 Owner Master Mode: Full Access to ALL Stories (Public & Private)',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Colors.amber, Colors.deepOrange]),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.amberAccent, blurRadius: 4, spreadRadius: 0.5),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.workspace_premium, color: Colors.black, size: 14),
+                      SizedBox(width: 4),
+                      Text('OWNER', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: Icon(isFolderView ? Icons.grid_view : Icons.folder_copy, color: Colors.amberAccent),
             tooltip: isFolderView ? 'Switch to All Stories Grid' : 'Switch to Genre Folders View',

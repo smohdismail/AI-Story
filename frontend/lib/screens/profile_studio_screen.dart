@@ -20,6 +20,7 @@ class _ProfileStudioScreenState extends State<ProfileStudioScreen> {
   final _backstoryController = TextEditingController();
 
   Map<String, dynamic>? _streakInfo;
+  Map<String, dynamic>? _userProfile;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -31,6 +32,12 @@ class _ProfileStudioScreenState extends State<ProfileStudioScreen> {
 
   Future<void> _loadData() async {
     final info = await StreakService.getStreakInfo();
+    try {
+      final profile = await ApiService.getMyProfile();
+      if (mounted) setState(() => _userProfile = profile);
+    } catch (e) {
+      debugPrint('Profile fetch error: $e');
+    }
     try {
       final persona = await ApiService.getPersona();
       if (mounted) {
@@ -162,6 +169,92 @@ class _ProfileStudioScreenState extends State<ProfileStudioScreen> {
                   ),
                   const SizedBox(height: 20),
 
+                  // 👑 Owner Master VIP Badge & Unrestricted Privileges
+                  if (_userProfile?['is_owner'] == true) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF831843), Color(0xFF581C87), Color(0xFF1E1B4B)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amberAccent, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withOpacity(0.2),
+                            blurRadius: 14,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Colors.amber,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.workspace_premium, color: Colors.black, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '👑 APP OWNER & MASTER CREATOR',
+                                      style: TextStyle(
+                                        color: Colors.amberAccent,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Lifetime VIP Status • Zero Paywalls',
+                                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.amberAccent),
+                                ),
+                                child: const Text(
+                                  'OWNER',
+                                  style: TextStyle(
+                                    color: Colors.amberAccent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(color: Colors.white24, height: 1),
+                          const SizedBox(height: 12),
+                          _buildOwnerRow(Icons.all_inclusive, 'Free Lifetime Access (No subscription needed)'),
+                          const SizedBox(height: 6),
+                          _buildOwnerRow(Icons.auto_stories, 'Master Library: Access ALL stories (Public & Private)'),
+                          const SizedBox(height: 6),
+                          _buildOwnerRow(Icons.people_alt, 'Character Lounge: Full access to EVERY character on platform'),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   // Writing Stats Banner
                   if (_streakInfo != null)
                     Card(
@@ -272,6 +365,21 @@ class _ProfileStudioScreenState extends State<ProfileStudioScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildOwnerRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.amberAccent, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 

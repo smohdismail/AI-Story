@@ -19,9 +19,23 @@ class UserResponse(BaseModel):
     id: UUID4
     username: str
     email: str
+    role: Optional[str] = "user"
+    is_owner: Optional[bool] = False
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+class UserProfileResponse(BaseModel):
+    id: UUID4
+    username: str
+    email: str
+    role: str
+    is_owner: bool
+    subscription_tier: str
+    is_subscription_active: bool
+    unlimited_access: bool
+    can_access_all_stories: bool
+    can_access_all_characters: bool
 
 class PersonaBase(BaseModel):
     name: str
