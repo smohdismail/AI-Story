@@ -1027,7 +1027,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
               } else if (choice == 'Download Image') {
                 _downloadImage();
               } else if (choice == 'Clear Chat') {
-                _clearChat();
+                _restartChat();
               } else if (choice.startsWith('Theme:')) {
                 setState(() => _currentTheme = choice.split(': ')[1]);
               }
