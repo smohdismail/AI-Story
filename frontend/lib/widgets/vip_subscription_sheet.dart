@@ -59,7 +59,7 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
       'plan_id': 'VIP_YEARLY',
       'name': 'Annual VIP',
       'price_inr': '₹1,699',
-      'price_usd': '\$49.99',
+      'price_usd': '\$44.99',
       'period': '/ year',
       'badge': 'SAVE 45% 👑',
       'is_popular': false,
