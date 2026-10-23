@@ -38,34 +38,70 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 import io
 from PIL import Image
 
+import boto3
+
+R2_ENDPOINT = os.getenv("R2_ENDPOINT", "https://302aa31fab85952c5291e43427a8303a.r2.cloudflarestorage.com")
+R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY_ID", "e12a14fed24f48ae6555736ad234e675")
+R2_SECRET_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "89db83d73d32e0c17b59724b1455ae6629a8aade4c568346eb888fd53ecb61fa")
+R2_BUCKET = os.getenv("R2_BUCKET_NAME", "ai-story-images")
+R2_PUBLIC_DOMAIN = os.getenv("R2_PUBLIC_DOMAIN", "https://pub-248c8a2f7b2d42529197615ecb9eb2d2.r2.dev")
+
+r2_client = None
+if R2_ENDPOINT and R2_ACCESS_KEY and R2_SECRET_KEY:
+    try:
+        r2_client = boto3.client(
+            "s3",
+            endpoint_url=R2_ENDPOINT,
+            aws_access_key_id=R2_ACCESS_KEY,
+            aws_secret_access_key=R2_SECRET_KEY,
+            region_name="auto"
+        )
+    except Exception as e:
+        print(f"Error initializing R2 client: {e}")
+
 def upload_avatar_to_supabase(base64_string: str) -> str:
-    if not supabase or not base64_string:
+    if not base64_string:
         return base64_string
     if base64_string.startswith("http"):
         return base64_string
     try:
-        # Generate random unique filename
         filename = f"{uuid.uuid4()}.webp"
-        image_bytes = base64.b64decode(base64_string)
+        raw = base64_string
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        image_bytes = base64.b64decode(raw)
         
         # Compress with Pillow
         image = Image.open(io.BytesIO(image_bytes))
         output_buffer = io.BytesIO()
-        image.save(output_buffer, format="WEBP", quality=80, method=6)
+        image.save(output_buffer, format="WEBP", quality=82, method=6)
         compressed_bytes = output_buffer.getvalue()
         
-        # Upload to supabase avatars bucket
-        supabase.storage.from_("avatars").upload(
-            path=filename,
-            file=compressed_bytes,
-            file_options={"content-type": "image/webp"}
-        )
-        
-        # Get public url
-        public_url = supabase.storage.from_("avatars").get_public_url(filename)
-        return public_url
+        # 1. Prefer Cloudflare R2 (10 GB free + $0 bandwidth forever)
+        if r2_client and R2_BUCKET:
+            try:
+                r2_client.put_object(
+                    Bucket=R2_BUCKET,
+                    Key=filename,
+                    Body=compressed_bytes,
+                    ContentType="image/webp"
+                )
+                return f"{R2_PUBLIC_DOMAIN}/{filename}"
+            except Exception as r2_err:
+                print(f"R2 upload error, falling back to Supabase: {r2_err}")
+
+        # 2. Fallback to Supabase Storage if R2 is not configured
+        if supabase:
+            supabase.storage.from_("avatars").upload(
+                path=filename,
+                file=compressed_bytes,
+                file_options={"content-type": "image/webp"}
+            )
+            return supabase.storage.from_("avatars").get_public_url(filename)
+            
+        return base64_string
     except Exception as e:
-        print(f"Error uploading avatar to supabase: {e}")
+        print(f"Error uploading image to storage: {e}")
         return base64_string
 
 async def get_story_chapter_chronicle(story_id: uuid.UUID, db: AsyncSession) -> str:
