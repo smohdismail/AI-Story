@@ -335,7 +335,14 @@ class ApiService {
       headers: headers,
     );
     if (response.statusCode != 200) {
-      throw Exception('Failed to delete story');
+      String detail = response.body;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded.containsKey('detail')) {
+          detail = decoded['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(detail.isNotEmpty ? detail : 'Failed to delete story (${response.statusCode})');
     }
   }
 
@@ -707,6 +714,39 @@ class ApiService {
     } else {
       throw Exception('Failed to load character');
     }
+  }
+
+  static Future<Map<String, dynamic>> uploadCharacterWallpaper(String characterId, String imageBase64) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/characters/$characterId/wallpapers'),
+      headers: headers,
+      body: jsonEncode({'image_base64': imageBase64}),
+    );
+    await _checkStatus(response);
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> deleteCharacterWallpaper(String characterId, String url) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/characters/$characterId/wallpapers'),
+      headers: headers,
+      body: jsonEncode({'url': url}),
+    );
+    await _checkStatus(response);
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> setActiveCharacterWallpaper(String characterId, String? url) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/characters/$characterId/active_wallpaper'),
+      headers: headers,
+      body: jsonEncode({'url': url}),
+    );
+    await _checkStatus(response);
+    return jsonDecode(response.body);
   }
 
   static Future<Map<String, dynamic>> getActiveGroupChat(String storyId) async {

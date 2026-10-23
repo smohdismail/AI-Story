@@ -35,6 +35,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   String _currentTheme = 'Dark Mode';
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _showScrollToBottom = false;
 
   final List<String> _quickSparks = [
     'Who caught your eye tonight? 😏',
@@ -49,6 +50,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadChat();
     _loadMembers();
   }
@@ -597,8 +599,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   @override
   void dispose() {
     _msgController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final isScrolledUp = (maxScroll - currentScroll) > 150;
+    if (isScrolledUp != _showScrollToBottom) {
+      setState(() {
+        _showScrollToBottom = isScrolledUp;
+      });
+    }
   }
 
   @override
@@ -770,8 +785,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                             ],
                           ),
                         )
-                      : ListView.builder(
-                          controller: _scrollController,
+                      : Stack(
+                          children: [
+                            ListView.builder(
+                              controller: _scrollController,
                           itemCount: _messages.length,
                           itemBuilder: (context, index) {
                             final msg = _messages[index];
@@ -909,6 +926,40 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                             );
                           },
                         ),
+                        if (_showScrollToBottom)
+                          Positioned(
+                            right: 16,
+                            bottom: 12,
+                            child: AnimatedOpacity(
+                              opacity: _showScrollToBottom ? 1.0 : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              child: ClipOval(
+                                child: Material(
+                                  color: Colors.black.withValues(alpha: 0.82),
+                                  child: InkWell(
+                                    onTap: _scrollToBottom,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(9),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.amber.withValues(alpha: 0.8), width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.amber.withValues(alpha: 0.4),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(Icons.keyboard_double_arrow_down_rounded, color: Colors.amber, size: 24),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
             ),
 
             // Typing indicator when characters are responding

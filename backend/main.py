@@ -4,7 +4,7 @@ from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete, or_, and_, text, func, desc, asc, not_
+from sqlalchemy import delete, update, or_, and_, text, func, desc, asc, not_
 from sqlalchemy.orm import selectinload
 from contextlib import asynccontextmanager
 import uuid
@@ -319,6 +319,8 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS passion_level INTEGER DEFAULT 50;",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS vulnerability_level INTEGER DEFAULT 30;",
         "ALTER TABLE characters ADD COLUMN IF NOT EXISTS romantic_status VARCHAR DEFAULT 'Guarded';",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS background_base64 TEXT;",
+        "ALTER TABLE characters ADD COLUMN IF NOT EXISTS wallpapers_json TEXT DEFAULT '[]';", 
     ]
     for alter_stmt in safe_alters:
         try:
@@ -803,42 +805,101 @@ async def delete_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
         if not story:
             raise HTTPException(status_code=404, detail="Story not found")
 
-    # 1. Delete group chat messages and group chat sessions for this story
-    sessions_res = await db.execute(select(models.GroupChatSession.id).where(models.GroupChatSession.story_id == story_id))
-    session_ids = sessions_res.scalars().all()
-    if session_ids:
-        await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.session_id.in_(session_ids)))
-        await db.execute(delete(models.GroupChatSession).where(models.GroupChatSession.story_id == story_id))
-    
-    # 2. Delete scene illustrations
-    await db.execute(delete(models.SceneIllustration).where(models.SceneIllustration.story_id == story_id))
+    try:
+        # Fetch character IDs and chapter IDs
+        chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
+        char_ids = list(chars_res.scalars().all())
+        
+        chaps_res = await db.execute(select(models.Chapter.id).where(models.Chapter.story_id == story_id))
+        chap_ids = list(chaps_res.scalars().all())
 
-    # 3. Delete character posts and comments
-    posts_res = await db.execute(select(models.CharacterPost.id).where(models.CharacterPost.story_id == story_id))
-    post_ids = posts_res.scalars().all()
-    if post_ids:
-        await db.execute(delete(models.CharacterPostComment).where(models.CharacterPostComment.post_id.in_(post_ids)))
+        # 1. Delete group chat messages and group chat sessions for this story
+        sessions_res = await db.execute(select(models.GroupChatSession.id).where(models.GroupChatSession.story_id == story_id))
+        session_ids = list(sessions_res.scalars().all())
+        if session_ids:
+            await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.session_id.in_(session_ids)))
+        if char_ids:
+            await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.speaker_id.in_(char_ids)))
+        await db.execute(delete(models.GroupChatSession).where(models.GroupChatSession.story_id == story_id))
+        
+        # 2. Delete scene illustrations
+        if chap_ids:
+            await db.execute(delete(models.SceneIllustration).where(or_(models.SceneIllustration.story_id == story_id, models.SceneIllustration.chapter_id.in_(chap_ids))))
+        else:
+            await db.execute(delete(models.SceneIllustration).where(models.SceneIllustration.story_id == story_id))
+
+        # 3. Delete character posts and comments
+        if char_ids:
+            posts_res = await db.execute(select(models.CharacterPost.id).where(or_(models.CharacterPost.story_id == story_id, models.CharacterPost.character_id.in_(char_ids))))
+        else:
+            posts_res = await db.execute(select(models.CharacterPost.id).where(models.CharacterPost.story_id == story_id))
+        post_ids = list(posts_res.scalars().all())
+        if post_ids:
+            await db.execute(delete(models.CharacterPostComment).where(models.CharacterPostComment.post_id.in_(post_ids)))
+            await db.execute(delete(models.CharacterPost).where(models.CharacterPost.id.in_(post_ids)))
         await db.execute(delete(models.CharacterPost).where(models.CharacterPost.story_id == story_id))
 
-    # 4. Delete character chats, unlocks, relationships, characters
-    chars_res = await db.execute(select(models.Character.id).where(models.Character.story_id == story_id))
-    char_ids = chars_res.scalars().all()
-    if char_ids:
-        await db.execute(delete(models.CharacterUnlock).where(models.CharacterUnlock.character_id.in_(char_ids)))
-        await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id.in_(char_ids)))
-    await db.execute(delete(models.CharacterRelationship).where(models.CharacterRelationship.story_id == story_id))
-    await db.execute(delete(models.Character).where(models.Character.story_id == story_id))
+        # 4. Delete story-linked & character-linked interactive records
+        if char_ids:
+            await db.execute(delete(models.CharacterDiary).where(or_(models.CharacterDiary.story_id == story_id, models.CharacterDiary.character_id.in_(char_ids))))
+            await db.execute(delete(models.AutonomousGossip).where(or_(models.AutonomousGossip.story_id == story_id, models.AutonomousGossip.character1_id.in_(char_ids), models.AutonomousGossip.character2_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterRoomInspection).where(or_(models.CharacterRoomInspection.story_id == story_id, models.CharacterRoomInspection.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterPhotoboothStrip).where(or_(models.CharacterPhotoboothStrip.story_id == story_id, models.CharacterPhotoboothStrip.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterGiftTryOn).where(or_(models.CharacterGiftTryOn.story_id == story_id, models.CharacterGiftTryOn.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterVhsMemoryClip).where(or_(models.CharacterVhsMemoryClip.story_id == story_id, models.CharacterVhsMemoryClip.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterDailyStory).where(or_(models.CharacterDailyStory.story_id == story_id, models.CharacterDailyStory.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterCandidPhoto).where(or_(models.CharacterCandidPhoto.story_id == story_id, models.CharacterCandidPhoto.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterDomesticBlissVignette).where(or_(models.CharacterDomesticBlissVignette.story_id == story_id, models.CharacterDomesticBlissVignette.character_id.in_(char_ids))))
+            await db.execute(delete(models.StoryRivalryConfrontation).where(or_(models.StoryRivalryConfrontation.story_id == story_id, models.StoryRivalryConfrontation.primary_character_id.in_(char_ids), models.StoryRivalryConfrontation.rival_character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterSharedDream).where(or_(models.CharacterSharedDream.story_id == story_id, models.CharacterSharedDream.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterMailboxLetter).where(or_(models.CharacterMailboxLetter.story_id == story_id, models.CharacterMailboxLetter.character_id.in_(char_ids))))
+            await db.execute(delete(models.CharacterVoicemail).where(or_(models.CharacterVoicemail.story_id == story_id, models.CharacterVoicemail.character_id.in_(char_ids))))
+            await db.execute(delete(models.StoryNarrativeMemory).where(or_(models.StoryNarrativeMemory.story_id == story_id, models.StoryNarrativeMemory.character_id.in_(char_ids))))
+            await db.execute(delete(models.UserCharacterProgress).where(models.UserCharacterProgress.character_id.in_(char_ids)))
+            await db.execute(delete(models.CharacterUnlock).where(models.CharacterUnlock.character_id.in_(char_ids)))
+            await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id.in_(char_ids)))
+            await db.execute(delete(models.CharacterRelationship).where(or_(models.CharacterRelationship.story_id == story_id, models.CharacterRelationship.from_character_id.in_(char_ids), models.CharacterRelationship.to_character_id.in_(char_ids))))
+        else:
+            await db.execute(delete(models.CharacterDiary).where(models.CharacterDiary.story_id == story_id))
+            await db.execute(delete(models.AutonomousGossip).where(models.AutonomousGossip.story_id == story_id))
+            await db.execute(delete(models.CharacterRoomInspection).where(models.CharacterRoomInspection.story_id == story_id))
+            await db.execute(delete(models.CharacterPhotoboothStrip).where(models.CharacterPhotoboothStrip.story_id == story_id))
+            await db.execute(delete(models.CharacterGiftTryOn).where(models.CharacterGiftTryOn.story_id == story_id))
+            await db.execute(delete(models.CharacterVhsMemoryClip).where(models.CharacterVhsMemoryClip.story_id == story_id))
+            await db.execute(delete(models.CharacterDailyStory).where(models.CharacterDailyStory.story_id == story_id))
+            await db.execute(delete(models.CharacterCandidPhoto).where(models.CharacterCandidPhoto.story_id == story_id))
+            await db.execute(delete(models.CharacterDomesticBlissVignette).where(models.CharacterDomesticBlissVignette.story_id == story_id))
+            await db.execute(delete(models.StoryRivalryConfrontation).where(models.StoryRivalryConfrontation.story_id == story_id))
+            await db.execute(delete(models.CharacterSharedDream).where(models.CharacterSharedDream.story_id == story_id))
+            await db.execute(delete(models.CharacterMailboxLetter).where(models.CharacterMailboxLetter.story_id == story_id))
+            await db.execute(delete(models.CharacterVoicemail).where(models.CharacterVoicemail.story_id == story_id))
+            await db.execute(delete(models.StoryNarrativeMemory).where(models.StoryNarrativeMemory.story_id == story_id))
+            await db.execute(delete(models.CharacterRelationship).where(models.CharacterRelationship.story_id == story_id))
 
-    # 5. Delete world locations, public story likes, chapters, world items
-    await db.execute(delete(models.WorldLocation).where(models.WorldLocation.story_id == story_id))
-    await db.execute(delete(models.PublicStoryLike).where(models.PublicStoryLike.story_id == story_id))
-    await db.execute(delete(models.Chapter).where(models.Chapter.story_id == story_id))
-    await db.execute(delete(models.WorldItem).where(models.WorldItem.story_id == story_id))
-    
-    # 6. Delete story itself
-    await db.delete(story)
-    await db.commit()
-    return {"status": "success", "message": "Story deleted"}
+        await db.execute(delete(models.Character).where(models.Character.story_id == story_id))
+
+        # 6. Delete chapter reactions and break chapter hierarchy before deleting chapters
+        if chap_ids:
+            await db.execute(delete(models.ChapterReaction).where(models.ChapterReaction.chapter_id.in_(chap_ids)))
+            await db.execute(update(models.Chapter).where(or_(models.Chapter.story_id == story_id, models.Chapter.parent_chapter_id.in_(chap_ids))).values(parent_chapter_id=None))
+            await db.flush()
+            
+        await db.execute(delete(models.Chapter).where(models.Chapter.story_id == story_id))
+
+        # 7. World locations, public story likes, world items
+        await db.execute(delete(models.WorldLocation).where(models.WorldLocation.story_id == story_id))
+        await db.execute(delete(models.PublicStoryLike).where(models.PublicStoryLike.story_id == story_id))
+        await db.execute(delete(models.WorldItem).where(models.WorldItem.story_id == story_id))
+        
+        # 8. Delete story itself
+        await db.delete(story)
+        await db.commit()
+        return {"status": "success", "message": "Story deleted"}
+    except Exception as e:
+        await db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to delete story: {str(e)}")
 
 @app.post("/api/v1/stories/{story_id}/illustrate_scene", response_model=schemas.SceneIllustrationResponse)
 async def illustrate_scene(story_id: uuid.UUID, request: schemas.IllustrateSceneRequest, db: AsyncSession = Depends(get_db)):
@@ -995,6 +1056,8 @@ async def fork_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
 async def create_character(story_id: uuid.UUID, character: schemas.CharacterCreate, db: AsyncSession = Depends(get_db)):
     if character.avatar_base64:
         character.avatar_base64 = upload_avatar_to_supabase(character.avatar_base64)
+    if character.background_base64:
+        character.background_base64 = upload_avatar_to_supabase(character.background_base64)
     db_character = models.Character(**character.model_dump(), story_id=story_id)
     db.add(db_character)
     await db.commit()
@@ -1047,6 +1110,8 @@ async def update_character(story_id: uuid.UUID, character_id: uuid.UUID, charact
     update_data = character_update.model_dump(exclude_unset=True)
     if "avatar_base64" in update_data and update_data["avatar_base64"]:
         update_data["avatar_base64"] = upload_avatar_to_supabase(update_data["avatar_base64"])
+    if "background_base64" in update_data and update_data["background_base64"]:
+        update_data["background_base64"] = upload_avatar_to_supabase(update_data["background_base64"])
     for key, value in update_data.items():
         setattr(db_char, key, value)
         
@@ -1060,6 +1125,29 @@ async def delete_character(story_id: uuid.UUID, character_id: uuid.UUID, db: Asy
     db_char = result.scalars().first()
     if not db_char:
         raise HTTPException(status_code=404, detail="Character not found")
+        
+    # Cascade delete all child records of this character
+    await db.execute(delete(models.CharacterDiary).where(models.CharacterDiary.character_id == character_id))
+    await db.execute(delete(models.CharacterRoomInspection).where(models.CharacterRoomInspection.character_id == character_id))
+    await db.execute(delete(models.CharacterPhotoboothStrip).where(models.CharacterPhotoboothStrip.character_id == character_id))
+    await db.execute(delete(models.CharacterGiftTryOn).where(models.CharacterGiftTryOn.character_id == character_id))
+    await db.execute(delete(models.CharacterVhsMemoryClip).where(models.CharacterVhsMemoryClip.character_id == character_id))
+    await db.execute(delete(models.CharacterDailyStory).where(models.CharacterDailyStory.character_id == character_id))
+    await db.execute(delete(models.CharacterCandidPhoto).where(models.CharacterCandidPhoto.character_id == character_id))
+    await db.execute(delete(models.CharacterDomesticBlissVignette).where(models.CharacterDomesticBlissVignette.character_id == character_id))
+    await db.execute(delete(models.StoryRivalryConfrontation).where(or_(models.StoryRivalryConfrontation.primary_character_id == character_id, models.StoryRivalryConfrontation.rival_character_id == character_id)))
+    await db.execute(delete(models.AutonomousGossip).where(or_(models.AutonomousGossip.character1_id == character_id, models.AutonomousGossip.character2_id == character_id)))
+    await db.execute(delete(models.CharacterSharedDream).where(models.CharacterSharedDream.character_id == character_id))
+    await db.execute(delete(models.CharacterMailboxLetter).where(models.CharacterMailboxLetter.character_id == character_id))
+    await db.execute(delete(models.CharacterVoicemail).where(models.CharacterVoicemail.character_id == character_id))
+    await db.execute(delete(models.StoryNarrativeMemory).where(models.StoryNarrativeMemory.character_id == character_id))
+    await db.execute(delete(models.CharacterUnlock).where(models.CharacterUnlock.character_id == character_id))
+    await db.execute(delete(models.UserCharacterProgress).where(models.UserCharacterProgress.character_id == character_id))
+    await db.execute(delete(models.CharacterChat).where(models.CharacterChat.character_id == character_id))
+    await db.execute(delete(models.GroupChatMessage).where(models.GroupChatMessage.speaker_id == character_id))
+    await db.execute(delete(models.CharacterRelationship).where(or_(models.CharacterRelationship.from_character_id == character_id, models.CharacterRelationship.to_character_id == character_id)))
+    await db.execute(delete(models.CharacterPost).where(models.CharacterPost.character_id == character_id))
+
     await db.delete(db_char)
     await db.commit()
     return {"status": "success", "message": "Character deleted"}
@@ -2583,6 +2671,92 @@ async def clear_group_chat(session_id: uuid.UUID, db: AsyncSession = Depends(get
     await db.commit()
     return {"status": "cleared"}
 
+
+
+# ==========================================
+# 🖼️ CHARACTER CHAT WALLPAPERS & BACKGROUNDS
+# ==========================================
+@app.post("/api/v1/characters/{character_id}/wallpapers")
+async def upload_character_wallpaper(
+    character_id: uuid.UUID,
+    image_base64: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    uploaded_url = upload_avatar_to_supabase(image_base64)
+    
+    current_wallpapers = []
+    if char.wallpapers_json:
+        try:
+            current_wallpapers = json.loads(char.wallpapers_json)
+            if not isinstance(current_wallpapers, list):
+                current_wallpapers = []
+        except Exception:
+            current_wallpapers = []
+            
+    if uploaded_url not in current_wallpapers:
+        current_wallpapers.insert(0, uploaded_url)
+        
+    char.wallpapers_json = json.dumps(current_wallpapers)
+    char.background_base64 = uploaded_url
+    await db.commit()
+    await db.refresh(char)
+    return {
+        "status": "success",
+        "url": uploaded_url,
+        "active_wallpaper": char.background_base64,
+        "wallpapers": current_wallpapers
+    }
+
+@app.delete("/api/v1/characters/{character_id}/wallpapers")
+async def delete_character_wallpaper(
+    character_id: uuid.UUID,
+    url: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    current_wallpapers = []
+    if char.wallpapers_json:
+        try:
+            current_wallpapers = json.loads(char.wallpapers_json)
+        except Exception:
+            current_wallpapers = []
+            
+    current_wallpapers = [w for w in current_wallpapers if w != url]
+    char.wallpapers_json = json.dumps(current_wallpapers)
+    if char.background_base64 == url:
+        char.background_base64 = current_wallpapers[0] if current_wallpapers else char.avatar_base64
+    await db.commit()
+    await db.refresh(char)
+    return {
+        "status": "success",
+        "active_wallpaper": char.background_base64,
+        "wallpapers": current_wallpapers
+    }
+
+@app.put("/api/v1/characters/{character_id}/active_wallpaper")
+async def set_active_character_wallpaper(
+    character_id: uuid.UUID,
+    url: Optional[str] = Body(None, embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    char = await db.get(models.Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+        
+    char.background_base64 = url if url else char.avatar_base64
+    await db.commit()
+    await db.refresh(char)
+    return {
+        "status": "success",
+        "active_wallpaper": char.background_base64
+    }
 
 @app.get("/api/v1/characters/{character_id}", response_model=schemas.CharacterResponse)
 async def get_character(

@@ -8,7 +8,9 @@ import 'package:translator/translator.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
+import '../widgets/image_crop_dialog.dart';
 import '../pdf_export.dart';
 import '../utils/name_generator.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -1800,19 +1802,32 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                     final picker = ImagePicker();
                                     final pickedFile = await picker.pickImage(
                                       source: ImageSource.gallery,
-                                      imageQuality: 90,
-                                      maxWidth: 1080,
-                                      maxHeight: 1080,
+                                      imageQuality: 92,
+                                      maxWidth: 1920,
+                                      maxHeight: 2560,
                                     );
                                     if (pickedFile != null) {
                                       final bytes = await pickedFile.readAsBytes();
-                                      final base64Image = base64Encode(bytes);
-                                      await ApiService.updateCharacter(
-                                        widget.storyId,
-                                        char['id'],
-                                        {'avatar_base64': base64Image},
+                                      final originalBase64 = base64Encode(bytes);
+                                      if (!mounted) return;
+                                      final cropResult = await ImageCropDialog.show(
+                                        context,
+                                        imageBytes: bytes,
+                                        originalBase64: originalBase64,
                                       );
-                                      _loadData();
+                                      if (cropResult != null) {
+                                        await ApiService.updateCharacter(
+                                          widget.storyId,
+                                          char['id'],
+                                          {
+                                            'avatar_base64': cropResult.croppedAvatarBase64,
+                                            'background_base64': cropResult.originalImageBase64,
+                                          },
+                                        );
+                                        final prefs = await SharedPreferences.getInstance();
+                                        await prefs.setString('active_bg_${char['id']}', cropResult.originalImageBase64);
+                                        _loadData();
+                                      }
                                     }
                                   },
                                   child: Container(
@@ -1996,7 +2011,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                       context.push('/character_chat', extra: {
                                         'characterId': char['id'],
                                         'characterName': charName,
-                                        'backgroundImage': char['avatar_base64'],
+                                        'backgroundImage': char['background_base64'] ?? char['avatar_base64'],
                                       });
                                     },
                                     icon: const Icon(Icons.chat_bubble_outline, size: 15),
@@ -2635,7 +2650,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     final appearanceController = TextEditingController();
     final relationshipController = TextEditingController();
     final dialogueStyleController = TextEditingController();
-    String? base64Image;
+    String? base64Avatar;
+    String? fullBackgroundBase64;
     bool isUploading = false;
 
     showDialog(
@@ -2681,73 +2697,315 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       ),
                     ),
                   ),
-                  if (base64Image != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: CircleAvatar(
-                        radius: 40,
-                        backgroundImage: MemoryImage(base64Decode(base64Image!)),
-                      ),
+                  // 📸 TWO-IMAGE UPLOADER: 1. Chat Wallpaper (Full) + 2. Avatar (Cropped)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white12),
                     ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: isUploading ? null : () async {
-                          setStateDialog(() => isUploading = true);
-                          try {
-                            final picker = ImagePicker();
-                            final XFile? image = await picker.pickImage(
-                              source: ImageSource.gallery,
-                              imageQuality: 90,
-                              maxWidth: 1080,
-                              maxHeight: 1080,
-                            );
-                            if (image != null) {
-                              final bytes = await image.readAsBytes();
-                              setStateDialog(() {
-                                base64Image = base64Encode(bytes);
-                              });
-                            }
-                          } catch (e) {
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e')));
-                          } finally {
-                            setStateDialog(() => isUploading = false);
-                          }
-                        },
-                        icon: isUploading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload),
-                        label: const Text('Upload'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: isUploading ? null : () async {
-                          if (appearanceController.text.isEmpty && nameController.text.isEmpty) {
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
-                            return;
-                          }
-                          
-                          final confirm = await _confirmCreditUsage(context, 'generate a character avatar');
-                          if (!confirm) return;
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Chat Wallpaper (Full Uncropped Image)
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.wallpaper, size: 13, color: Colors.greenAccent),
+                                      SizedBox(width: 4),
+                                      Text('Chat Background', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text('Uncropped Full Image', style: TextStyle(color: Colors.white54, fontSize: 9.5)),
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: isUploading ? null : () async {
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          setStateDialog(() => fullBackgroundBase64 = origB64);
+                                          // If avatar is not yet set, offer to crop avatar from this background
+                                          if (base64Avatar == null) {
+                                            final cropRes = await ImageCropDialog.show(
+                                              context,
+                                              imageBytes: bytes,
+                                              originalBase64: origB64,
+                                            );
+                                            if (cropRes != null) {
+                                              setStateDialog(() => base64Avatar = cropRes.croppedAvatarBase64);
+                                            } else {
+                                              setStateDialog(() => base64Avatar = origB64);
+                                            }
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 68,
+                                      height: 92,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black38,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: fullBackgroundBase64 != null ? Colors.greenAccent : Colors.white24,
+                                          width: fullBackgroundBase64 != null ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: fullBackgroundBase64 != null
+                                          ? ClipRRect(
+                                              borderRadius: BorderRadius.circular(7),
+                                              child: Image.memory(
+                                                base64Decode(fullBackgroundBase64!.contains(',') ? fullBackgroundBase64!.split(',').last : fullBackgroundBase64!),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            )
+                                          : const Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.add_photo_alternate, color: Colors.white54, size: 24),
+                                                SizedBox(height: 4),
+                                                Text('Upload BG', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                                              ],
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  OutlinedButton(
+                                    onPressed: isUploading ? null : () async {
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          setStateDialog(() => fullBackgroundBase64 = origB64);
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      visualDensity: VisualDensity.compact,
+                                      side: BorderSide(color: fullBackgroundBase64 != null ? Colors.greenAccent : Colors.white24),
+                                    ),
+                                    child: Text(
+                                      fullBackgroundBase64 != null ? 'Change BG' : 'Upload BG',
+                                      style: TextStyle(fontSize: 10.5, color: fullBackgroundBase64 != null ? Colors.greenAccent : Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                          setStateDialog(() => isUploading = true);
-                          try {
-                            String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
-                            final res = await ApiService.generateImage(prompt);
-                            if (res['base64_image'] != null) {
-                              setStateDialog(() {
-                                base64Image = res['base64_image'];
-                              });
-                            }
-                          } catch (e) {
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
-                          } finally {
-                            setStateDialog(() => isUploading = false);
-                          }
-                        },
-                        icon: const Icon(Icons.auto_awesome, color: Colors.purple),
-                        label: const Text('AI Generate'),
-                      ),
-                    ],
+                            Container(width: 1, height: 120, color: Colors.white12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+
+                            // 2. Character Avatar (Cropped Circular Headshot)
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.face, size: 13, color: Colors.pinkAccent),
+                                      SizedBox(width: 4),
+                                      Text('Character Avatar', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text('Cropped Headshot', style: TextStyle(color: Colors.white54, fontSize: 9.5)),
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: isUploading ? null : () async {
+                                      // If we have a background already, open crop dialog on it directly
+                                      if (fullBackgroundBase64 != null) {
+                                        final clean = fullBackgroundBase64!.contains(',') ? fullBackgroundBase64!.split(',').last : fullBackgroundBase64!;
+                                        final bytes = base64Decode(clean);
+                                        final cropRes = await ImageCropDialog.show(
+                                          context,
+                                          imageBytes: bytes,
+                                          originalBase64: fullBackgroundBase64!,
+                                        );
+                                        if (cropRes != null) {
+                                          setStateDialog(() => base64Avatar = cropRes.croppedAvatarBase64);
+                                        }
+                                        return;
+                                      }
+                                      // Otherwise pick from gallery
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          final cropRes = await ImageCropDialog.show(
+                                            context,
+                                            imageBytes: bytes,
+                                            originalBase64: origB64,
+                                          );
+                                          if (cropRes != null) {
+                                            setStateDialog(() {
+                                              base64Avatar = cropRes.croppedAvatarBase64;
+                                              fullBackgroundBase64 ??= cropRes.originalImageBase64;
+                                            });
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 68,
+                                      height: 92,
+                                      alignment: Alignment.center,
+                                      child: CircleAvatar(
+                                        radius: 34,
+                                        backgroundColor: Colors.black38,
+                                        backgroundImage: base64Avatar != null
+                                            ? MemoryImage(base64Decode(base64Avatar!.contains(',') ? base64Avatar!.split(',').last : base64Avatar!))
+                                            : null,
+                                        child: base64Avatar == null
+                                            ? const Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.crop, color: Colors.pinkAccent, size: 22),
+                                                  SizedBox(height: 2),
+                                                  Text('Avatar', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                                                ],
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  OutlinedButton(
+                                    onPressed: isUploading ? null : () async {
+                                      // Upload separate image or crop from BG
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          final cropRes = await ImageCropDialog.show(
+                                            context,
+                                            imageBytes: bytes,
+                                            originalBase64: origB64,
+                                          );
+                                          if (cropRes != null) {
+                                            setStateDialog(() => base64Avatar = cropRes.croppedAvatarBase64);
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      visualDensity: VisualDensity.compact,
+                                      side: BorderSide(color: base64Avatar != null ? Colors.pinkAccent : Colors.white24),
+                                    ),
+                                    child: Text(
+                                      base64Avatar != null ? 'Change Avatar' : 'Upload Avatar',
+                                      style: TextStyle(fontSize: 10.5, color: base64Avatar != null ? Colors.pinkAccent : Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: OutlinedButton.icon(
+                            onPressed: isUploading ? null : () async {
+                              if (appearanceController.text.isEmpty && nameController.text.isEmpty) {
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
+                                return;
+                              }
+                              final confirm = await _confirmCreditUsage(context, 'generate a character avatar');
+                              if (!confirm) return;
+
+                              setStateDialog(() => isUploading = true);
+                              try {
+                                String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
+                                final res = await ApiService.generateImage(prompt);
+                                if (res['base64_image'] != null) {
+                                  final genB64 = res['base64_image'];
+                                  final bytes = base64Decode(genB64);
+                                  final cropRes = await ImageCropDialog.show(
+                                    context,
+                                    imageBytes: bytes,
+                                    originalBase64: genB64,
+                                  );
+                                  setStateDialog(() {
+                                    fullBackgroundBase64 = genB64;
+                                    base64Avatar = cropRes?.croppedAvatarBase64 ?? genB64;
+                                  });
+                                }
+                              } catch (e) {
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
+                              } finally {
+                                setStateDialog(() => isUploading = false);
+                              }
+                            },
+                            icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 14),
+                            label: const Text('AI Generate Both', style: TextStyle(color: Colors.purpleAccent, fontSize: 11)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.purpleAccent),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -2789,7 +3047,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 onPressed: () async {
                   if (nameController.text.isEmpty) return;
                   try {
-                    await ApiService.createCharacter(widget.storyId, {
+                    final created = await ApiService.createCharacter(widget.storyId, {
                       'name': nameController.text,
                       'role': roleController.text,
                       'gender': genderController.text,
@@ -2797,8 +3055,16 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       'appearance': appearanceController.text,
                       'relationship_status': relationshipController.text,
                       'dialogue_style': dialogueStyleController.text,
-                      if (base64Image != null) 'avatar_base64': base64Image,
+                      if (base64Avatar != null || fullBackgroundBase64 != null)
+                        'avatar_base64': base64Avatar ?? fullBackgroundBase64,
+                      if (fullBackgroundBase64 != null || base64Avatar != null)
+                        'background_base64': fullBackgroundBase64 ?? base64Avatar,
                     });
+                    if (created['id'] != null && (fullBackgroundBase64 != null || base64Avatar != null)) {
+                      final prefs = await SharedPreferences.getInstance();
+                      final bgToSave = fullBackgroundBase64 ?? base64Avatar!;
+                      await prefs.setString('active_bg_${created['id']}', bgToSave);
+                    }
                     if (mounted) Navigator.pop(context);
                     _loadData();
                   } catch (e) {
@@ -2822,7 +3088,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     final appearanceController = TextEditingController(text: char['appearance'] ?? '');
     final relationshipController = TextEditingController(text: char['relationship_status'] ?? '');
     final dialogueStyleController = TextEditingController(text: char['dialogue_style'] ?? '');
-    String? base64Image = char['avatar_base64'];
+    String? base64Avatar = char['avatar_base64'];
+    String? fullBackgroundBase64 = char['background_base64'];
     bool isUploading = false;
 
     showDialog(
@@ -2835,75 +3102,302 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (base64Image != null && base64Image!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: CircleAvatar(
-                        radius: 40,
-                        backgroundImage: (base64Image!.startsWith('http')
-                            ? NetworkImage(base64Image!)
-                            : MemoryImage(base64Decode(base64Image!))) as ImageProvider,
-                      ),
+                  // 📸 TWO-IMAGE UPLOADER: 1. Chat Wallpaper (Full) + 2. Avatar (Cropped)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white12),
                     ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: isUploading ? null : () async {
-                          setStateDialog(() => isUploading = true);
-                          try {
-                            final picker = ImagePicker();
-                            final XFile? image = await picker.pickImage(
-                              source: ImageSource.gallery,
-                              imageQuality: 90,
-                              maxWidth: 1080,
-                              maxHeight: 1080,
-                            );
-                            if (image != null) {
-                              final bytes = await image.readAsBytes();
-                              setStateDialog(() {
-                                base64Image = base64Encode(bytes);
-                              });
-                            }
-                          } catch (e) {
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e')));
-                          } finally {
-                            setStateDialog(() => isUploading = false);
-                          }
-                        },
-                        icon: isUploading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload),
-                        label: const Text('Upload'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: isUploading ? null : () async {
-                          if (appearanceController.text.isEmpty && nameController.text.isEmpty) {
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
-                            return;
-                          }
-                          
-                          final confirm = await _confirmCreditUsage(context, 'generate a character avatar');
-                          if (!confirm) return;
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Chat Wallpaper (Full Uncropped Image)
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.wallpaper, size: 13, color: Colors.greenAccent),
+                                      SizedBox(width: 4),
+                                      Text('Chat Background', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text('Uncropped Full Image', style: TextStyle(color: Colors.white54, fontSize: 9.5)),
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: isUploading ? null : () async {
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          setStateDialog(() => fullBackgroundBase64 = origB64);
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 68,
+                                      height: 92,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black38,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: fullBackgroundBase64 != null ? Colors.greenAccent : Colors.white24,
+                                          width: fullBackgroundBase64 != null ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: fullBackgroundBase64 != null
+                                          ? ClipRRect(
+                                              borderRadius: BorderRadius.circular(7),
+                                              child: (fullBackgroundBase64!.startsWith('http')
+                                                  ? Image.network(fullBackgroundBase64!, fit: BoxFit.cover)
+                                                  : Image.memory(
+                                                      base64Decode(fullBackgroundBase64!.contains(',') ? fullBackgroundBase64!.split(',').last : fullBackgroundBase64!),
+                                                      fit: BoxFit.cover,
+                                                    )),
+                                            )
+                                          : const Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.add_photo_alternate, color: Colors.white54, size: 24),
+                                                SizedBox(height: 4),
+                                                Text('Upload BG', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                                              ],
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  OutlinedButton(
+                                    onPressed: isUploading ? null : () async {
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          setStateDialog(() => fullBackgroundBase64 = origB64);
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      visualDensity: VisualDensity.compact,
+                                      side: BorderSide(color: fullBackgroundBase64 != null ? Colors.greenAccent : Colors.white24),
+                                    ),
+                                    child: Text(
+                                      fullBackgroundBase64 != null ? 'Change BG' : 'Upload BG',
+                                      style: TextStyle(fontSize: 10.5, color: fullBackgroundBase64 != null ? Colors.greenAccent : Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                          setStateDialog(() => isUploading = true);
-                          try {
-                            String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
-                            final res = await ApiService.generateImage(prompt);
-                            if (res['base64_image'] != null) {
-                              setStateDialog(() {
-                                base64Image = res['base64_image'];
-                              });
-                            }
-                          } catch (e) {
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
-                          } finally {
-                            setStateDialog(() => isUploading = false);
-                          }
-                        },
-                        icon: const Icon(Icons.auto_awesome, color: Colors.purple),
-                        label: const Text('AI Generate'),
-                      ),
-                    ],
+                            Container(width: 1, height: 120, color: Colors.white12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+
+                            // 2. Character Avatar (Cropped Circular Headshot)
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.face, size: 13, color: Colors.pinkAccent),
+                                      SizedBox(width: 4),
+                                      Text('Character Avatar', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text('Cropped Headshot', style: TextStyle(color: Colors.white54, fontSize: 9.5)),
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: isUploading ? null : () async {
+                                      // If we have background, crop from background directly
+                                      if (fullBackgroundBase64 != null && !fullBackgroundBase64!.startsWith('http')) {
+                                        final clean = fullBackgroundBase64!.contains(',') ? fullBackgroundBase64!.split(',').last : fullBackgroundBase64!;
+                                        final bytes = base64Decode(clean);
+                                        final cropRes = await ImageCropDialog.show(
+                                          context,
+                                          imageBytes: bytes,
+                                          originalBase64: fullBackgroundBase64!,
+                                        );
+                                        if (cropRes != null) {
+                                          setStateDialog(() => base64Avatar = cropRes.croppedAvatarBase64);
+                                        }
+                                        return;
+                                      }
+                                      // Otherwise pick from gallery
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          final cropRes = await ImageCropDialog.show(
+                                            context,
+                                            imageBytes: bytes,
+                                            originalBase64: origB64,
+                                          );
+                                          if (cropRes != null) {
+                                            setStateDialog(() => base64Avatar = cropRes.croppedAvatarBase64);
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 68,
+                                      height: 92,
+                                      alignment: Alignment.center,
+                                      child: CircleAvatar(
+                                        radius: 34,
+                                        backgroundColor: Colors.black38,
+                                        backgroundImage: base64Avatar != null
+                                            ? (base64Avatar!.startsWith('http')
+                                                ? NetworkImage(base64Avatar!)
+                                                : MemoryImage(base64Decode(base64Avatar!.contains(',') ? base64Avatar!.split(',').last : base64Avatar!))) as ImageProvider
+                                            : null,
+                                        child: base64Avatar == null
+                                            ? const Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.crop, color: Colors.pinkAccent, size: 22),
+                                                  SizedBox(height: 2),
+                                                  Text('Avatar', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                                                ],
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  OutlinedButton(
+                                    onPressed: isUploading ? null : () async {
+                                      setStateDialog(() => isUploading = true);
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 92,
+                                          maxWidth: 1920,
+                                          maxHeight: 2560,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          final origB64 = base64Encode(bytes);
+                                          final cropRes = await ImageCropDialog.show(
+                                            context,
+                                            imageBytes: bytes,
+                                            originalBase64: origB64,
+                                          );
+                                          if (cropRes != null) {
+                                            setStateDialog(() => base64Avatar = cropRes.croppedAvatarBase64);
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                      } finally {
+                                        setStateDialog(() => isUploading = false);
+                                      }
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      visualDensity: VisualDensity.compact,
+                                      side: BorderSide(color: base64Avatar != null ? Colors.pinkAccent : Colors.white24),
+                                    ),
+                                    child: Text(
+                                      base64Avatar != null ? 'Change Avatar' : 'Upload Avatar',
+                                      style: TextStyle(fontSize: 10.5, color: base64Avatar != null ? Colors.pinkAccent : Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: OutlinedButton.icon(
+                            onPressed: isUploading ? null : () async {
+                              if (appearanceController.text.isEmpty && nameController.text.isEmpty) {
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter appearance or name first!')));
+                                return;
+                              }
+                              final confirm = await _confirmCreditUsage(context, 'generate a character avatar');
+                              if (!confirm) return;
+
+                              setStateDialog(() => isUploading = true);
+                              try {
+                                String prompt = "Portrait of ${nameController.text}. ${appearanceController.text}";
+                                final res = await ApiService.generateImage(prompt);
+                                if (res['base64_image'] != null) {
+                                  final genB64 = res['base64_image'];
+                                  final bytes = base64Decode(genB64);
+                                  final cropRes = await ImageCropDialog.show(
+                                    context,
+                                    imageBytes: bytes,
+                                    originalBase64: genB64,
+                                  );
+                                  setStateDialog(() {
+                                    fullBackgroundBase64 = genB64;
+                                    base64Avatar = cropRes?.croppedAvatarBase64 ?? genB64;
+                                  });
+                                }
+                              } catch (e) {
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI Error: $e')));
+                              } finally {
+                                setStateDialog(() => isUploading = false);
+                              }
+                            },
+                            icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 14),
+                            label: const Text('AI Generate Both', style: TextStyle(color: Colors.purpleAccent, fontSize: 11)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.purpleAccent),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -2962,10 +3456,17 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       'relationship_status': relationshipController.text.trim(),
                       'dialogue_style': dialogueStyleController.text.trim(),
                     };
-                    if (base64Image != null) {
-                      updateData['avatar_base64'] = base64Image;
+                    if (base64Avatar != null) {
+                      updateData['avatar_base64'] = base64Avatar;
+                    }
+                    if (fullBackgroundBase64 != null) {
+                      updateData['background_base64'] = fullBackgroundBase64;
                     }
                     await ApiService.updateCharacter(widget.storyId, char['id'], updateData);
+                    if (fullBackgroundBase64 != null) {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('active_bg_${char['id']}', fullBackgroundBase64!);
+                    }
                     if (mounted) Navigator.pop(context);
                     _loadData();
                   } catch (e) {

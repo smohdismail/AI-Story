@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../utils/name_generator.dart';
+import '../widgets/image_crop_dialog.dart';
 
 class CharacterImageStudioScreen extends StatefulWidget {
   final String storyId;
@@ -27,7 +29,40 @@ class _CharacterImageStudioScreenState extends State<CharacterImageStudioScreen>
   String _selectedStyle = 'photorealistic';
   bool _isGeneratingImage = false;
   String? _selectedBase64Image;
+  String? _croppedAvatarBase64;
+  String? _fullBackgroundBase64;
   final List<Map<String, dynamic>> _imageHistory = [];
+
+  Future<void> _openCropDialog([String? customB64]) async {
+    final raw = customB64 ?? _fullBackgroundBase64 ?? _selectedBase64Image;
+    if (raw == null) return;
+    try {
+      final clean = raw.contains(',') ? raw.split(',').last : raw;
+      final bytes = base64Decode(clean);
+      final cropRes = await ImageCropDialog.show(
+        context,
+        imageBytes: bytes,
+        originalBase64: raw,
+      );
+      if (cropRes != null) {
+        setState(() {
+          _croppedAvatarBase64 = cropRes.croppedAvatarBase64;
+          _fullBackgroundBase64 = cropRes.originalImageBase64;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Avatar framed! Full portrait will be used as chat wallpaper.'),
+              backgroundColor: Colors.pinkAccent,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Crop error: $e')));
+    }
+  }
 
   // Character details controllers
   final TextEditingController _nameController = TextEditingController();
@@ -152,6 +187,8 @@ class _CharacterImageStudioScreenState extends State<CharacterImageStudioScreen>
       if (b64 != null && b64.isNotEmpty) {
         setState(() {
           _selectedBase64Image = b64;
+          _fullBackgroundBase64 = b64;
+          _croppedAvatarBase64 = null;
           _imageHistory.insert(0, {
             'b64': b64,
             'prompt': prompt,
@@ -163,6 +200,11 @@ class _CharacterImageStudioScreenState extends State<CharacterImageStudioScreen>
             _appearanceController.text = prompt;
           }
         });
+
+        if (mounted) {
+          // Open cropper immediately so user can frame avatar face
+          _openCropDialog(b64);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -271,17 +313,36 @@ class _CharacterImageStudioScreenState extends State<CharacterImageStudioScreen>
             : _promptController.text.trim(),
         'relationship_status': _relationshipController.text.trim(),
         'dialogue_style': _dialogueStyleController.text.trim(),
-        if (_selectedBase64Image != null) 'avatar_base64': _selectedBase64Image,
+        if ((_croppedAvatarBase64 ?? _selectedBase64Image) != null)
+          'avatar_base64': _croppedAvatarBase64 ?? _selectedBase64Image,
+        if ((_fullBackgroundBase64 ?? _selectedBase64Image) != null)
+          'background_base64': _fullBackgroundBase64 ?? _selectedBase64Image,
       };
 
+      Map<String, dynamic>? savedChar;
       if (widget.existingCharacter != null && widget.existingCharacter!['id'] != null) {
-        await ApiService.updateCharacter(
+        savedChar = await ApiService.updateCharacter(
           widget.storyId,
           widget.existingCharacter!['id'].toString(),
           payload,
         );
       } else {
-        await ApiService.createCharacter(widget.storyId, payload);
+        savedChar = await ApiService.createCharacter(widget.storyId, payload);
+      }
+
+      final charId = widget.existingCharacter != null && widget.existingCharacter!['id'] != null
+          ? widget.existingCharacter!['id'].toString()
+          : savedChar['id']?.toString();
+
+      final bgToSave = _fullBackgroundBase64 ?? _selectedBase64Image;
+      if (charId != null && bgToSave != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('active_bg_$charId', bgToSave);
+        final currentList = prefs.getStringList('custom_bgs_$charId') ?? [];
+        if (!currentList.contains(bgToSave)) {
+          currentList.insert(0, bgToSave);
+          await prefs.setStringList('custom_bgs_$charId', currentList);
+        }
       }
 
       if (mounted) {
@@ -600,8 +661,59 @@ class _CharacterImageStudioScreenState extends State<CharacterImageStudioScreen>
                         style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _openCropDialog,
+                      icon: const Icon(Icons.crop, size: 14),
+                      label: Text(
+                        _croppedAvatarBase64 != null ? 'Re-Crop Avatar ✂️' : 'Crop Avatar ✂️',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.pinkAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
                   ],
                 ),
+                if (_croppedAvatarBase64 != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.pinkAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: Colors.pink.shade900,
+                          backgroundImage: MemoryImage(base64Decode(_croppedAvatarBase64!)),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Avatar Headshot Configured! ✂️',
+                                style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                'This cropped face will be your avatar, and the full portrait below will be your chat wallpaper.',
+                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),

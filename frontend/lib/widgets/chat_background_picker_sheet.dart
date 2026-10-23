@@ -1,3 +1,4 @@
+import '../api.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -70,16 +71,61 @@ class _ChatBackgroundPickerSheetState extends State<ChatBackgroundPickerSheet> {
     final prefs = await SharedPreferences.getInstance();
     final savedList = prefs.getStringList('custom_bgs_${widget.characterId}') ?? [];
     
-    // Filter out files that might have been deleted from disk
+    // 1. Initial local files
     final validFiles = savedList.where((p) {
       if (p.startsWith('http') || p.length > 200) return true; // URLs or base64
       return File(p).existsSync();
     }).toList();
 
-    setState(() {
-      _backgrounds = validFiles;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _backgrounds = validFiles;
+        _isLoading = false;
+      });
+    }
+
+    // 2. Fetch from Database to guarantee persistence across app restarts / reinstalls
+    try {
+      final charInfo = await ApiService.getCharacter(widget.characterId);
+      final List<String> serverWallpapers = [];
+      if (charInfo['wallpapers_json'] != null && charInfo['wallpapers_json'].toString().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(charInfo['wallpapers_json']);
+          if (decoded is List) {
+            serverWallpapers.addAll(decoded.map((e) => e.toString()));
+          }
+        } catch (_) {}
+      }
+
+      // Also if background_base64 is present and not yet in list, include it
+      final serverBg = charInfo['background_base64']?.toString();
+      if (serverBg != null && serverBg.isNotEmpty && !serverWallpapers.contains(serverBg)) {
+        serverWallpapers.insert(0, serverBg);
+      }
+
+      // Merge server wallpapers and local files without duplicates
+      final mergedList = <String>[];
+      for (final item in [...serverWallpapers, ...validFiles]) {
+        if (!mergedList.contains(item)) {
+          mergedList.add(item);
+        }
+      }
+
+      await prefs.setStringList('custom_bgs_${widget.characterId}', mergedList);
+      
+      final active = prefs.getString('active_bg_${widget.characterId}') ?? serverBg;
+
+      if (mounted) {
+        setState(() {
+          _backgrounds = mergedList;
+          if (_selectedBackground == null || _selectedBackground == widget.defaultAvatarBase64) {
+            _selectedBackground = active ?? widget.defaultAvatarBase64;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error syncing wallpapers from database: $e');
+    }
   }
 
   Future<void> _pickAndUploadImages() async {
@@ -87,10 +133,10 @@ class _ChatBackgroundPickerSheetState extends State<ChatBackgroundPickerSheet> {
     try {
       setState(() => _isUploading = true);
       
-      // Try multi-image selection first
+      // Try multi-image selection
       final List<XFile> pickedFiles = await picker.pickMultiImage(
-        imageQuality: 88,
-        maxWidth: 1440,
+        imageQuality: 90,
+        maxWidth: 1920,
       );
 
       if (pickedFiles.isEmpty) {
@@ -98,27 +144,39 @@ class _ChatBackgroundPickerSheetState extends State<ChatBackgroundPickerSheet> {
         return;
       }
 
-      final dir = await getApplicationDocumentsDirectory();
-      final wpDir = Directory('${dir.path}/chat_wallpapers/${widget.characterId}');
-      if (!await wpDir.exists()) {
-        await wpDir.create(recursive: true);
-      }
-
+      final prefs = await SharedPreferences.getInstance();
       final List<String> newlyAdded = [];
+      String? lastActive;
+
       for (int i = 0; i < pickedFiles.length; i++) {
         final xFile = pickedFiles[i];
-        final fileExt = xFile.name.contains('.') ? xFile.name.split('.').last : 'jpg';
-        final newPath = '${wpDir.path}/bg_${DateTime.now().millisecondsSinceEpoch}_$i.$fileExt';
-        final savedFile = await File(xFile.path).copy(newPath);
-        newlyAdded.add(savedFile.path);
+        final bytes = await xFile.readAsBytes();
+        final base64Img = base64Encode(bytes);
+
+        try {
+          // Save directly to the Database!
+          final res = await ApiService.uploadCharacterWallpaper(widget.characterId, base64Img);
+          final serverUrl = res['url']?.toString() ?? base64Img;
+          newlyAdded.add(serverUrl);
+          lastActive = res['active_wallpaper']?.toString() ?? serverUrl;
+        } catch (err) {
+          // Fallback to local copy if network fails
+          debugPrint('Upload wallpaper API failed, fallback to local: $err');
+          final dir = await getApplicationDocumentsDirectory();
+          final wpDir = Directory('${dir.path}/chat_wallpapers/${widget.characterId}');
+          if (!await wpDir.exists()) await wpDir.create(recursive: true);
+          final fileExt = xFile.name.contains('.') ? xFile.name.split('.').last : 'jpg';
+          final newPath = '${wpDir.path}/bg_${DateTime.now().millisecondsSinceEpoch}_$i.$fileExt';
+          final savedFile = await File(xFile.path).copy(newPath);
+          newlyAdded.add(savedFile.path);
+          lastActive = savedFile.path;
+        }
       }
 
-      final updatedList = [...newlyAdded, ..._backgrounds];
-      final prefs = await SharedPreferences.getInstance();
+      final updatedList = [...newlyAdded, ..._backgrounds.where((b) => !newlyAdded.contains(b))];
       await prefs.setStringList('custom_bgs_${widget.characterId}', updatedList);
 
-      // Select the first newly uploaded image
-      final newlySelected = newlyAdded.first;
+      final newlySelected = lastActive ?? newlyAdded.first;
       await prefs.setString('active_bg_${widget.characterId}', newlySelected);
 
       setState(() {
@@ -132,7 +190,7 @@ class _ChatBackgroundPickerSheetState extends State<ChatBackgroundPickerSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Added ${newlyAdded.length} new background image${newlyAdded.length > 1 ? "s" : ""}!'),
+            content: Text('Saved ${newlyAdded.length} new wallpaper${newlyAdded.length > 1 ? "s" : ""} to Database!'),
             backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
           ),
@@ -156,6 +214,11 @@ class _ChatBackgroundPickerSheetState extends State<ChatBackgroundPickerSheet> {
     } else {
       await prefs.setString('active_bg_${widget.characterId}', path);
     }
+    try {
+      await ApiService.setActiveCharacterWallpaper(widget.characterId, path);
+    } catch (e) {
+      debugPrint('Sync active wallpaper to database failed: $e');
+    }
     widget.onBackgroundSelected(path, _dimOpacity);
   }
 
@@ -177,6 +240,12 @@ class _ChatBackgroundPickerSheetState extends State<ChatBackgroundPickerSheet> {
     ) ?? false;
 
     if (!confirm) return;
+
+    try {
+      await ApiService.deleteCharacterWallpaper(widget.characterId, path);
+    } catch (e) {
+      debugPrint('Delete wallpaper from database failed: $e');
+    }
 
     try {
       final file = File(path);

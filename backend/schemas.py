@@ -190,6 +190,8 @@ class CharacterBase(BaseModel):
     relationship_status: Optional[str] = None
     dialogue_style: Optional[str] = None
     avatar_base64: Optional[str] = None
+    background_base64: Optional[str] = None
+    wallpapers_json: Optional[str] = "[]"
     intimacy_score: Optional[int] = 0
     passion_level: Optional[int] = 50
     vulnerability_level: Optional[int] = 30
@@ -211,6 +213,8 @@ class CharacterUpdate(BaseModel):
     relationship_status: Optional[str] = None
     dialogue_style: Optional[str] = None
     avatar_base64: Optional[str] = None
+    background_base64: Optional[str] = None
+    wallpapers_json: Optional[str] = None
     intimacy_score: Optional[int] = None
     passion_level: Optional[int] = None
     vulnerability_level: Optional[int] = None

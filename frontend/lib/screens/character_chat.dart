@@ -77,6 +77,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
   List<String> _suggestions = [];
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _showScrollToBottom = false;
   
   // Phase 3 State
   int _intimacyScore = 0;
@@ -92,8 +93,21 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     _voiceService.stop();
     _audioPlayer.dispose();
     _msgController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final isScrolledUp = (maxScroll - currentScroll) > 150;
+    if (isScrolledUp != _showScrollToBottom) {
+      setState(() {
+        _showScrollToBottom = isScrolledUp;
+      });
+    }
   }
 
   @override
@@ -101,6 +115,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _voiceService.addListener(_onVoiceUpdate);
+    _scrollController.addListener(_onScroll);
     _loadChat();
     _loadCustomBackgroundPreferences();
     _loadQuota();
@@ -200,9 +215,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     try {
       final msgs = await ApiService.getCharacterChat(widget.characterId);
       final charInfo = await ApiService.getCharacter(widget.characterId);
+      final serverBg = charInfo['background_base64']?.toString();
       setState(() {
         _messages = msgs;
         _intimacyScore = charInfo['intimacy_score'] ?? 0;
+        if (serverBg != null && serverBg.isNotEmpty) {
+          if (_activeBackgroundPath == null || _activeBackgroundPath == widget.backgroundImage) {
+            _activeBackgroundPath = serverBg;
+          }
+        }
         _isLoading = false;
       });
       _scrollToBottom();
@@ -1229,8 +1250,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                     children: [
                       if (!_isImmersionMode)
                         Expanded(
-                        child: ListView.builder(
-                        controller: _scrollController,
+                          child: Stack(
+                            children: [
+                              ListView.builder(
+                                controller: _scrollController,
                         padding: const EdgeInsets.all(16),
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
@@ -1408,7 +1431,41 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                           );
                         },
                       ),
-                    ),
+                      if (_showScrollToBottom)
+                        Positioned(
+                          right: 16,
+                          bottom: 12,
+                          child: AnimatedOpacity(
+                            opacity: _showScrollToBottom ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: ClipOval(
+                              child: Material(
+                                color: Colors.black.withValues(alpha: 0.82),
+                                child: InkWell(
+                                  onTap: _scrollToBottom,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(9),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.8), width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.pinkAccent.withValues(alpha: 0.4),
+                                          blurRadius: 10,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.keyboard_double_arrow_down_rounded, color: Colors.pinkAccent, size: 24),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                     if (_isSending)
                       const Padding(
                         padding: EdgeInsets.all(8.0),

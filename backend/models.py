@@ -132,6 +132,8 @@ class Character(Base):
     relationship_status = Column(String)
     dialogue_style = Column(Text, nullable=True)
     avatar_base64 = Column(Text, nullable=True)
+    background_base64 = Column(Text, nullable=True)
+    wallpapers_json = Column(Text, default="[]")
     intimacy_score = Column(Integer, default=0)
     passion_level = Column(Integer, default=50)
     vulnerability_level = Column(Integer, default=30)
