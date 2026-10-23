@@ -54,6 +54,9 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
   List<String> get _storyTitles {
     final titles = <String>{};
     for (var c in _characters) {
+      if (!_isOwner && c['is_published'] == false && c['is_own'] != true) {
+        continue;
+      }
       final t = c['story_title']?.toString();
       if (t != null && t.isNotEmpty) titles.add(t);
     }
@@ -62,6 +65,9 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
 
   List<dynamic> get _filteredCharacters {
     return _characters.where((c) {
+      if (!_isOwner && c['is_published'] == false && c['is_own'] != true) {
+        return false;
+      }
       final name = (c['name'] ?? '').toString().toLowerCase();
       final role = (c['role'] ?? '').toString().toLowerCase();
       final story = (c['story_title'] ?? '').toString();
@@ -268,6 +274,24 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          if (char['is_published'] == false) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.deepOrange.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.lock, size: 9, color: Colors.deepOrangeAccent),
+                                  SizedBox(width: 2),
+                                  Text('Private', style: TextStyle(fontSize: 9, color: Colors.deepOrangeAccent, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],

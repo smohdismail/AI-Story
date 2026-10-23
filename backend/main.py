@@ -553,8 +553,8 @@ async def get_subscription_plans(current_user: Optional[models.User] = Depends(a
         schemas.SubscriptionPlanItem(
             plan_id="VIP_WEEKLY",
             name="Weekly Romance Pass",
-            price_inr="₹49",
-            price_usd="$1.49",
+            price_inr="₹79",
+            price_usd="$1.99",
             billing_period="per week",
             popular=False,
             badge=None,
@@ -568,8 +568,8 @@ async def get_subscription_plans(current_user: Optional[models.User] = Depends(a
         schemas.SubscriptionPlanItem(
             plan_id="VIP_MONTHLY",
             name="Monthly Intimacy VIP",
-            price_inr="₹199",
-            price_usd="$4.99",
+            price_inr="₹249",
+            price_usd="$6.99",
             billing_period="per month",
             popular=True,
             badge="MOST POPULAR ⭐",
@@ -585,11 +585,11 @@ async def get_subscription_plans(current_user: Optional[models.User] = Depends(a
         schemas.SubscriptionPlanItem(
             plan_id="VIP_YEARLY",
             name="Annual Lifetime VIP",
-            price_inr="₹1,499",
-            price_usd="$39.99",
+            price_inr="₹1,699",
+            price_usd="$49.99",
             billing_period="per year",
             popular=False,
-            badge="SAVE 40% 👑",
+            badge="SAVE 45% 👑",
             features=[
                 "👑 All Monthly VIP Features",
                 "🎖️ Exclusive VIP Profile Badge",
@@ -1007,6 +1007,15 @@ async def list_characters(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
 ):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    # 👑 MASTER OWNER PRIVILEGE: Owner can inspect and read ANY story characters, public or private
+    is_master = current_user and current_user.is_system_owner
+    is_author = current_user and story.user_id and story.user_id == current_user.id
+    if not story.is_published and not is_master and not is_author:
+        raise HTTPException(status_code=403, detail="This novel is marked Private by its author and is not accessible.")
+
     result = await db.execute(select(models.Character).where(models.Character.story_id == story_id))
     chars = result.scalars().all()
     if not current_user:
@@ -1080,7 +1089,19 @@ async def delete_world_item(story_id: uuid.UUID, item_id: uuid.UUID, db: AsyncSe
     return {"status": "success", "message": "World item deleted"}
 
 @app.get("/api/v1/stories/{story_id}/chapters", response_model=list[schemas.ChapterResponse])
-async def list_chapters(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def list_chapters(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
+    story = await db.get(models.Story, story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    # 👑 MASTER OWNER PRIVILEGE: Owner can inspect and read ANY story chapters, public or private
+    is_master = current_user and current_user.is_system_owner
+    is_author = current_user and story.user_id and story.user_id == current_user.id
+    if not story.is_published and not is_master and not is_author:
+        raise HTTPException(status_code=403, detail="This novel is marked Private by its author and is not accessible.")
     result = await db.execute(select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number))
     return result.scalars().all()
 
@@ -2574,6 +2595,14 @@ async def get_character(
     if not char:
         raise HTTPException(status_code=404, detail="Character not found")
         
+    if char.story_id:
+        story = await db.get(models.Story, char.story_id)
+        if story:
+            is_master = current_user and current_user.is_system_owner
+            is_author = current_user and story.user_id and story.user_id == current_user.id
+            if not story.is_published and not is_master and not is_author:
+                raise HTTPException(status_code=403, detail="This character belongs to a private novel and is not accessible.")
+        
     if current_user:
         prog = await get_or_create_user_character_progress(current_user.id, character_id, db, default_intimacy=char.intimacy_score or 0)
         if prog:
@@ -2735,15 +2764,7 @@ async def get_community_feed(db: AsyncSession = Depends(get_db)):
         .where(models.Story.is_published == True)
         .order_by(models.Story.created_at.desc())
     )
-    stories = result.scalars().all()
-    if not stories:
-        fallback_res = await db.execute(
-            select(models.Story)
-            .order_by(models.Story.created_at.desc())
-            .limit(25)
-        )
-        stories = fallback_res.scalars().all()
-    return stories
+    return result.scalars().all()
 
 @app.post("/api/v1/stories/{story_id}/like")
 async def like_story(story_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -3052,30 +3073,37 @@ async def get_all_user_characters(db: AsyncSession = Depends(get_db), current_us
         all_chars_res = await db.execute(select(models.Character).order_by(models.Character.name.asc()))
         chars = all_chars_res.scalars().all()
     else:
-        stories_res = await db.execute(select(models.Story).where(models.Story.user_id == current_user.id))
-        stories = stories_res.scalars().all()
-        story_ids = [s.id for s in stories] if stories else []
-        
-        chars = []
-        if story_ids:
-            chars_res = await db.execute(select(models.Character).where(models.Character.story_id.in_(story_ids)))
-            chars = chars_res.scalars().all()
-            
-        # If user has no characters tied directly, fallback to all characters so Lounge is lively
-        if not chars:
-            all_chars_res = await db.execute(select(models.Character).limit(100))
-            chars = all_chars_res.scalars().all()
+        # Regular users: Characters from PUBLIC stories + characters from user's own stories (public or private)
+        chars_res = await db.execute(
+            select(models.Character)
+            .join(models.Story, models.Character.story_id == models.Story.id)
+            .where(
+                or_(
+                    models.Story.is_published == True,
+                    models.Story.user_id == current_user.id
+                )
+            )
+            .order_by(models.Character.name.asc())
+        )
+        chars = chars_res.scalars().all()
 
-    # Map story titles
+    # Map story titles and visibility
     all_story_ids = list({c.story_id for c in chars if c.story_id})
     story_title_map = {}
+    story_pub_map = {}
+    story_owner_map = {}
     if all_story_ids:
         s_res = await db.execute(select(models.Story).where(models.Story.id.in_(all_story_ids)))
-        story_title_map = {str(s.id): s.title for s in s_res.scalars().all()}
+        for s in s_res.scalars().all():
+            story_title_map[str(s.id)] = s.title
+            story_pub_map[str(s.id)] = bool(s.is_published)
+            story_owner_map[str(s.id)] = s.user_id
 
     out = []
     for c in chars:
         avatar = getattr(c, "avatar_base64", None)
+        is_own = bool(current_user and story_owner_map.get(str(c.story_id)) == current_user.id)
+        is_pub = story_pub_map.get(str(c.story_id), True)
         out.append({
             "id": str(c.id),
             "name": c.name,
@@ -3090,7 +3118,9 @@ async def get_all_user_characters(db: AsyncSession = Depends(get_db), current_us
             "active_wardrobe": getattr(c, "active_wardrobe", None),
             "intimacy_score": getattr(c, "intimacy_score", 0) or 0,
             "story_id": str(c.story_id),
-            "story_title": story_title_map.get(str(c.story_id), "Novel")
+            "story_title": story_title_map.get(str(c.story_id), "Novel"),
+            "is_published": is_pub,
+            "is_own": is_own
         })
     return out
 

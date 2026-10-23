@@ -72,6 +72,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final filtered = _publicStories.where((s) {
+      if (s['is_published'] == false) return false;
       final title = (s['title'] ?? '').toString().toLowerCase();
       final genre = (s['genre'] ?? '').toString().toLowerCase();
       final query = _searchQuery.toLowerCase();
