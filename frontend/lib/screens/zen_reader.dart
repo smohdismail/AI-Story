@@ -8,6 +8,7 @@ import '../services/ambient_sound_service.dart';
 import '../widgets/audio_drama_sheet.dart';
 import '../widgets/dynamic_weather_overlay.dart';
 import '../widgets/ambience_weather_sheet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 
 enum ReaderTheme {
@@ -16,6 +17,15 @@ enum ReaderTheme {
   sepia,
   light,
   candlelight,
+  parchment,
+  roseQuartz,
+  cyberpunk,
+  forestMoss,
+}
+
+enum ReadingMode {
+  scroll,
+  pageFlip,
 }
 
 class ZenReaderScreen extends StatefulWidget {
@@ -52,6 +62,10 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
   double _lineHeight = 1.7;
   String _fontFamily = 'Serif';
   ReaderTheme _readerTheme = ReaderTheme.dark;
+  ReadingMode _readingMode = ReadingMode.scroll;
+  double _contentPadding = 24.0;
+  int _currentPageIndex = 0;
+  PageController? _pageController;
   bool _fullscreen = false;
 
   // Chapter State
@@ -224,6 +238,8 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     _loadChoices();
     _loadReactions();
     _initCandleFlickerTimer();
+    _pageController = PageController(initialPage: 0);
+    _loadPreferences();
   }
 
   void _initCandleFlickerTimer() {
@@ -331,7 +347,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       if (quote.isNotEmpty) {
         final startLookback = (match.start > 60) ? match.start - 60 : 0;
         final endLookahead = (match.end + 60 < text.length) ? match.end + 60 : text.length;
-        final contextAround = (text.substring(startLookback, match.start) + ' ' + text.substring(match.end, endLookahead)).toLowerCase();
+        final contextAround = '${text.substring(startLookback, match.start)} ${text.substring(match.end, endLookahead)}'.toLowerCase();
 
         String role;
         if (contextAround.contains('she ') || contextAround.contains('her ') || contextAround.contains('elena') || contextAround.contains('whispered she') || contextAround.contains('she said')) {
@@ -2168,99 +2184,250 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: _getCardColor(),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final textColor = _getTextColor();
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reading Appearance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-                  const SizedBox(height: 16),
-                  // Themes row
-                  Text('Background Theme', style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.7))),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildThemeChip('🕯️ Candlelight', ReaderTheme.candlelight, const Color(0xFF241408), const Color(0xFFFEE685), setSheetState),
-                      _buildThemeChip('AMOLED', ReaderTheme.amoled, Colors.black, Colors.white, setSheetState),
-                      _buildThemeChip('Dark', ReaderTheme.dark, const Color(0xFF1E1E2E), Colors.white, setSheetState),
-                      _buildThemeChip('Sepia', ReaderTheme.sepia, const Color(0xFFF7EFE2), const Color(0xFF4A3728), setSheetState),
-                      _buildThemeChip('Light', ReaderTheme.light, const Color(0xFFFAFAFA), const Color(0xFF222222), setSheetState),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Font Size
-                  Row(
-                    children: [
-                      Text('Font Size: ${_fontSize.toInt()}pt', style: TextStyle(color: textColor)),
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(Icons.remove_circle_outline, color: textColor),
-                        onPressed: () {
-                          if (_fontSize > 12) {
-                            setSheetState(() => _fontSize -= 1);
-                            setState(() => _fontSize -= 1);
-                          }
-                        },
+            final cardColor = _getCardColor();
+            return DraggableScrollableSheet(
+              initialChildSize: 0.76,
+              minChildSize: 0.45,
+              maxChildSize: 0.94,
+              expand: false,
+              builder: (context, scrollCtrl) {
+                return ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: textColor.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.add_circle_outline, color: textColor),
-                        onPressed: () {
-                          if (_fontSize < 34) {
-                            setSheetState(() => _fontSize += 1);
-                            setState(() => _fontSize += 1);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  // Font Family
-                  Row(
-                    children: [
-                      Text('Font Family', style: TextStyle(color: textColor)),
-                      const Spacer(),
-                      DropdownButton<String>(
-                        value: _fontFamily,
-                        dropdownColor: _getCardColor(),
-                        style: TextStyle(color: textColor),
-                        items: ['Serif', 'Sans', 'Monospace'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setSheetState(() => _fontFamily = val);
-                            setState(() => _fontFamily = val);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Row(
+                    ),
+                    Row(
                       children: [
-                        const Icon(Icons.favorite, color: Colors.pinkAccent, size: 18),
-                        const SizedBox(width: 8),
-                        Text('Tactile Heartbeat & Breath Haptics', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const Icon(Icons.palette_outlined, color: Colors.amberAccent, size: 22),
+                        const SizedBox(width: 10),
+                        Text('Reading Appearance & Modes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
                       ],
                     ),
-                    subtitle: Text('Simulate physical heartbeat pulses during intense romantic scenes', style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 11)),
-                    value: _enableHeartbeatHaptics,
-                    activeColor: Colors.pinkAccent,
-                    onChanged: (val) {
-                      setSheetState(() => _enableHeartbeatHaptics = val);
-                      setState(() => _enableHeartbeatHaptics = val);
-                      if (val) _triggerHeartbeatHaptic();
-                    },
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 18),
+
+                    // 1. Reading Mode (Continuous Scroll vs Page Flip)
+                    Text('Reading Layout Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.7), letterSpacing: 1.1)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setSheetState(() => _readingMode = ReadingMode.scroll);
+                              setState(() => _readingMode = ReadingMode.scroll);
+                              _savePreferences();
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: _readingMode == ReadingMode.scroll ? Colors.amber.withValues(alpha: 0.18) : cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _readingMode == ReadingMode.scroll ? Colors.amberAccent : Colors.grey.withValues(alpha: 0.25),
+                                  width: _readingMode == ReadingMode.scroll ? 2 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.swap_vert, size: 18, color: _readingMode == ReadingMode.scroll ? Colors.amberAccent : textColor),
+                                  const SizedBox(width: 8),
+                                  Text('Continuous Scroll', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textColor)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setSheetState(() => _readingMode = ReadingMode.pageFlip);
+                              setState(() => _readingMode = ReadingMode.pageFlip);
+                              _savePreferences();
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: _readingMode == ReadingMode.pageFlip ? Colors.cyanAccent.withValues(alpha: 0.18) : cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _readingMode == ReadingMode.pageFlip ? Colors.cyanAccent : Colors.grey.withValues(alpha: 0.25),
+                                  width: _readingMode == ReadingMode.pageFlip ? 2 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.auto_stories, size: 18, color: _readingMode == ReadingMode.pageFlip ? Colors.cyanAccent : textColor),
+                                  const SizedBox(width: 8),
+                                  Text('Book Page Turn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textColor)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 2. Reading Themes (9 options!)
+                    Text('Novel Color Themes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.7), letterSpacing: 1.1)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildThemeChip('📜 Parchment', ReaderTheme.parchment, const Color(0xFFF4ECE1), const Color(0xFF2C2218), setSheetState),
+                        _buildThemeChip('🕯️ Candlelight', ReaderTheme.candlelight, const Color(0xFF140B04), const Color(0xFFFEE685), setSheetState),
+                        _buildThemeChip('🖤 AMOLED', ReaderTheme.amoled, Colors.black, Colors.white, setSheetState),
+                        _buildThemeChip('🌙 Midnight', ReaderTheme.dark, const Color(0xFF16161F), const Color(0xFFE8E8E8), setSheetState),
+                        _buildThemeChip('☕ Sepia', ReaderTheme.sepia, const Color(0xFFF7EFE2), const Color(0xFF382918), setSheetState),
+                        _buildThemeChip('🌸 Rose Quartz', ReaderTheme.roseQuartz, const Color(0xFFFDF0F3), const Color(0xFF3B1E2B), setSheetState),
+                        _buildThemeChip('🌲 Emerald', ReaderTheme.forestMoss, const Color(0xFF0D1712), const Color(0xFFD6E2D5), setSheetState),
+                        _buildThemeChip('⚡ Cyberpunk', ReaderTheme.cyberpunk, const Color(0xFF0B0E14), const Color(0xFF00E5FF), setSheetState),
+                        _buildThemeChip('☀️ Crisp Light', ReaderTheme.light, const Color(0xFFFAFAFA), const Color(0xFF1A1A1A), setSheetState),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 3. Font Size & Stepper
+                    Row(
+                      children: [
+                        Text('Font Size: ${_fontSize.toInt()}pt', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Icons.remove_circle_outline, color: textColor),
+                          onPressed: () {
+                            if (_fontSize > 12) {
+                              setSheetState(() => _fontSize -= 1);
+                              setState(() => _fontSize -= 1);
+                              _savePreferences();
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.add_circle_outline, color: textColor),
+                          onPressed: () {
+                            if (_fontSize < 36) {
+                              setSheetState(() => _fontSize += 1);
+                              setState(() => _fontSize += 1);
+                              _savePreferences();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 4. Line Spacing (1.4x, 1.7x, 2.1x)
+                    Row(
+                      children: [
+                        Text('Line Spacing', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                        const Spacer(),
+                        SegmentedButton<double>(
+                          segments: const [
+                            ButtonSegment(value: 1.4, label: Text('Compact', style: TextStyle(fontSize: 11))),
+                            ButtonSegment(value: 1.7, label: Text('Normal', style: TextStyle(fontSize: 11))),
+                            ButtonSegment(value: 2.1, label: Text('Relaxed', style: TextStyle(fontSize: 11))),
+                          ],
+                          selected: {_lineHeight},
+                          onSelectionChanged: (val) {
+                            setSheetState(() => _lineHeight = val.first);
+                            setState(() => _lineHeight = val.first);
+                            _savePreferences();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 5. Page Margins (Narrow, Normal, Wide)
+                    Row(
+                      children: [
+                        Text('Page Margins', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                        const Spacer(),
+                        SegmentedButton<double>(
+                          segments: const [
+                            ButtonSegment(value: 16.0, label: Text('Narrow', style: TextStyle(fontSize: 11))),
+                            ButtonSegment(value: 24.0, label: Text('Normal', style: TextStyle(fontSize: 11))),
+                            ButtonSegment(value: 36.0, label: Text('Wide', style: TextStyle(fontSize: 11))),
+                          ],
+                          selected: {_contentPadding},
+                          onSelectionChanged: (val) {
+                            setSheetState(() => _contentPadding = val.first);
+                            setState(() => _contentPadding = val.first);
+                            _savePreferences();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 6. Font Family
+                    Row(
+                      children: [
+                        Text('Font Family', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                        const Spacer(),
+                        DropdownButton<String>(
+                          value: _fontFamily,
+                          dropdownColor: _getCardColor(),
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                          items: ['Serif', 'Sans', 'Monospace', 'Cursive'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setSheetState(() => _fontFamily = val);
+                              setState(() => _fontFamily = val);
+                              _savePreferences();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+
+                    // 7. Tactile Heartbeat Haptics
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Row(
+                        children: [
+                          const Icon(Icons.favorite, color: Colors.pinkAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Tactile Heartbeat Haptics', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      subtitle: Text('Simulate physical heartbeat pulses during intense romantic scenes', style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 11)),
+                      value: _enableHeartbeatHaptics,
+                      activeColor: Colors.pinkAccent,
+                      onChanged: (val) {
+                        setSheetState(() => _enableHeartbeatHaptics = val);
+                        setState(() => _enableHeartbeatHaptics = val);
+                        _savePreferences();
+                        if (val) _triggerHeartbeatHaptic();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              },
             );
           },
         );
@@ -2274,6 +2441,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       onTap: () {
         setSheetState(() => _readerTheme = theme);
         setState(() => _readerTheme = theme);
+        _savePreferences();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2302,6 +2470,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFFFAFAFA);
       case ReaderTheme.candlelight:
         return const Color(0xFF140B04); // Deep smoky warm hearth
+      case ReaderTheme.parchment:
+        return const Color(0xFFF4ECE1); // Vintage antique book paper
+      case ReaderTheme.roseQuartz:
+        return const Color(0xFFFDF0F3); // Romantic soft blush petal
+      case ReaderTheme.cyberpunk:
+        return const Color(0xFF0B0E14); // Obsidian darkness
+      case ReaderTheme.forestMoss:
+        return const Color(0xFF0D1712); // Deep midnight emerald pine
     }
   }
 
@@ -2317,6 +2493,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFFEEEEEE);
       case ReaderTheme.candlelight:
         return const Color(0xFF241408); // Warm dark amber hearth
+      case ReaderTheme.parchment:
+        return const Color(0xFFE8DECF); // Antique parchment card
+      case ReaderTheme.roseQuartz:
+        return const Color(0xFFF7DDE3); // Rose petal card
+      case ReaderTheme.cyberpunk:
+        return const Color(0xFF151922); // Cyber slate card
+      case ReaderTheme.forestMoss:
+        return const Color(0xFF16251E); // Forest shadow card
     }
   }
 
@@ -2331,6 +2515,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFF1A1A1A);
       case ReaderTheme.candlelight:
         return const Color(0xFFFEE685); // Warm flickering golden amber
+      case ReaderTheme.parchment:
+        return const Color(0xFF2C2218); // Deep vintage iron-gall ink
+      case ReaderTheme.roseQuartz:
+        return const Color(0xFF3B1E2B); // Velvet dark plum
+      case ReaderTheme.cyberpunk:
+        return const Color(0xFFE2E8F0); // Ice white
+      case ReaderTheme.forestMoss:
+        return const Color(0xFFD6E2D5); // Calming sage parchment
     }
   }
 
@@ -2345,6 +2537,14 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
         return const Color(0xFF1565C0);
       case ReaderTheme.candlelight:
         return const Color(0xFFF59E0B); // Vibrant molten honey
+      case ReaderTheme.parchment:
+        return const Color(0xFF8B2500); // Deep crimson vintage ink
+      case ReaderTheme.roseQuartz:
+        return const Color(0xFFBE185D); // Romantic deep magenta rose
+      case ReaderTheme.cyberpunk:
+        return const Color(0xFF00E5FF); // Electric neon cyan
+      case ReaderTheme.forestMoss:
+        return const Color(0xFF34D399); // Soft glowing emerald
     }
   }
 
@@ -2357,6 +2557,9 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       case 'Sans':
         base = const TextStyle(fontFamily: 'sans-serif');
         break;
+      case 'Cursive':
+        base = const TextStyle(fontStyle: FontStyle.italic, fontFamily: 'serif');
+        break;
       case 'Serif':
       default:
         base = const TextStyle(fontFamily: 'serif');
@@ -2366,7 +2569,344 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       fontSize: _fontSize,
       height: _lineHeight,
       color: _getTextColor(),
-      letterSpacing: 0.3,
+      letterSpacing: _fontFamily == 'Monospace' ? -0.2 : 0.3,
+    );
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _fontSize = prefs.getDouble('reader_font_size') ?? 18.0;
+        _lineHeight = prefs.getDouble('reader_line_height') ?? 1.7;
+        _fontFamily = prefs.getString('reader_font_family') ?? 'Serif';
+        _contentPadding = prefs.getDouble('reader_content_padding') ?? 24.0;
+        _enableHeartbeatHaptics = prefs.getBool('reader_haptics') ?? true;
+
+        final themeStr = prefs.getString('reader_theme');
+        if (themeStr != null) {
+          _readerTheme = ReaderTheme.values.firstWhere(
+            (t) => t.name == themeStr,
+            orElse: () => ReaderTheme.dark,
+          );
+        }
+
+        final modeStr = prefs.getString('reader_mode');
+        if (modeStr != null) {
+          _readingMode = ReadingMode.values.firstWhere(
+            (m) => m.name == modeStr,
+            orElse: () => ReadingMode.scroll,
+          );
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _savePreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('reader_font_size', _fontSize);
+      await prefs.setDouble('reader_line_height', _lineHeight);
+      await prefs.setString('reader_font_family', _fontFamily);
+      await prefs.setDouble('reader_content_padding', _contentPadding);
+      await prefs.setBool('reader_haptics', _enableHeartbeatHaptics);
+      await prefs.setString('reader_theme', _readerTheme.name);
+      await prefs.setString('reader_mode', _readingMode.name);
+    } catch (_) {}
+  }
+
+  List<List<int>> _paginateParagraphIndices(List<String> paragraphs) {
+    final pages = <List<int>>[];
+    var currentPage = <int>[];
+    int currentChars = 0;
+    final maxCharsPerPage = (14000 / _fontSize).clamp(450, 1400).toInt();
+
+    for (int i = 0; i < paragraphs.length; i++) {
+      final p = paragraphs[i].trim();
+      if (p.isEmpty) continue;
+      final pLen = p.length;
+
+      if (currentChars + pLen > maxCharsPerPage && currentPage.isNotEmpty) {
+        pages.add(currentPage);
+        currentPage = [i];
+        currentChars = pLen;
+      } else {
+        currentPage.add(i);
+        currentChars += pLen;
+      }
+    }
+    if (currentPage.isNotEmpty) {
+      pages.add(currentPage);
+    }
+    return pages.isEmpty ? [[for (int i = 0; i < paragraphs.length; i++) i]] : pages;
+  }
+
+  Widget _buildParagraphItem(int index, String para, TextStyle textStyle, Color dialogueColor) {
+    final trimmed = para.trim();
+    if (trimmed.isEmpty) return const SizedBox.shrink();
+
+    final isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
+    final paraReactions = _chapterReactions.where((r) => r['paragraph_index'] == index).toList();
+
+    return Container(
+      margin: EdgeInsets.only(bottom: _fontSize * 0.9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  trimmed,
+                  style: textStyle.copyWith(
+                    color: isDialogue ? dialogueColor : textStyle.color,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_reaction_outlined, size: 14, color: Colors.white24),
+                tooltip: 'Drop reaction',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => _showReactDialog(index, trimmed),
+              ),
+            ],
+          ),
+          if (paraReactions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: paraReactions.map((r) {
+                  final text = r['reaction_text'] as String?;
+                  final emoji = r['emoji'] ?? '🔥';
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(emoji, style: const TextStyle(fontSize: 12)),
+                        if (text != null && text.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            text,
+                            style: const TextStyle(color: Colors.white70, fontSize: 10, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageFlipBody(Color bgColor, Color textColor, int wordCount, int readTimeMinutes) {
+    final paragraphs = _currentContent.split(RegExp(r'\n\s*\n|\r\n\s*\r\n'));
+    final pages = _paginateParagraphIndices(paragraphs);
+    final totalPages = pages.length;
+    final textStyle = _getTextStyle();
+    final dialogueColor = _getDialogueColor();
+
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          physics: const BouncingScrollPhysics(),
+          onPageChanged: (idx) {
+            setState(() => _currentPageIndex = idx);
+          },
+          itemCount: totalPages,
+          itemBuilder: (context, pageIndex) {
+            final pageIndices = pages[pageIndex];
+            final isFirstPage = pageIndex == 0;
+            final isLastPage = pageIndex == totalPages - 1;
+
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: _contentPadding, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header on Page 1
+                      if (isFirstPage) ...[
+                        Text(
+                          _currentTitle,
+                          style: TextStyle(
+                            fontSize: _fontSize * 1.45,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: _fontFamily,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time, size: 12, color: textColor.withValues(alpha: 0.5)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '~ $readTimeMinutes min read • $wordCount words',
+                              style: TextStyle(fontSize: 11, color: textColor.withValues(alpha: 0.5)),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                      ] else ...[
+                        // Subtle running header for inner pages
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _currentTitle,
+                                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: textColor.withValues(alpha: 0.45)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                '${pageIndex + 1} / $totalPages',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.5)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Scrollable page content
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ...pageIndices.map((idx) => _buildParagraphItem(idx, paragraphs[idx], textStyle, dialogueColor)),
+                              // Choices, Teasers, etc. on last page
+                              if (isLastPage) ...[
+                                const SizedBox(height: 20),
+                                const Divider(height: 32),
+                                _buildChapterNavigation(),
+                                _buildMindReaderButtonCard(),
+                                _buildTeaserCard(),
+                                _buildPrivateDiaryCard(),
+                                _buildWhatIfCard(),
+                                _buildChoicesWidget(),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Footer with Page indicators and Next/Prev quick buttons
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton.icon(
+                              onPressed: pageIndex > 0
+                                  ? () => _pageController?.previousPage(
+                                        duration: const Duration(milliseconds: 280),
+                                        curve: Curves.easeOutCubic,
+                                      )
+                                  : null,
+                              icon: const Icon(Icons.arrow_back_ios, size: 12),
+                              label: const Text('Prev', style: TextStyle(fontSize: 11)),
+                              style: TextButton.styleFrom(
+                                foregroundColor: textColor.withValues(alpha: pageIndex > 0 ? 0.7 : 0.2),
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: textColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'Page ${pageIndex + 1} of $totalPages',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.7)),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: pageIndex < totalPages - 1
+                                  ? () => _pageController?.nextPage(
+                                        duration: const Duration(milliseconds: 280),
+                                        curve: Curves.easeOutCubic,
+                                      )
+                                  : null,
+                              icon: const Icon(Icons.arrow_forward_ios, size: 12),
+                              label: const Text('Next', style: TextStyle(fontSize: 11)),
+                              style: TextButton.styleFrom(
+                                foregroundColor: textColor.withValues(alpha: pageIndex < totalPages - 1 ? 0.7 : 0.2),
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        // Tap Target Left Edge (Turn to Prev Page)
+        Positioned(
+          left: 0,
+          top: 80,
+          bottom: 60,
+          width: 44,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_currentPageIndex > 0) {
+                _pageController?.previousPage(
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+          ),
+        ),
+        // Tap Target Right Edge (Turn to Next Page)
+        Positioned(
+          right: 0,
+          top: 80,
+          bottom: 60,
+          width: 44,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_currentPageIndex < totalPages - 1) {
+                _pageController?.nextPage(
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -2378,6 +2918,10 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
       _currentIndex = index;
       _currentTitle = ch['title'] ?? 'Chapter ${ch['chapter_number']}';
       _currentContent = _extractPlainText(ch['content'] ?? '');
+      _currentPageIndex = 0;
+      if (_pageController?.hasClients == true) {
+        _pageController?.jumpToPage(0);
+      }
       _currentChapterId = ch['id']?.toString();
       _choices = [];
       _selectedChoiceIndex = null;
@@ -2435,6 +2979,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
   @override
   void dispose() {
+    _pageController?.dispose();
     _flickerTimer?.cancel();
     _stopHeartbeatHaptics();
     _ambientService.stop();
@@ -2578,76 +3123,7 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
 
         // Paragraphs of Novel with Floating Reactions
         ...paragraphs.asMap().entries.map((entry) {
-          final index = entry.key;
-          final para = entry.value;
-          final trimmed = para.trim();
-          if (trimmed.isEmpty) return const SizedBox.shrink();
-
-          final isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
-          final paraReactions = _chapterReactions.where((r) => r['paragraph_index'] == index).toList();
-
-          return Container(
-            margin: EdgeInsets.only(bottom: _fontSize * 0.9),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        trimmed,
-                        style: textStyle.copyWith(
-                          color: isDialogue ? dialogueColor : textStyle.color,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_reaction_outlined, size: 14, color: Colors.white24),
-                      tooltip: 'Drop reaction',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () => _showReactDialog(index, trimmed),
-                    ),
-                  ],
-                ),
-                if (paraReactions.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: paraReactions.map((r) {
-                        final text = r['reaction_text'] as String?;
-                        final emoji = r['emoji'] ?? '🔥';
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(emoji, style: const TextStyle(fontSize: 12)),
-                              if (text != null && text.isNotEmpty) ...[
-                                const SizedBox(width: 4),
-                                Text(
-                                  text,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontStyle: FontStyle.italic),
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-              ],
-            ),
-          );
+          return _buildParagraphItem(entry.key, entry.value, textStyle, dialogueColor);
         }),
 
         // Interactive Margin Scribble Trigger Card at end of scene
@@ -3078,11 +3554,13 @@ class _ZenReaderScreenState extends State<ZenReaderScreen> {
             onDoubleTap: () => setState(() => _fullscreen = !_fullscreen),
             child: Container(
               color: bgColor,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: _readingMode == ReadingMode.pageFlip
+                  ? _buildPageFlipBody(bgColor, textColor, wordCount, readTimeMinutes)
+                  : Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.symmetric(horizontal: _contentPadding, vertical: 28),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
