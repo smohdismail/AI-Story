@@ -723,7 +723,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error exporting EPUB: ')),
+                          SnackBar(content: Text('Error exporting EPUB: ' + e.toString())),
                         );
                       }
                     }

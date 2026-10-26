@@ -1680,11 +1680,36 @@ async def build_story_export_timeline(story_id: uuid.UUID, db: AsyncSession):
         return story, timeline
 
     base_time = story.created_at or datetime.utcnow()
-    for idx, ch in enumerate(chapters):
-        if not getattr(ch, "created_at", None):
-            ch.created_at = base_time + timedelta(minutes=(idx + 1) * 10)
-
     sorted_chapters = sorted(chapters, key=lambda c: c.chapter_number)
+
+    # Check for exact historical timestamps in story narrative memories if chapters share timestamps
+    mem_res = await db.execute(
+        select(models.StoryNarrativeMemory)
+        .where(models.StoryNarrativeMemory.story_id == story_id)
+        .order_by(models.StoryNarrativeMemory.created_at.asc())
+    )
+    all_story_mems = list(mem_res.scalars().all())
+    chap_mem_map = {}
+    for m in all_story_mems:
+        m_name = (m.character_name or "").strip()
+        match = re.match(r'^Chapter\s+(\d+)', m_name, re.IGNORECASE)
+        if match:
+            ch_num = int(match.group(1))
+            if ch_num not in chap_mem_map and m.created_at:
+                chap_mem_map[ch_num] = m.created_at
+
+    for idx, ch in enumerate(sorted_chapters):
+        if ch.chapter_number in chap_mem_map:
+            ch.created_at = chap_mem_map[ch.chapter_number]
+        elif not getattr(ch, "created_at", None):
+            ch.created_at = base_time + timedelta(minutes=(idx + 1) * 15)
+
+    # Ensure strictly ascending timestamps for interval calculations
+    for idx in range(1, len(sorted_chapters)):
+        prev_ch = sorted_chapters[idx - 1]
+        curr_ch = sorted_chapters[idx]
+        if curr_ch.created_at <= prev_ch.created_at:
+            curr_ch.created_at = prev_ch.created_at + timedelta(seconds=1)
 
     first_chap_time = sorted_chapters[0].created_at
     pre_chats = [c for c in all_chats if c["created_at"] < first_chap_time]
