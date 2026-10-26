@@ -701,16 +701,31 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Generating EPUB...')),
                     );
-                    final bytes = await ApiService.downloadEpub(widget.storyId);
-                    if (bytes != null) {
-                      final dir = await getApplicationDocumentsDirectory();
-                      final file = File('${dir.path}/${story!['title']}.epub');
-                      await file.writeAsBytes(bytes);
-                      await Share.shareXFiles([XFile(file.path)]);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Failed to generate EPUB')),
-                      );
+                    try {
+                      final bytes = await ApiService.downloadEpub(widget.storyId);
+                      if (bytes != null && bytes.isNotEmpty) {
+                        final dir = await getApplicationDocumentsDirectory();
+                        final rawTitle = story?['title'] ?? 'Story';
+                        String cleanFilename = rawTitle.toString().replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_').trim();
+                        if (cleanFilename.isEmpty) {
+                          cleanFilename = 'Story_Export';
+                        }
+                        final file = File('${dir.path}/$cleanFilename.epub');
+                        await file.writeAsBytes(bytes);
+                        await Share.shareXFiles([XFile(file.path)], text: 'Exported Story: $rawTitle');
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Failed to generate EPUB')),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error exporting EPUB: ')),
+                        );
+                      }
                     }
                   },
                 ),

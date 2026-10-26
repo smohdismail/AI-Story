@@ -1,10 +1,23 @@
-import 'dart:typed_data';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'api.dart';
 
 class PdfExport {
+  static String _clean(String text) {
+    // Strip emojis, dingbats, variation selectors, and surrogate characters that crash standard PDF fonts
+    return text
+        .replaceAll(RegExp(r'[\u{10000}-\u{10FFFF}]', unicode: true), '')
+        .replaceAll(RegExp(r'[\u{FE00}-\u{FE0F}]', unicode: true), '')
+        .replaceAll(RegExp(r'[\u{2300}-\u{27BF}]', unicode: true), '')
+        .replaceAll(RegExp(r'[\u{2B50}-\u{2B55}]', unicode: true), '')
+        .trim();
+  }
+
   static Future<Uint8List> generateStoryPdf(
       Map<String, dynamic> story, 
       List<dynamic> characters, 
@@ -19,16 +32,26 @@ class PdfExport {
           timeline = timelineData['timeline'] as List<dynamic>;
         }
       } catch (e) {
-        print('Could not fetch timeline for PDF export: $e');
+        debugPrint('Could not fetch timeline for PDF export: $e');
       }
     }
 
     final pdf = pw.Document();
 
-    // Use a classic Serif font.
-    final font = await PdfGoogleFonts.merriweatherRegular();
-    final fontItalic = await PdfGoogleFonts.merriweatherItalic();
-    final fontBold = await PdfGoogleFonts.merriweatherBold();
+    // Use classic Serif font with reliable fallback
+    pw.Font font;
+    pw.Font fontItalic;
+    pw.Font fontBold;
+
+    try {
+      font = await PdfGoogleFonts.merriweatherRegular();
+      fontItalic = await PdfGoogleFonts.merriweatherItalic();
+      fontBold = await PdfGoogleFonts.merriweatherBold();
+    } catch (_) {
+      font = pw.Font.helvetica();
+      fontItalic = pw.Font.helveticaOblique();
+      fontBold = pw.Font.helveticaBold();
+    }
 
     final normalStyle = pw.TextStyle(font: font, fontSize: 11, lineSpacing: 2);
     final italicStyle = pw.TextStyle(font: fontItalic, fontSize: 11, lineSpacing: 2);
@@ -36,12 +59,12 @@ class PdfExport {
     final dialogueSpeakerUser = pw.TextStyle(font: fontBold, fontSize: 10.5, color: PdfColors.blueGrey800);
     final dialogueText = pw.TextStyle(font: font, fontSize: 10.5, lineSpacing: 1.5, color: PdfColors.black);
     
-    String title = story['title'] ?? '';
-    String subtitle = story['synopsis'] ?? '';
+    String title = _clean(story['title'] ?? '');
+    String subtitle = _clean(story['synopsis'] ?? '');
     
     if (title.isEmpty || title == 'Untitled Story') {
        if (characters.isNotEmpty) {
-           final charNames = characters.map((c) => c['full_name'] ?? c['name'] ?? '').where((n) => n.toString().isNotEmpty).toList();
+           final charNames = characters.map((c) => _clean(c['full_name'] ?? c['name'] ?? '')).where((n) => n.isNotEmpty).toList();
            if (charNames.length == 1) {
                title = "The Story of You & ${charNames[0]}";
            } else if (charNames.length > 1) {
@@ -66,7 +89,7 @@ class PdfExport {
                 pw.Text(title, style: pw.TextStyle(font: fontBold, fontSize: 32), textAlign: pw.TextAlign.center),
                 pw.SizedBox(height: 16),
                 if (story['genre'] != null && story['genre'].toString().isNotEmpty)
-                  pw.Text(story['genre'].toString().toUpperCase(), style: pw.TextStyle(font: fontBold, fontSize: 12, color: PdfColors.deepPurple700, letterSpacing: 2)),
+                  pw.Text(_clean(story['genre'].toString()).toUpperCase(), style: pw.TextStyle(font: fontBold, fontSize: 12, color: PdfColors.deepPurple700, letterSpacing: 2)),
                 pw.SizedBox(height: 30),
                 if (subtitle.isNotEmpty)
                   pw.Padding(
@@ -104,8 +127,8 @@ class PdfExport {
 
         if (type == 'chapter') {
           final chNum = item['chapter_number'] ?? (i + 1);
-          final chTitle = item['title'] ?? 'Chapter $chNum';
-          final content = (item['content'] ?? '').toString();
+          final chTitle = _clean((item['title'] ?? 'Chapter $chNum').toString());
+          final content = _clean((item['content'] ?? '').toString());
 
           if (widgets.isNotEmpty) {
             widgets.add(pw.NewPage());
@@ -141,7 +164,7 @@ class PdfExport {
             );
           }
         } else if (type == 'chat_section') {
-          final secTitle = (item['title'] ?? 'Conversations').toString();
+          final secTitle = _clean((item['title'] ?? 'Conversations').toString());
           final chatItems = (item['items'] as List<dynamic>? ?? []);
 
           if (chatItems.isEmpty) continue;
@@ -152,28 +175,20 @@ class PdfExport {
               padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               decoration: const pw.BoxDecoration(
                 color: PdfColors.grey100,
-                borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
                 border: pw.Border.fromBorderSide(pw.BorderSide(color: PdfColors.deepPurple200, width: 0.8)),
               ),
-              child: pw.Row(
-                children: [
-                  pw.Text('💬  ', style: pw.TextStyle(font: fontBold, fontSize: 12)),
-                  pw.Expanded(
-                    child: pw.Text(
-                      secTitle.toUpperCase(),
-                      style: pw.TextStyle(font: fontBold, fontSize: 10, letterSpacing: 1.5, color: PdfColors.deepPurple900),
-                    ),
-                  ),
-                ],
+              child: pw.Text(
+                '- ${secTitle.toUpperCase()} -',
+                style: pw.TextStyle(font: fontBold, fontSize: 10, letterSpacing: 1.5, color: PdfColors.deepPurple900),
               ),
             ),
           );
           widgets.add(pw.SizedBox(height: 12));
 
           for (final c in chatItems) {
-            final speaker = (c['speaker'] ?? (c['is_ai'] == true ? (c['character_name'] ?? 'Character') : 'You')).toString();
+            final speaker = _clean((c['speaker'] ?? (c['is_ai'] == true ? (c['character_name'] ?? 'Character') : 'You')).toString());
             final isAi = c['is_ai'] == true;
-            final message = (c['message'] ?? '').toString().trim();
+            final message = _clean((c['message'] ?? '').toString());
             if (message.isEmpty) continue;
 
             widgets.add(
@@ -184,11 +199,10 @@ class PdfExport {
                   padding: const pw.EdgeInsets.all(8),
                   decoration: pw.BoxDecoration(
                     color: isAi ? PdfColors.purple50 : PdfColors.blueGrey50,
-                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
                     border: pw.Border(
                       left: pw.BorderSide(
-                        color: isAi ? PdfColors.deepPurple : PdfColors.blueGrey,
-                        width: 3,
+                        color: isAi ? PdfColors.deepPurple700 : PdfColors.blueGrey700,
+                        width: 3.5,
                       ),
                     ),
                   ),
@@ -224,7 +238,7 @@ class PdfExport {
     } else {
       // Fallback: traditional chapters only
       for (var chapter in chapters) {
-        final content = chapter['content'] ?? '';
+        final content = _clean((chapter['content'] ?? '').toString());
         if (content.isEmpty) continue;
 
         final paragraphs = content.split('\n\n');
@@ -237,7 +251,7 @@ class PdfExport {
               return [
                 pw.Header(
                   level: 0,
-                  child: pw.Text('Chapter ${chapter['chapter_number']}: ${chapter['title'] ?? ''}', style: pw.TextStyle(font: fontBold, fontSize: 24)),
+                  child: pw.Text('Chapter ${chapter['chapter_number']}: ${_clean(chapter['title'] ?? '')}', style: pw.TextStyle(font: fontBold, fontSize: 24)),
                 ),
                 pw.SizedBox(height: 20),
                 ...paragraphs.map((p) {
@@ -264,13 +278,20 @@ class PdfExport {
       List<dynamic> chapters,
       {List<dynamic>? timeline}) async {
     final bytes = await generateStoryPdf(story, characters, chapters, timeline: timeline);
-    String title = story['title'] ?? 'Story';
-    if (title.isEmpty || title == 'Untitled Story') {
-        title = 'My_Story';
+    String rawTitle = story['title'] ?? 'Story';
+    String cleanFilename = rawTitle.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_').trim();
+    if (cleanFilename.isEmpty) {
+      cleanFilename = 'Story_Export';
     }
-    // Clean filename
-    title = title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
-    
-    await Printing.sharePdf(bytes: bytes, filename: '$title.pdf');
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$cleanFilename.pdf');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles([XFile(file.path)], text: 'Exported Story: $rawTitle');
+    } catch (e) {
+      debugPrint('ShareXFiles failed, falling back to Printing.sharePdf: $e');
+      await Printing.sharePdf(bytes: bytes, filename: '$cleanFilename.pdf');
+    }
   }
 }

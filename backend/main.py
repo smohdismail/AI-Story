@@ -1851,7 +1851,13 @@ async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     book.set_identifier(str(story.id))
     book.set_title(story.title)
     book.set_language('en')
-    book.add_author(story.user.username if story.user else 'AI Story Generator')
+    author = "AI Story Generator"
+    if story.user_id:
+        u_res = await db.execute(select(models.User.username).where(models.User.id == story.user_id))
+        u_name = u_res.scalar_one_or_none()
+        if u_name:
+            author = u_name
+    book.add_author(author)
 
     intro = epub.EpubHtml(title='Synopsis', file_name='intro.xhtml', lang='en')
     intro.content = f"<h1>{story.title}</h1><h2>Synopsis</h2><p>{story.synopsis or ''}</p>"
