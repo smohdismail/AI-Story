@@ -1581,7 +1581,76 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                 rolling_context += f"--- IMMEDIATE PREVIOUS CHAPTER (Chapter {last_chapter.chapter_number}) ---\n...{last_chapter.content[-2500:]}\n\n[CONTINUE THE STORY FROM HERE]"
                 request.context = rolling_context
         else:
-            story_context += "IMPORTANT: You are writing Chapter 1.\n"
+            # Chapter 1 Master Introduction & Character Portrait Directive
+            synopsis_text = (story.synopsis or "").strip()
+            if not synopsis_text:
+                synopsis_text = f"An immersive novel titled '{story.title or 'Untitled'}' in the {story.genre or 'drama'} genre."
+            
+            # Ensure character names and roles are explicitly highlighted in the synopsis
+            char_names_roles = [f"{c.name} ({c.role or 'Lead Character'})" for c in characters]
+            if char_names_roles and not any(c.name.lower() in synopsis_text.lower() for c in characters):
+                synopsis_text += f"\nKey Characters Featured: {', '.join(char_names_roles)}."
+
+            char_profiles = []
+            for c in characters:
+                c_gender = (c.gender or "").lower()
+                is_female = any(w in c_gender for w in ["female", "woman", "girl", "she", "lady"]) or not c_gender
+                
+                profile_items = [
+                    f"Name: {c.name}",
+                    f"Role: {c.role or 'Lead'}",
+                    f"Age: {c.age if c.age else 'Early 20s'}",
+                    f"Gender: {c.gender or ('Female' if is_female else 'Male')}",
+                    f"Personality: {c.personality or 'Expressive, magnetic, and distinct'}",
+                    f"Appearance Profile: {c.appearance or 'Striking visual presence'}",
+                ]
+                if c.active_wardrobe:
+                    profile_items.append(f"Opening Wardrobe & Attire: {c.active_wardrobe}")
+                if c.dialogue_style:
+                    profile_items.append(f"Voice & Dialogue Style: {c.dialogue_style}")
+                
+                if is_female:
+                    profile_items.append(
+                        "MANDATORY EXHAUSTIVE FEMALE PHYSICAL DETAILS TO FULLY INTRODUCE: "
+                        "Detailed body type and feminine figure (curves, proportions, bust, slender waist, hip contours), "
+                        "skin tone and complexion (exact shade, smoothness, radiance, warmth), "
+                        "height and weight/build (stature relative to the protagonist, graceful posture), "
+                        "face and facial features (eye shape and iris color, full lips, delicate nose, cheekbones, jawline, micro-expressions), "
+                        "hair details (exact color, highlights, length, silky/wavy texture, volume, and exact styling), "
+                        "age, maturity, feminine elegance, and sensory scent aura."
+                    )
+                char_profiles.append("  • " + "\n    ".join(profile_items))
+
+            char_intro_section = "\n\n".join(char_profiles) if char_profiles else "Introduce the main characters from the Story Synopsis."
+
+            story_context += (
+                "\n"
+                "========================================================================================\n"
+                "🌟 CRITICAL CHAPTER 1 MASTER DIRECTIVE: STORY INTRODUCTION & EXHAUSTIVE CHARACTER PORTRAITS\n"
+                "========================================================================================\n"
+                "You are writing CHAPTER 1: THE GRAND OPENING INTRODUCTION OF THIS NOVEL.\n"
+                "You MUST follow these strict novel-writing rules without skipping any detail:\n\n"
+                "1. STORY PREMISE & WORLD INTRODUCTION (FROM SYNOPSIS):\n"
+                f"   • Story Synopsis & Core Premise:\n     \"{synopsis_text}\"\n"
+                "   • You MUST introduce the story's world, atmospheric tone, physical location, and starting situation.\n"
+                "   • Establish the protagonist's starting environment and everyday reality right before the inciting event takes place.\n\n"
+                "2. EXHAUSTIVE PHYSICAL & SENSORY CHARACTER INTRODUCTIONS:\n"
+                "   • Every character introduced in this chapter MUST receive a complete, vivid, and deeply detailed physical portrait woven naturally into the narrative.\n"
+                "   • FOR FEMALE CHARACTERS IN PARTICULAR, YOU MUST NOT LEAVE OUT ANY PHYSICAL DETAIL:\n"
+                "     - Body Type & Measurements: Exact figure, silhouette, curves, bust, waist-to-hip ratio, posture, and physical proportions.\n"
+                "     - Skin Tone & Complexion: Exact skin tone (e.g. porcelain, sun-kissed golden, creamy ivory, warm olive, dusky bronze), smoothness, texture, and natural glow.\n"
+                "     - Height & Weight / Build: Stature, height relative to the protagonist, delicate or athletic build, graceful movement, and presence.\n"
+                "     - Face & Facial Features: Exact eye shape (almond, wide, hooded), iris color and depth, eyelashes, lip shape, fullness and natural color, cheekbones, nose profile, and micro-expressions.\n"
+                "     - Hair Color & Style: Exact hair color and highlights, length, texture (silky, glossy, wavy, cascading), and how it is styled or falls across their shoulders.\n"
+                "     - Age & Maturity: Apparent age, youthful vitality or mature sophistication, and womanly grace.\n"
+                "     - Attire, Scent & Chemistry: What they are wearing, how the fabric hugs or flows over their figure, their signature scent (perfume, blossoms, vanilla, rain), and the immediate emotional/sensory spark when meeting the protagonist.\n\n"
+                "3. CHARACTERS TO FULLY INTRODUCE IN THIS OPENING CHAPTER:\n"
+                f"{char_intro_section}\n\n"
+                "4. FIRST ENCOUNTER & HOOK:\n"
+                "   • Showcase their first appearance or interaction with the protagonist through authentic, banter-filled dialogue, lingering eye contact, and emotional/physical tension.\n"
+                "   • End the chapter with a compelling narrative hook that naturally leads into the next chapter.\n"
+                "========================================================================================\n\n"
+            )
     
     bg_task = None
     if request.story_id and all_chapters:
