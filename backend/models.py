@@ -193,6 +193,7 @@ class Chapter(Base):
     status = Column(SQLEnum(StoryStatus), default=StoryStatus.draft)
     choices_json = Column(Text, nullable=True)
     choice_prompt = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
     story = relationship("Story", back_populates="chapters")
 

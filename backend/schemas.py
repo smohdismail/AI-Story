@@ -253,6 +253,7 @@ class ChapterBase(BaseModel):
     choices_json: Optional[str] = None
     parent_chapter_id: Optional[UUID4] = None
     choice_prompt: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 class ChapterCreate(ChapterBase):
     pass

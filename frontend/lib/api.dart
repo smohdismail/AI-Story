@@ -72,6 +72,22 @@ class ApiService {
     return null;
   }
 
+  static Future<Map<String, dynamic>?> getStoryTimelineExport(String storyId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('/stories//export/timeline_data'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      print('Error getting story timeline export: ');
+    }
+    return null;
+  }
+
   static String extractErrorMessage(String responseBody, String defaultMsg) {
     try {
       final decoded = jsonDecode(responseBody);

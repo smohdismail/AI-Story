@@ -336,6 +336,7 @@ async def lifespan(app: FastAPI):
         print(f"Metadata create_all: {e}")
 
     safe_alters = [
+        "ALTER TABLE chapters ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW();",
         "ALTER TABLE group_chat_sessions ADD COLUMN IF NOT EXISTS member_ids TEXT DEFAULT '[]';",
         "ALTER TABLE group_chat_sessions ADD COLUMN IF NOT EXISTS title VARCHAR DEFAULT 'Tavern Group Chat';",
         "ALTER TABLE stories ADD COLUMN IF NOT EXISTS tension_level INTEGER DEFAULT 2;",
@@ -1593,17 +1594,162 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
         background=bg_task
     )
 
-@app.get("/api/v1/stories/{story_id}/export/epub")
-async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def build_story_export_timeline(story_id: uuid.UUID, db: AsyncSession):
+    from datetime import datetime, timedelta
+    
     result = await db.execute(select(models.Story).where(models.Story.id == story_id))
     story = result.scalars().first()
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        return None, []
 
-    chapter_result = await db.execute(
-        select(models.Chapter).where(models.Chapter.story_id == story_id).order_by(models.Chapter.chapter_number.asc())
+    chaps_res = await db.execute(
+        select(models.Chapter)
+        .where(models.Chapter.story_id == story_id)
+        .order_by(models.Chapter.chapter_number.asc())
     )
-    chapters = chapter_result.scalars().all()
+    chapters = list(chaps_res.scalars().all())
+
+    chars_res = await db.execute(
+        select(models.Character).where(models.Character.story_id == story_id)
+    )
+    characters = list(chars_res.scalars().all())
+    char_map = {c.id: c.name for c in characters}
+    char_ids = list(char_map.keys())
+
+    all_1on1_chats = []
+    if char_ids:
+        chats_res = await db.execute(
+            select(models.CharacterChat)
+            .where(models.CharacterChat.character_id.in_(char_ids))
+            .order_by(models.CharacterChat.created_at.asc())
+        )
+        for chat in chats_res.scalars().all():
+            char_name = char_map.get(chat.character_id, "Character")
+            speaker = char_name if chat.is_ai else "You"
+            all_1on1_chats.append({
+                "type": "1on1",
+                "character_id": str(chat.character_id),
+                "character_name": char_name,
+                "speaker": speaker,
+                "is_ai": bool(chat.is_ai),
+                "message": (chat.message or "").strip(),
+                "created_at": chat.created_at or (story.created_at or datetime.utcnow())
+            })
+
+    all_group_chats = []
+    sessions_res = await db.execute(
+        select(models.GroupChatSession).where(models.GroupChatSession.story_id == story_id)
+    )
+    sessions = list(sessions_res.scalars().all())
+    session_map = {s.id: s.title for s in sessions}
+    session_ids = list(session_map.keys())
+
+    if session_ids:
+        grp_msgs_res = await db.execute(
+            select(models.GroupChatMessage)
+            .where(models.GroupChatMessage.session_id.in_(session_ids))
+            .order_by(models.GroupChatMessage.created_at.asc())
+        )
+        for gmsg in grp_msgs_res.scalars().all():
+            speaker = gmsg.speaker_name or ("You" if not gmsg.speaker_id else char_map.get(gmsg.speaker_id, "Character"))
+            session_title = session_map.get(gmsg.session_id, "Tavern Banter")
+            all_group_chats.append({
+                "type": "group",
+                "session_id": str(gmsg.session_id),
+                "session_title": session_title,
+                "speaker": speaker,
+                "is_ai": bool(gmsg.speaker_id is not None),
+                "message": (gmsg.message or "").strip(),
+                "created_at": gmsg.created_at or (story.created_at or datetime.utcnow())
+            })
+
+    all_chats = [c for c in (all_1on1_chats + all_group_chats) if c["message"]]
+    all_chats.sort(key=lambda x: x["created_at"])
+
+    timeline = []
+    if not chapters:
+        if all_chats:
+            timeline.append({
+                "type": "chat_section",
+                "title": "Story Conversations",
+                "items": [
+                    {**c, "created_at": c["created_at"].isoformat() if isinstance(c["created_at"], datetime) else str(c["created_at"])}
+                    for c in all_chats
+                ]
+            })
+        return story, timeline
+
+    base_time = story.created_at or datetime.utcnow()
+    for idx, ch in enumerate(chapters):
+        if not getattr(ch, "created_at", None):
+            ch.created_at = base_time + timedelta(minutes=(idx + 1) * 10)
+
+    sorted_chapters = sorted(chapters, key=lambda c: c.chapter_number)
+
+    first_chap_time = sorted_chapters[0].created_at
+    pre_chats = [c for c in all_chats if c["created_at"] < first_chap_time]
+    if pre_chats:
+        timeline.append({
+            "type": "chat_section",
+            "title": "Prologue Conversations",
+            "items": [
+                {**c, "created_at": c["created_at"].isoformat() if isinstance(c["created_at"], datetime) else str(c["created_at"])}
+                for c in pre_chats
+            ]
+        })
+
+    for idx, ch in enumerate(sorted_chapters):
+        timeline.append({
+            "type": "chapter",
+            "chapter_number": ch.chapter_number,
+            "title": ch.title or f"Chapter {ch.chapter_number}",
+            "content": ch.content or "",
+            "summary": ch.summary or "",
+            "created_at": ch.created_at.isoformat() if isinstance(ch.created_at, datetime) else str(ch.created_at)
+        })
+
+        start_time = ch.created_at
+        end_time = sorted_chapters[idx + 1].created_at if idx + 1 < len(sorted_chapters) else None
+
+        if end_time:
+            interval_chats = [c for c in all_chats if start_time <= c["created_at"] < end_time]
+        else:
+            interval_chats = [c for c in all_chats if c["created_at"] >= start_time]
+
+        if interval_chats:
+            timeline.append({
+                "type": "chat_section",
+                "title": f"Conversations after Chapter {ch.chapter_number}",
+                "after_chapter_number": ch.chapter_number,
+                "items": [
+                    {**c, "created_at": c["created_at"].isoformat() if isinstance(c["created_at"], datetime) else str(c["created_at"])}
+                    for c in interval_chats
+                ]
+            })
+
+    return story, timeline
+
+@app.get("/api/v1/stories/{story_id}/export/timeline_data")
+async def get_story_timeline_export(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story, timeline = await build_story_export_timeline(story_id, db)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return {
+        "story": {
+            "id": str(story.id),
+            "title": story.title or "Untitled Story",
+            "synopsis": story.synopsis or "",
+            "genre": story.genre or "",
+            "created_at": story.created_at.isoformat() if story.created_at else None,
+        },
+        "timeline": timeline
+    }
+
+@app.get("/api/v1/stories/{story_id}/export/epub")
+async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story, timeline = await build_story_export_timeline(story_id, db)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
 
     book = epub.EpubBook()
     book.set_identifier(str(story.id))
@@ -1612,25 +1758,44 @@ async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     book.add_author(story.user.username if story.user else 'AI Story Generator')
 
     intro = epub.EpubHtml(title='Synopsis', file_name='intro.xhtml', lang='en')
-    intro.content = f"<h1>{story.title}</h1><h2>Synopsis</h2><p>{story.synopsis}</p>"
+    intro.content = f"<h1>{story.title}</h1><h2>Synopsis</h2><p>{story.synopsis or ''}</p>"
     book.add_item(intro)
 
     spine = ['nav', intro]
     toc = [intro]
 
-    for ch in chapters:
-        ch_item = epub.EpubHtml(title=ch.title, file_name=f'chapter_{ch.chapter_number}.xhtml', lang='en')
-        content_html = f"<h1>{ch.title}</h1><p>" + ch.content.replace("\n", "</p><p>") + "</p>"
-        ch_item.content = content_html
-        book.add_item(ch_item)
-        spine.append(ch_item)
-        toc.append(ch_item)
+    section_idx = 0
+    for item in timeline:
+        if item["type"] == "chapter":
+            section_idx += 1
+            ch_num = item["chapter_number"]
+            ch_title = item["title"]
+            ch_item = epub.EpubHtml(title=ch_title, file_name=f'chapter_{ch_num}.xhtml', lang='en')
+            body_p = "".join(f"<p>{p.strip()}</p>" for p in item["content"].split("\n") if p.strip())
+            ch_item.content = f"<h1>{ch_title}</h1>{body_p}"
+            book.add_item(ch_item)
+            spine.append(ch_item)
+            toc.append(ch_item)
+        elif item["type"] == "chat_section":
+            section_idx += 1
+            sec_title = item.get("title", "Conversations")
+            chat_item = epub.EpubHtml(title=sec_title, file_name=f'conversations_{section_idx}.xhtml', lang='en')
+            chat_lines = []
+            chat_lines.append(f"<h2>{sec_title}</h2><hr/>")
+            for msg in item.get("items", []):
+                speaker = msg.get("speaker", "Character")
+                m_text = msg.get("message", "")
+                chat_lines.append(f"<p><strong>{speaker}:</strong> {m_text}</p>")
+            chat_item.content = "".join(chat_lines)
+            book.add_item(chat_item)
+            spine.append(chat_item)
+            toc.append(chat_item)
 
     book.toc = tuple(toc)
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
     
-    style = 'BODY {color: white;}'
+    style = 'BODY { font-family: serif; color: #111; line-height: 1.6; } h1, h2 { color: #333; } hr { border: 0; border-top: 1px solid #ccc; margin: 20px 0; }'
     nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
     book.add_item(nav_css)
 
@@ -1639,7 +1804,8 @@ async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".epub")
     epub.write_epub(temp_file.name, book, {})
 
-    return FileResponse(path=temp_file.name, filename=f"{story.title}.epub", media_type='application/epub+zip')
+    clean_filename = re.sub(r'[^\w\s-]', '', story.title or 'Story').strip().replace(' ', '_')
+    return FileResponse(path=temp_file.name, filename=f"{clean_filename}.epub", media_type='application/epub+zip')
 
 import urllib.request
 import base64
