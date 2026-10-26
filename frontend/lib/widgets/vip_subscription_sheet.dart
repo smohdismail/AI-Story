@@ -40,7 +40,7 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
     {
       'plan_id': 'VIP_WEEKLY',
       'name': 'Weekly Pass',
-      'price_inr': '₹79',
+      'price_inr': '₹189',
       'price_usd': '\$1.99',
       'period': '/ week',
       'badge': null,
@@ -49,7 +49,7 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
     {
       'plan_id': 'VIP_MONTHLY',
       'name': 'Monthly VIP',
-      'price_inr': '₹249',
+      'price_inr': '₹665',
       'price_usd': '\$6.99',
       'period': '/ month',
       'badge': 'MOST POPULAR ⭐',
@@ -58,7 +58,7 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
     {
       'plan_id': 'VIP_YEARLY',
       'name': 'Annual VIP',
-      'price_inr': '₹1,699',
+      'price_inr': '₹4,279',
       'price_usd': '\$44.99',
       'period': '/ year',
       'badge': 'SAVE 45% 👑',

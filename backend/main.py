@@ -585,11 +585,46 @@ async def get_my_quota(db: AsyncSession = Depends(get_db), current_user: models.
         export_cost=export_cost,
     )
 
+# --- EXCHANGE RATE & CURRENCY CONVERSION ---
+import time
+
+_EXCHANGE_RATE_CACHE = {
+    "rate": 95.15,
+    "last_fetched": 0.0
+}
+
+def get_live_usd_to_inr_rate() -> float:
+    """Fetch live USD to INR exchange rate with 6-hour caching and resilient fallback."""
+    now = time.time()
+    if now - _EXCHANGE_RATE_CACHE["last_fetched"] < 21600 and _EXCHANGE_RATE_CACHE["rate"] > 0:
+        return _EXCHANGE_RATE_CACHE["rate"]
+    try:
+        req = urllib.request.Request(
+            "https://open.er-api.com/v6/latest/USD",
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=4) as response:
+            data = json.loads(response.read().decode())
+            inr = data.get("rates", {}).get("INR")
+            if inr and isinstance(inr, (int, float)) and inr > 50:
+                _EXCHANGE_RATE_CACHE["rate"] = float(inr)
+                _EXCHANGE_RATE_CACHE["last_fetched"] = now
+                return _EXCHANGE_RATE_CACHE["rate"]
+    except Exception as e:
+        logger.warning(f"Failed to fetch live exchange rate, using cached/fallback: {e}")
+    return _EXCHANGE_RATE_CACHE["rate"]
+
+def format_inr_price(usd_price: float) -> str:
+    """Convert USD price to clean parity INR string with commas (e.g. ₹189, ₹4,279)."""
+    rate = get_live_usd_to_inr_rate()
+    raw_inr = round(usd_price * rate)
+    return f"₹{raw_inr:,}"
+
 # --- SUBSCRIPTION ENDPOINTS ---
 
 @app.get("/api/v1/subscription/plans", response_model=schemas.SubscriptionPlansResponse)
 async def get_subscription_plans(current_user: Optional[models.User] = Depends(auth.get_current_user_optional)):
-    """List all available VIP subscription plans with local pricing and perks."""
+    """List all available VIP subscription plans with real-time currency conversion and perks."""
     current_tier = "FREE"
     is_vip = False
     if current_user:
@@ -600,7 +635,7 @@ async def get_subscription_plans(current_user: Optional[models.User] = Depends(a
         schemas.SubscriptionPlanItem(
             plan_id="VIP_WEEKLY",
             name="Weekly Romance Pass",
-            price_inr="₹79",
+            price_inr=format_inr_price(1.99),
             price_usd="$1.99",
             billing_period="per week",
             popular=False,
@@ -615,7 +650,7 @@ async def get_subscription_plans(current_user: Optional[models.User] = Depends(a
         schemas.SubscriptionPlanItem(
             plan_id="VIP_MONTHLY",
             name="Monthly Intimacy VIP",
-            price_inr="₹249",
+            price_inr=format_inr_price(6.99),
             price_usd="$6.99",
             billing_period="per month",
             popular=True,
@@ -632,7 +667,7 @@ async def get_subscription_plans(current_user: Optional[models.User] = Depends(a
         schemas.SubscriptionPlanItem(
             plan_id="VIP_YEARLY",
             name="Annual Lifetime VIP",
-            price_inr="₹1,699",
+            price_inr=format_inr_price(44.99),
             price_usd="$44.99",
             billing_period="per year",
             popular=False,
@@ -692,7 +727,7 @@ async def get_credit_packs(current_user: Optional[models.User] = Depends(auth.ge
             pack_id="PACK_STARTER",
             name="Starter Pack",
             credits=25,
-            price_inr="₹149",
+            price_inr=format_inr_price(1.99),
             price_usd="$1.99",
             popular=False,
             badge=None,
@@ -702,7 +737,7 @@ async def get_credit_packs(current_user: Optional[models.User] = Depends(auth.ge
             pack_id="PACK_POPULAR",
             name="Popular Pack",
             credits=60,
-            price_inr="₹299",
+            price_inr=format_inr_price(3.99),
             price_usd="$3.99",
             popular=True,
             badge="BEST VALUE 🔥",
@@ -712,7 +747,7 @@ async def get_credit_packs(current_user: Optional[models.User] = Depends(auth.ge
             pack_id="PACK_COLLECTOR",
             name="Collector Pack",
             credits=150,
-            price_inr="₹599",
+            price_inr=format_inr_price(7.99),
             price_usd="$7.99",
             popular=False,
             badge="MAX SAVINGS 👑",
