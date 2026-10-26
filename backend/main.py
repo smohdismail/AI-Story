@@ -762,7 +762,7 @@ async def create_story(story: schemas.StoryCreate, db: AsyncSession = Depends(ge
 
     data = story.model_dump()
     if data.get("is_published") is None:
-        data["is_published"] = True
+        data["is_published"] = False
     db_story = models.Story(**data, user_id=current_user.id)
     db.add(db_story)
     await db.commit()

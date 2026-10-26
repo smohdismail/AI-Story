@@ -56,7 +56,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   String _selectedIntimacy = 'explicit';
   String _selectedPov = 'Standard';
   bool _jealousyTrigger = false;
-  bool _isPublic = true; // By default keep public as requested
+  bool _isPublic = false; // By default keep public as requested
 
   final _intimacyOptions = [
     {'value': 'mild', 'label': '🌸 Mild Romance (Sweet & Flirty, No Explicit Scenes)'},
