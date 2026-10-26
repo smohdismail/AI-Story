@@ -23,6 +23,7 @@ import '../widgets/room_inspection_sheet.dart';
 import '../widgets/dynamic_weather_overlay.dart';
 import '../widgets/ambience_weather_sheet.dart';
 import '../widgets/secret_locked_diary_sheet.dart';
+import '../widgets/typing_indicator.dart';
 import '../services/ambient_sound_service.dart';
 import '../services/real_world_sync_service.dart';
 import '../services/character_voice_service.dart';
@@ -1467,9 +1468,16 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   ),
                 ),
                     if (_isSending)
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: LinearProgressIndicator(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TypingBubble(
+                            senderName: widget.characterName,
+                            bubbleColor: _aiBubbleColor,
+                            dotColor: Colors.amber,
+                          ),
+                        ),
                       ),
                     if (!_isImmersionMode)
                       Container(
@@ -1599,21 +1607,27 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                               ),
                             ),
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Expanded(
                                   child: TextField(
                                     controller: _msgController,
+                                    minLines: 1,
+                                    maxLines: 5,
+                                    keyboardType: TextInputType.multiline,
+                                    textInputAction: TextInputAction.newline,
+                                    style: const TextStyle(color: Colors.white),
                                     decoration: InputDecoration(
                                       hintText: 'Type a message...',
+                                      hintStyle: const TextStyle(color: Colors.white54),
                                       filled: true,
                                       fillColor: Colors.grey[900],
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(24),
+                                        borderRadius: BorderRadius.circular(20),
                                         borderSide: BorderSide.none,
                                       ),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                     ),
-                                    onSubmitted: (_) => _sendMessage(),
                                   ),
                                 ),
                                   const SizedBox(width: 8),

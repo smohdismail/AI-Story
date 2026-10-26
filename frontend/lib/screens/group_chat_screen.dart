@@ -7,6 +7,7 @@ import '../widgets/ambience_weather_sheet.dart';
 import '../widgets/autonomous_gossip_sheet.dart';
 import '../services/ambient_sound_service.dart';
 import '../services/real_world_sync_service.dart';
+import '../widgets/typing_indicator.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String storyId;
@@ -968,32 +969,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.amber.withValues(alpha: 0.4), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Characters are bantering in the tavern...',
-                          style: TextStyle(
-                            color: Colors.amber.withValues(alpha: 0.9),
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: TypingBubble(
+                    label: 'Characters are bantering in the tavern...',
+                    dotColor: Colors.amber,
+                    bubbleColor: Colors.black.withValues(alpha: 0.6),
                   ),
                 ),
               ),
@@ -1073,10 +1052,15 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _msgController,
+                        minLines: 1,
+                        maxLines: 5,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'Speak or whisper to the group...',
@@ -1084,12 +1068,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           filled: true,
                           fillColor: Colors.grey[900],
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(20),
                             borderSide: BorderSide.none,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
-                        onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
                     const SizedBox(width: 8),
