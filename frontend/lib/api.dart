@@ -76,14 +76,30 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('/stories//export/timeline_data'),
+        Uri.parse('$baseUrl/stories/$storyId/export/timeline_data'),
         headers: headers,
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (e) {
-      print('Error getting story timeline export: ');
+      // ignore
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getStoryPreviouslyOnRecap(String storyId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/stories/$storyId/previously_on'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      // ignore
     }
     return null;
   }

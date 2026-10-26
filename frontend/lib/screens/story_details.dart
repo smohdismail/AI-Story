@@ -33,6 +33,7 @@ import '../widgets/photobooth_strip_sheet.dart';
 import '../widgets/room_inspection_sheet.dart';
 import '../widgets/synced_chapter_studio_sheet.dart';
 import '../widgets/autonomous_gossip_sheet.dart';
+import '../widgets/previously_on_sheet.dart';
 
 class StoryDetailsScreen extends StatefulWidget {
   final String storyId;
@@ -925,6 +926,18 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               ),
             if (story != null && chapters.isNotEmpty)
               IconButton(
+                icon: const Icon(Icons.movie_filter_rounded, color: Colors.amberAccent),
+                tooltip: 'Previously On... (Story Recap)',
+                onPressed: () {
+                  PreviouslyOnSheet.show(
+                    context,
+                    storyId: widget.storyId,
+                    storyTitle: story?['title'] ?? 'Story',
+                  );
+                },
+              ),
+            if (story != null && chapters.isNotEmpty)
+              IconButton(
                 icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent),
                 tooltip: 'AI Story Tools',
                 onPressed: _showAiSuiteBottomSheet,
@@ -937,7 +950,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               ),
             PopupMenuButton<String>(
               onSelected: (value) {
-                if (value == 'info') {
+                if (value == 'previously_on') {
+                  PreviouslyOnSheet.show(
+                    context,
+                    storyId: widget.storyId,
+                    storyTitle: story?['title'] ?? 'Story',
+                  );
+                } else if (value == 'info') {
                   _showStoryInfoDialog();
                 } else if (value == 'refresh') {
                   _loadData();
@@ -954,6 +973,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               itemBuilder: (BuildContext context) {
                 final isPublished = story?['is_published'] == true;
                 return [
+                  const PopupMenuItem(
+                    value: 'previously_on',
+                    child: Row(
+                      children: [Icon(Icons.movie_filter_rounded, color: Colors.amberAccent), SizedBox(width: 8), Text('Previously On... (Recap)')],
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'info',
                     child: Row(
@@ -1142,6 +1167,19 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                           storyTitle: story?['title'],
                           coverUrl: story?['cover_image_url'],
                           characters: characters,
+                        );
+                      },
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.movie_filter_rounded, size: 16, color: Colors.amberAccent),
+                      label: const Text('Previously On... 🎬', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.amber.withValues(alpha: 0.15),
+                      side: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.4)),
+                      onPressed: () {
+                        PreviouslyOnSheet.show(
+                          context,
+                          storyId: widget.storyId,
+                          storyTitle: story?['title'] ?? 'Story',
                         );
                       },
                     ),

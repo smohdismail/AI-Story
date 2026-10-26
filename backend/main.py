@@ -1745,6 +1745,102 @@ async def get_story_timeline_export(story_id: uuid.UUID, db: AsyncSession = Depe
         "timeline": timeline
     }
 
+@app.get("/api/v1/stories/{story_id}/previously_on")
+async def get_story_previously_on_recap(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    story, timeline = await build_story_export_timeline(story_id, db)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    mem_res = await db.execute(
+        select(models.StoryNarrativeMemory)
+        .where(models.StoryNarrativeMemory.story_id == story_id)
+        .order_by(models.StoryNarrativeMemory.created_at.asc())
+    )
+    memories = list(mem_res.scalars().all())
+
+    recap_cards = []
+    last_chapter_num = 0
+    last_chapter_title = ""
+
+    for item in timeline:
+        if item["type"] == "chapter":
+            ch_num = item["chapter_number"]
+            ch_title = item.get("title") or f"Chapter {ch_num}"
+            last_chapter_num = ch_num
+            last_chapter_title = ch_title
+            
+            summary = (item.get("summary") or "").strip()
+            if not summary:
+                content = (item.get("content") or "").strip()
+                if content:
+                    first_para = content.split("\n\n")[0].strip().replace("\n", " ")
+                    summary = first_para[:240] + ("..." if len(first_para) > 240 else "")
+                else:
+                    summary = "Chapter recorded into the story canon."
+
+            recap_cards.append({
+                "type": "chapter",
+                "chapter_number": ch_num,
+                "title": ch_title,
+                "summary": summary,
+                "badge": f"Chapter {ch_num}"
+            })
+
+        elif item["type"] == "chat_section":
+            sec_title = item.get("title") or "Conversations"
+            raw_items = item.get("items", [])
+            if not raw_items:
+                continue
+
+            speakers = list(dict.fromkeys([
+                m.get("speaker") or "Character" 
+                for m in raw_items 
+                if m.get("speaker") and m.get("speaker") != "You"
+            ]))
+            speakers_str = ", ".join(speakers) if speakers else "Characters"
+
+            exchanges = []
+            sample_msgs = raw_items[-3:] if len(raw_items) > 3 else raw_items
+            for sm in sample_msgs:
+                spk = sm.get("speaker") or "Character"
+                t = sm.get("message") or ""
+                if len(t) > 130:
+                    t = t[:127] + "..."
+                exchanges.append({"speaker": spk, "text": t, "is_ai": sm.get("is_ai", False)})
+
+            summary_text = f"Exchanged {len(raw_items)} messages with {speakers_str}."
+
+            recap_cards.append({
+                "type": "chat",
+                "title": sec_title,
+                "speakers": speakers_str,
+                "summary": summary_text,
+                "sample_exchanges": exchanges,
+                "badge": "Interlude"
+            })
+
+    key_revelations = []
+    for m in memories[-4:]:
+        if m.event_summary:
+            clean_ev = m.event_summary.strip()
+            if clean_ev not in key_revelations:
+                key_revelations.append(clean_ev)
+
+    if last_chapter_num > 0:
+        current_status = f"You are currently at Chapter {last_chapter_num}: '{last_chapter_title}'."
+    else:
+        current_status = "Your journey is at its beginning."
+
+    return {
+        "story_title": story.title or "Untitled Story",
+        "synopsis": story.synopsis or "",
+        "genre": story.genre or "",
+        "current_status": current_status,
+        "total_chapters": last_chapter_num,
+        "key_revelations": key_revelations,
+        "recap_cards": recap_cards
+    }
+
 @app.get("/api/v1/stories/{story_id}/export/epub")
 async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     story, timeline = await build_story_export_timeline(story_id, db)
