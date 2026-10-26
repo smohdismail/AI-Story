@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 import '../theme_provider.dart';
 import '../api.dart';
 
@@ -14,6 +15,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customRulesController = TextEditingController();
   final TextEditingController _serverUrlController = TextEditingController();
+  String _selectedSplashTheme = 'unified';
   bool _isLoading = true;
 
   @override
@@ -28,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _customRulesController.text = prefs.getString('global_custom_rules') ?? '';
       _serverUrlController.text = ApiService.baseUrl;
+      _selectedSplashTheme = prefs.getString('splash_theme') ?? 'unified';
       _isLoading = false;
     });
   }
@@ -40,6 +43,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SnackBar(content: Text('Custom AI Rules saved successfully.')),
       );
     }
+  }
+
+  Future<void> _saveSplashTheme(String theme) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('splash_theme', theme);
+    setState(() {
+      _selectedSplashTheme = theme;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Splash Screen theme updated!')),
+      );
+    }
+  }
+
+  void _previewSplash(String themeKey) {
+    context.push('/splash', extra: {
+      'overrideTheme': themeKey,
+      'isPreview': true,
+    });
   }
 
   Future<void> _saveServerUrl(String url) async {
@@ -151,6 +174,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Splash Screen Experience 🎬',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _previewSplash(_selectedSplashTheme),
+                icon: const Icon(Icons.play_circle_fill, size: 18),
+                label: const Text('Test Current'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Choose which cinematic opening screen plays when the app launches:',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                _buildSplashRadio('unified', '👑 Unified Masterpiece', 'Grimoire + Crack + Secret Whisper + Heartbeat', Icons.auto_awesome, Colors.amberAccent),
+                const Divider(height: 1),
+                _buildSplashRadio('dynamic', '🎲 Dynamic Shuffler', 'Surprise opening every launch!', Icons.shuffle, Colors.cyanAccent),
+                const Divider(height: 1),
+                _buildSplashRadio('whisper', '💌 The Secret Whisper', 'Encrypted character transmission & soundwave', Icons.mark_email_unread_rounded, const Color(0xFFFF2D55)),
+                const Divider(height: 1),
+                _buildSplashRadio('rift', '🌌 The Dimensional Rift', 'Cosmic void tearing open into parallel reality', Icons.cyclone, Colors.cyan),
+                const Divider(height: 1),
+                _buildSplashRadio('seal', '📜 The Forbidden Seal', 'Ancient molten wax seal breaking open', Icons.verified_user, Colors.amber),
+                const Divider(height: 1),
+                _buildSplashRadio('thread', '🫀 Red Thread of Fate', 'Living soul tether & heartbeat sync', Icons.favorite, Colors.redAccent),
+                const Divider(height: 1),
+                _buildSplashRadio('celestial', '✨ Celestial Grimoire', 'Cosmic starlight & floating spellbook', Icons.auto_stories, Colors.purpleAccent),
+                const Divider(height: 1),
+                _buildSplashRadio('cyber', '⚡ Cyber Neon Matrix', 'High-tech neural story stream', Icons.bolt, Colors.tealAccent),
+                const Divider(height: 1),
+                _buildSplashRadio('candlelight', '🕯️ Velvet Candlelight', 'Warm tavern hearth & companion echoes', Icons.local_fire_department, Colors.orangeAccent),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
           const Text(
             'Global AI Rules (Director\'s Chair)',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -178,6 +245,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSplashRadio(String key, String title, String subtitle, IconData icon, Color color) {
+    final isSelected = _selectedSplashTheme == key;
+    return RadioListTile<String>(
+      value: key,
+      groupValue: _selectedSplashTheme,
+      onChanged: (val) {
+        if (val != null) _saveSplashTheme(val);
+      },
+      title: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? color : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(left: 30.0, top: 2),
+        child: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white60)),
+      ),
+      secondary: IconButton(
+        icon: const Icon(Icons.visibility_outlined, size: 20),
+        tooltip: 'Preview Screen',
+        onPressed: () => _previewSplash(key),
       ),
     );
   }

@@ -16,8 +16,8 @@ import 'screens/visual_novel_reader.dart';
 import 'screens/community_feed_screen.dart';
 import 'screens/main_navigation_screen.dart';
 import 'screens/character_image_studio_screen.dart';
+import 'screens/splash_screen.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'screens/auth.dart';
 import 'theme_provider.dart';
@@ -36,12 +36,20 @@ void main() async {
   } catch (e) {
     debugPrint('Init notification/voice error: ');
   }
-  final prefs = await SharedPreferences.getInstance();
-  final hasToken = prefs.getString('token') != null;
 
   final router = GoRouter(
-    initialLocation: hasToken ? '/' : '/auth',
+    initialLocation: '/splash',
     routes: <RouteBase>[
+      GoRoute(
+        path: '/splash',
+        builder: (BuildContext context, GoRouterState state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return SplashScreen(
+            overrideTheme: extra?['overrideTheme'] as String?,
+            isPreview: extra?['isPreview'] as bool? ?? false,
+          );
+        },
+      ),
       GoRoute(
         path: '/auth',
         builder: (BuildContext context, GoRouterState state) {
