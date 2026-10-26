@@ -2376,6 +2376,67 @@ class ApiService {
     throw Exception('Failed to upgrade subscription');
   }
 
+  // --- 13. CREDITS & EXPORT WALLET ---
+
+  static Future<Map<String, dynamic>> getCreditPacks() async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/credits/packs'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load credit packs');
+  }
+
+  static Future<Map<String, dynamic>> buyCredits(String packId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/credits/buy'),
+      headers: headers,
+      body: jsonEncode({'pack_id': packId}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to purchase credits');
+  }
+
+  static Future<Map<String, dynamic>> checkExportEligibility(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/stories/$storyId/export/check'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return {
+      'can_export': true,
+      'is_free_trial': true,
+      'credits_required': 0,
+      'current_credits': 0,
+      'free_exports_remaining': 1,
+      'is_vip': false,
+      'message': '1 Free Lifetime Export',
+    };
+  }
+
+  static Future<Map<String, dynamic>> consumeExportQuota(String storyId) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/export/consume'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final err = jsonDecode(response.body);
+      throw Exception(err['detail'] ?? 'Export quota deduction failed');
+    }
+  }
+
   static Future<bool> pingHeartbeat() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/system/heartbeat')).timeout(const Duration(seconds: 5));

@@ -25,6 +25,8 @@ class User(Base):
     daily_chats_used = Column(Integer, default=0, nullable=False)
     daily_stories_created = Column(Integer, default=0, nullable=False)
     daily_quota_date = Column(String, default="", nullable=True)
+    credits = Column(Integer, default=0, nullable=False)
+    free_exports_remaining = Column(Integer, default=1, nullable=False)
     
     stories = relationship("Story", back_populates="user")
     persona = relationship("Persona", back_populates="user", uselist=False, cascade="all, delete-orphan")

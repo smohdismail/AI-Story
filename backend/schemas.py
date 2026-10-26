@@ -55,6 +55,9 @@ class UserQuotaResponse(BaseModel):
     max_daily_stories: int
     daily_stories_remaining: int
     reset_time_utc: str
+    credits: int = 0
+    free_exports_remaining: int = 1
+    export_cost: int = 10
 
 class SubscriptionPlanItem(BaseModel):
     plan_id: str
@@ -81,6 +84,41 @@ class SubscriptionUpgradeResponse(BaseModel):
     subscription_tier: str
     is_subscription_active: bool
     expires_at: Optional[str] = None
+    credits: int = 0
+
+class CreditPackItem(BaseModel):
+    pack_id: str
+    name: str
+    credits: int
+    price_inr: str
+    price_usd: str
+    popular: bool = False
+    badge: Optional[str] = None
+    description: str
+
+class CreditPacksResponse(BaseModel):
+    packs: list[CreditPackItem]
+    current_credits: int
+    free_exports_remaining: int
+
+class BuyCreditsRequest(BaseModel):
+    pack_id: str
+    payment_reference: Optional[str] = None
+
+class BuyCreditsResponse(BaseModel):
+    status: str
+    message: str
+    credits_added: int
+    total_credits: int
+
+class ExportCheckResponse(BaseModel):
+    can_export: bool
+    is_free_trial: bool
+    credits_required: int
+    current_credits: int
+    free_exports_remaining: int
+    is_vip: bool
+    message: str
 
 class PersonaBase(BaseModel):
     name: str

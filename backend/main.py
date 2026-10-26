@@ -564,6 +564,11 @@ async def get_my_quota(db: AsyncSession = Depends(get_db), current_user: models.
     stories_rem = 999999 if is_vip else max(0, 2 - stories_used)
 
     import datetime as dt
+    export_cost = 5 if is_vip else 10
+    user_credits = getattr(current_user, 'credits', 0) or 0
+    free_exports = getattr(current_user, 'free_exports_remaining', 1)
+    if free_exports is None:
+        free_exports = 1
     return schemas.UserQuotaResponse(
         is_vip=is_vip,
         is_owner=is_owner,
@@ -575,6 +580,9 @@ async def get_my_quota(db: AsyncSession = Depends(get_db), current_user: models.
         max_daily_stories=max_stories,
         daily_stories_remaining=stories_rem,
         reset_time_utc="00:00:00 UTC",
+        credits=user_credits,
+        free_exports_remaining=free_exports,
+        export_cost=export_cost,
     )
 
 # --- SUBSCRIPTION ENDPOINTS ---
@@ -655,6 +663,10 @@ async def upgrade_subscription(
     days = 7 if req.plan_id == "VIP_WEEKLY" else (365 if req.plan_id == "VIP_YEARLY" else 30)
     expires_at = now + dt.timedelta(days=days)
     
+    # VIP Bonus Credits perk
+    bonus_credits = 10 if req.plan_id == "VIP_WEEKLY" else (100 if req.plan_id == "VIP_YEARLY" else 30)
+    current_user.credits = (current_user.credits or 0) + bonus_credits
+
     current_user.subscription_tier = req.plan_id
     current_user.is_subscription_active = True
     current_user.subscription_expires_at = expires_at
@@ -663,10 +675,131 @@ async def upgrade_subscription(
 
     return schemas.SubscriptionUpgradeResponse(
         status="success",
-        message=f"Congratulations! You are now upgraded to {req.plan_id}.",
+        message=f"Congratulations! You are now upgraded to {req.plan_id} and received +{bonus_credits} bonus credits!",
         subscription_tier=current_user.subscription_tier,
         is_subscription_active=True,
-        expires_at=expires_at.isoformat()
+        expires_at=expires_at.isoformat(),
+        credits=current_user.credits
+    )
+
+# --- CREDIT STORE & WALLET ENDPOINTS ---
+
+@app.get("/api/v1/credits/packs", response_model=schemas.CreditPacksResponse)
+async def get_credit_packs(current_user: Optional[models.User] = Depends(auth.get_current_user_optional)):
+    """List all available Credit packs for exports and perks."""
+    packs = [
+        schemas.CreditPackItem(
+            pack_id="PACK_STARTER",
+            name="Starter Pack",
+            credits=25,
+            price_inr="₹149",
+            price_usd="$1.99",
+            popular=False,
+            badge=None,
+            description="2-3 Standard exports (or 5 VIP exports)"
+        ),
+        schemas.CreditPackItem(
+            pack_id="PACK_POPULAR",
+            name="Popular Pack",
+            credits=60,
+            price_inr="₹299",
+            price_usd="$3.99",
+            popular=True,
+            badge="BEST VALUE 🔥",
+            description="6 Standard exports (or 12 VIP exports)"
+        ),
+        schemas.CreditPackItem(
+            pack_id="PACK_COLLECTOR",
+            name="Collector Pack",
+            credits=150,
+            price_inr="₹599",
+            price_usd="$7.99",
+            popular=False,
+            badge="MAX SAVINGS 👑",
+            description="15 Standard exports (or 30 VIP exports)"
+        ),
+    ]
+    cur_creds = (getattr(current_user, 'credits', 0) or 0) if current_user else 0
+    free_exp = (getattr(current_user, 'free_exports_remaining', 1) if current_user else 1)
+    if free_exp is None:
+        free_exp = 1
+    return schemas.CreditPacksResponse(
+        packs=packs,
+        current_credits=cur_creds,
+        free_exports_remaining=free_exp
+    )
+
+@app.post("/api/v1/credits/buy", response_model=schemas.BuyCreditsResponse)
+async def buy_credits(
+    req: schemas.BuyCreditsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """Purchase and credit tokens to the user's wallet."""
+    pack_map = {
+        "PACK_STARTER": 25,
+        "PACK_POPULAR": 60,
+        "PACK_COLLECTOR": 150
+    }
+    credits_to_add = pack_map.get(req.pack_id, 25)
+    current_user.credits = (current_user.credits or 0) + credits_to_add
+    await db.commit()
+    await db.refresh(current_user)
+    return schemas.BuyCreditsResponse(
+        status="success",
+        message=f"Added {credits_to_add} credits to your account!",
+        credits_added=credits_to_add,
+        total_credits=current_user.credits
+    )
+
+@app.get("/api/v1/stories/{story_id}/export/check", response_model=schemas.ExportCheckResponse)
+async def check_export_eligibility(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
+    """Check if current user can export this story (Free trial, VIP, or credit balance)."""
+    if not current_user:
+        # Default anonymous/unauthenticated preview
+        return schemas.ExportCheckResponse(
+            can_export=True,
+            is_free_trial=True,
+            credits_required=0,
+            current_credits=0,
+            free_exports_remaining=1,
+            is_vip=False,
+            message="1 Free Lifetime Export available"
+        )
+
+    is_vip = current_user.is_vip
+    free_remaining = getattr(current_user, 'free_exports_remaining', 1)
+    if free_remaining is None:
+        free_remaining = 1
+    credits_balance = getattr(current_user, 'credits', 0) or 0
+    required_cost = 5 if is_vip else 10
+
+    if free_remaining > 0:
+        return schemas.ExportCheckResponse(
+            can_export=True,
+            is_free_trial=True,
+            credits_required=0,
+            current_credits=credits_balance,
+            free_exports_remaining=free_remaining,
+            is_vip=is_vip,
+            message="Your 1st Export is FREE! (1 lifetime trial remaining)"
+        )
+
+    # Check credit balance
+    can_afford = credits_balance >= required_cost
+    msg = f"Export requires {required_cost} credits." if can_afford else f"Insufficient credits. Requires {required_cost} credits (Balance: {credits_balance})."
+    return schemas.ExportCheckResponse(
+        can_export=can_afford,
+        is_free_trial=False,
+        credits_required=required_cost,
+        current_credits=credits_balance,
+        free_exports_remaining=0,
+        is_vip=is_vip,
+        message=msg
     )
 
 # --- SYSTEM HEARTBEAT & KEEP-ALIVE ---
@@ -1935,8 +2068,67 @@ async def get_story_previously_on_recap(story_id: uuid.UUID, db: AsyncSession = 
         "recap_cards": recap_cards
     }
 
+@app.post("/api/v1/stories/{story_id}/export/consume")
+async def consume_export_quota(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """Deduct free export trial or credits when user exports story as PDF/EPUB."""
+    story_res = await db.execute(select(models.Story).where(models.Story.id == story_id))
+    story = story_res.scalar_one_or_none()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    is_owner = current_user.is_system_owner
+    if is_owner:
+        return {"status": "success", "charged": 0, "remaining_credits": current_user.credits or 0, "free_exports": current_user.free_exports_remaining or 0}
+
+    free_remaining = getattr(current_user, 'free_exports_remaining', 1)
+    if free_remaining is None:
+        free_remaining = 1
+
+    if free_remaining > 0:
+        current_user.free_exports_remaining = free_remaining - 1
+        await db.commit()
+        await db.refresh(current_user)
+        return {
+            "status": "success",
+            "message": "Used 1 Free Lifetime Export!",
+            "charged": 0,
+            "was_free": True,
+            "remaining_credits": current_user.credits or 0,
+            "free_exports": current_user.free_exports_remaining
+        }
+
+    is_vip = current_user.is_vip
+    cost = 5 if is_vip else 10
+    user_credits = getattr(current_user, 'credits', 0) or 0
+
+    if user_credits < cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits. This export requires {cost} credits, but you have {user_credits}."
+        )
+
+    current_user.credits = user_credits - cost
+    await db.commit()
+    await db.refresh(current_user)
+    return {
+        "status": "success",
+        "message": f"Successfully unlocked export for {cost} credits.",
+        "charged": cost,
+        "was_free": False,
+        "remaining_credits": current_user.credits,
+        "free_exports": current_user.free_exports_remaining
+    }
+
 @app.get("/api/v1/stories/{story_id}/export/epub")
-async def export_epub(story_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def export_epub(
+    story_id: uuid.UUID, 
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional)
+):
     story, timeline = await build_story_export_timeline(story_id, db)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")

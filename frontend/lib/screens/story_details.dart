@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../widgets/image_crop_dialog.dart';
 import '../pdf_export.dart';
+import '../widgets/credit_store_sheet.dart';
+import '../widgets/vip_subscription_sheet.dart';
 import '../utils/name_generator.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../services/audiobook_service.dart';
@@ -667,6 +669,167 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     );
   }
 
+  Future<bool> _confirmAndDeductExport(String formatLabel) async {
+    try {
+      final check = await ApiService.checkExportEligibility(widget.storyId);
+      final bool isFreeTrial = check['is_free_trial'] == true;
+      final int requiredCredits = check['credits_required'] ?? (check['is_vip'] == true ? 5 : 10);
+      final int currentCredits = check['current_credits'] ?? 0;
+      final bool isVip = check['is_vip'] == true;
+
+      if (!mounted) return false;
+
+      final bool? proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1A34),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: isFreeTrial ? Colors.pinkAccent : Colors.amber.withOpacity(0.5), width: 1.5),
+          ),
+          title: Row(
+            children: [
+              Text(isFreeTrial ? '🎉' : '📚', style: const TextStyle(fontSize: 24)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isFreeTrial ? 'Your 1st Export is FREE!' : 'Export as $formatLabel',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isFreeTrial) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.pinkAccent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.pinkAccent.withOpacity(0.4)),
+                  ),
+                  child: const Text(
+                    'Enjoy 1 complimentary lifetime export of your full story and all character conversations.',
+                    style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Future exports will require credits (10 credits for standard users, 5 credits for active VIPs).',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ] else ...[
+                Text(
+                  'Exporting your story and private character chats into a keepsake $formatLabel requires:',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.toll, color: Colors.amber, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$requiredCredits Credits',
+                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          if (isVip) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                '50% VIP OFF',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      Text(
+                        'Wallet: $currentCredits',
+                        style: TextStyle(
+                          color: currentCredits >= requiredCredits ? Colors.greenAccent : Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (currentCredits < requiredCredits) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'You need ${requiredCredits - currentCredits} more credits to export.',
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            ),
+            if (!isFreeTrial && currentCredits < requiredCredits)
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add_shopping_cart, size: 16),
+                label: const Text('Get Credits'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx, false);
+                  CreditStoreSheet.show(context);
+                },
+              )
+            else
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isFreeTrial ? Colors.pinkAccent : Colors.amber,
+                  foregroundColor: isFreeTrial ? Colors.white : Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(isFreeTrial ? 'Claim Free Export' : 'Confirm ($requiredCredits Credits)'),
+              ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return false;
+
+      // Consume quota/credits
+      await ApiService.consumeExportQuota(widget.storyId);
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.red[800], content: Text(e.toString().replaceAll('Exception: ', ''))),
+        );
+      }
+      return false;
+    }
+  }
+
   void _showExportBottomSheet() {
     showModalBottomSheet(
       context: context,
@@ -687,7 +850,13 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                     children: [
                       const Icon(Icons.ios_share, color: Colors.cyanAccent),
                       const SizedBox(width: 10),
-                      Text('Export Story', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Export Story Book', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.toll, color: Colors.amber),
+                        tooltip: 'Credit Wallet',
+                        onPressed: () => CreditStoreSheet.show(context),
+                      ),
                     ],
                   ),
                 ),
@@ -695,9 +864,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 ListTile(
                   leading: const Icon(Icons.book, color: Colors.amber),
                   title: const Text('Export as EPUB'),
-                  subtitle: const Text('Download e-book format for e-readers'),
+                  subtitle: const Text('Download e-book format for Kindle & e-readers'),
                   onTap: () async {
                     Navigator.pop(context);
+                    final allowed = await _confirmAndDeductExport('EPUB');
+                    if (!allowed || !mounted) return;
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Generating EPUB...')),
                     );
@@ -732,9 +904,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
                   title: const Text('Export as PDF'),
-                  subtitle: const Text('Generate printable PDF document with illustrations'),
+                  subtitle: const Text('Generate printable PDF book with chat logs'),
                   onTap: () async {
                     Navigator.pop(context);
+                    final allowed = await _confirmAndDeductExport('PDF');
+                    if (!allowed || !mounted) return;
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Generating PDF...')),
                     );
