@@ -224,6 +224,7 @@ class CharacterUpdate(BaseModel):
 class CharacterResponse(CharacterBase):
     id: UUID4
     story_id: UUID4
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

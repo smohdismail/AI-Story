@@ -145,6 +145,7 @@ class Character(Base):
     voice_id = Column(String, default="en-US-JennyNeural", nullable=True) # Neural TTS Voice (e.g. en-US-JennyNeural)
     cached_vault_json = Column(Text, nullable=True) # Memory Vault & Relationship analysis cache
     vault_updated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
  
     story = relationship("Story", back_populates="characters")
     chats = relationship("CharacterChat", back_populates="character", cascade="all, delete-orphan")
@@ -256,6 +257,7 @@ class CharacterRelationship(Base):
     relationship_type = Column(String) # e.g. Lover, Rival, Ally, Enemy
     sentiment_score = Column(Integer, default=0) # -100 to +100
     notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class PublicStoryLike(Base):
