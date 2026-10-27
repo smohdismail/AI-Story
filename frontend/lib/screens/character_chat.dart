@@ -35,12 +35,14 @@ import '../widgets/vip_subscription_sheet.dart';
 class CharacterChatScreen extends StatefulWidget {
   final String characterId;
   final String characterName;
+  final String? avatarBase64;
   final String? backgroundImage;
 
   const CharacterChatScreen({
     super.key,
     required this.characterId,
     required this.characterName,
+    this.avatarBase64,
     this.backgroundImage,
   });
 
@@ -73,6 +75,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
       }
     } catch (_) {}
   }
+  String? _effectiveAvatar;
   String? _activeBackgroundPath;
   double _backgroundDimOpacity = 0.6;
   List<String> _suggestions = [];
@@ -117,6 +120,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     WidgetsBinding.instance.addObserver(this);
     _voiceService.addListener(_onVoiceUpdate);
     _scrollController.addListener(_onScroll);
+    _effectiveAvatar = widget.avatarBase64;
     _loadChat();
     _loadCustomBackgroundPreferences();
     _loadQuota();
@@ -139,7 +143,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
       context,
       characterId: widget.characterId,
       characterName: widget.characterName,
-      defaultAvatarBase64: widget.backgroundImage,
+      defaultAvatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
       currentBackground: _activeBackgroundPath,
       currentDim: _backgroundDimOpacity,
       onBackgroundSelected: (newBg, newDim) {
@@ -166,6 +170,28 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
     }
     try {
       return MemoryImage(base64Decode(bg));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  ImageProvider? _resolveAvatarImage() {
+    final av = (_effectiveAvatar != null && _effectiveAvatar!.isNotEmpty)
+        ? _effectiveAvatar
+        : (widget.avatarBase64 != null && widget.avatarBase64!.isNotEmpty)
+            ? widget.avatarBase64
+            : widget.backgroundImage;
+    if (av == null || av.isEmpty) return null;
+
+    if (av.startsWith('http://') || av.startsWith('https://')) {
+      return NetworkImage(av);
+    }
+    final file = File(av);
+    if (file.existsSync()) {
+      return FileImage(file);
+    }
+    try {
+      return MemoryImage(base64Decode(av));
     } catch (_) {
       return null;
     }
@@ -217,9 +243,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
       final msgs = await ApiService.getCharacterChat(widget.characterId);
       final charInfo = await ApiService.getCharacter(widget.characterId);
       final serverBg = charInfo['background_base64']?.toString();
+      final serverAvatar = charInfo['avatar_base64']?.toString();
       setState(() {
         _messages = msgs;
         _intimacyScore = charInfo['intimacy_score'] ?? 0;
+        if (serverAvatar != null && serverAvatar.isNotEmpty) {
+          _effectiveAvatar = serverAvatar;
+        } else if ((_effectiveAvatar == null || _effectiveAvatar!.isEmpty) && charInfo['avatar_url'] != null) {
+          _effectiveAvatar = charInfo['avatar_url']?.toString();
+        }
         if (serverBg != null && serverBg.isNotEmpty) {
           if (_activeBackgroundPath == null || _activeBackgroundPath == widget.backgroundImage) {
             _activeBackgroundPath = serverBg;
@@ -677,7 +709,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
       characterId: widget.characterId,
       characterName: widget.characterName,
       intimacyScore: _intimacyScore,
-      avatarBase64: widget.backgroundImage,
+      avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
     );
   }
 
@@ -964,16 +996,26 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
         titleSpacing: 0,
         title: Row(
           children: [
-            if (widget.backgroundImage != null && widget.backgroundImage!.isNotEmpty) ...[
-              CircleAvatar(
-                radius: 17,
-                backgroundColor: Colors.white12,
-                backgroundImage: widget.backgroundImage!.startsWith('http')
-                    ? NetworkImage(widget.backgroundImage!)
-                    : MemoryImage(base64Decode(widget.backgroundImage!)) as ImageProvider,
-              ),
-              const SizedBox(width: 8),
-            ],
+            Builder(builder: (context) {
+              final avProvider = _resolveAvatarImage();
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white12,
+                    backgroundImage: avProvider,
+                    child: avProvider == null
+                        ? Text(
+                            widget.characterName.isNotEmpty ? widget.characterName[0].toUpperCase() : '?',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              );
+            }),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1053,7 +1095,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
               context,
               characterId: widget.characterId,
               characterName: widget.characterName,
-              avatarBase64: widget.backgroundImage,
+              avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
             ),
           ),
           // 3. Full Features 3-Dots Menu Button
@@ -1077,7 +1119,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Diary') {
                 SecretLockedDiarySheet.show(
@@ -1085,7 +1127,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   characterId: widget.characterId,
                   characterName: widget.characterName,
                   intimacyScore: _intimacyScore,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Voicemails') {
                 CharacterVoicemailsSheet.show(context, {
@@ -1097,21 +1139,21 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Dreamworld') {
                 SharedDreamSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Memory Vault') {
                 CharacterMemoryVaultSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Weather') {
                 AmbienceWeatherSheet.show(context);
@@ -1120,28 +1162,28 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Candid Selfies') {
                 CandidCameraRollSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'VHS Tape') {
                 VhsMemoryClipsSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Boutique Gifts') {
                 StoryRomanceBoutiqueSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                   onGiftGiven: _loadChat,
                 );
               } else if (choice == 'Photobooth Strip') {
@@ -1149,14 +1191,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Inspect Sanctuary') {
                 RoomInspectionSheet.show(
                   context,
                   characterId: widget.characterId,
                   characterName: widget.characterName,
-                  avatarBase64: widget.backgroundImage,
+                  avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                 );
               } else if (choice == 'Intimacy Unlocks') {
                 _showIntimacyMilestones();
@@ -1547,7 +1589,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                                       context,
                                       characterId: widget.characterId,
                                       characterName: widget.characterName,
-                                      avatarBase64: widget.backgroundImage,
+                                      avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                                     ),
                                   ),
                                   TextButton.icon(
@@ -1557,7 +1599,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                                       context,
                                       characterId: widget.characterId,
                                       characterName: widget.characterName,
-                                      avatarBase64: widget.backgroundImage,
+                                      avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                                       onGiftGiven: _loadChat,
                                     ),
                                   ),
@@ -1568,7 +1610,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> with WidgetsB
                                       context,
                                       characterId: widget.characterId,
                                       characterName: widget.characterName,
-                                      avatarBase64: widget.backgroundImage,
+                                      avatarBase64: _effectiveAvatar ?? widget.avatarBase64 ?? widget.backgroundImage,
                                     ),
                                   ),
                                   TextButton.icon(icon: const Icon(Icons.restart_alt, size: 16, color: Colors.red), label: const Text('Restart', style: TextStyle(color: Colors.red)), onPressed: _isSending ? null : _restartChat),

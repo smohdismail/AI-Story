@@ -2239,6 +2239,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                       context.push('/character_chat', extra: {
                                         'characterId': char['id'],
                                         'characterName': charName,
+                                        'avatarBase64': char['avatar_base64'],
                                         'backgroundImage': char['background_base64'] ?? char['avatar_base64'],
                                       });
                                     },
@@ -5017,7 +5018,12 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                                           onPressed: () {
                                             if (post['character_id'] != null) {
                                               Navigator.pop(ctx);
-                                              context.push('/character_chat/${post['character_id']}', extra: {'characterName': charName});
+                                              context.push('/character_chat', extra: {
+                                                'characterId': post['character_id'].toString(),
+                                                'characterName': charName,
+                                                'avatarBase64': post['avatar_base64']?.toString(),
+                                                'backgroundImage': post['avatar_base64']?.toString(),
+                                              });
                                             }
                                           },
                                         ),
@@ -5736,7 +5742,8 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                       context.push('/character_chat', extra: {
                         'characterId': char['id'],
                         'characterName': name,
-                        'backgroundImage': char['avatar_url'],
+                        'avatarBase64': char['avatar_base64'] ?? char['avatar_url'],
+                        'backgroundImage': char['background_base64'] ?? char['avatar_base64'] ?? char['avatar_url'],
                       });
                     },
                     icon: const Icon(Icons.chat, size: 14),

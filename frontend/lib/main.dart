@@ -139,7 +139,8 @@ void main() async {
         return CharacterChatScreen(
           characterId: extra['characterId'] as String,
           characterName: extra['characterName'] as String,
-          backgroundImage: extra['backgroundImage'] as String?,
+          avatarBase64: (extra['avatarBase64'] ?? extra['avatar_base64'] ?? extra['avatar']) as String?,
+          backgroundImage: (extra['backgroundImage'] ?? extra['background_base64']) as String?,
         );
       },
     ),
@@ -194,6 +195,7 @@ void main() async {
           router.push('/character_chat', extra: {
             'characterId': charId,
             'characterName': charName,
+            'avatarBase64': avatar,
             'backgroundImage': avatar,
           });
         }

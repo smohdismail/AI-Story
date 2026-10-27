@@ -364,7 +364,8 @@ class _CharacterLoungeScreenState extends State<CharacterLoungeScreen> {
                       context.push('/character_chat', extra: {
                         'characterId': char['id'],
                         'characterName': name,
-                        'backgroundImage': char['background_base64'] ?? avatar,
+                        'avatarBase64': avatar ?? char['avatar_base64'],
+                        'backgroundImage': char['background_base64'] ?? avatar ?? char['avatar_base64'],
                       });
                     },
                     icon: const Icon(Icons.chat, size: 16),

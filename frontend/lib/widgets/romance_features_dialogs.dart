@@ -1857,7 +1857,8 @@ class _LiveRoutineSheetState extends State<LiveRoutineSheet> {
                               GoRouter.of(context).push('/character_chat', extra: {
                                 'characterId': widget.character['id'],
                                 'characterName': widget.character['name'] ?? 'Character',
-                                'backgroundImage': widget.character['avatar_base64'],
+                                'avatarBase64': widget.character['avatar_base64'],
+                                'backgroundImage': widget.character['background_base64'] ?? widget.character['avatar_base64'],
                               });
                             },
                             icon: const Icon(Icons.chat, size: 16),
