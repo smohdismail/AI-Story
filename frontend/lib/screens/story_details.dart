@@ -2881,6 +2881,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     String? base64Avatar;
     String? fullBackgroundBase64;
     bool isUploading = false;
+    bool isSaving = false;
 
     showDialog(
       context: context,
@@ -3270,36 +3271,51 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               ElevatedButton(
-                onPressed: () async {
-                  if (nameController.text.isEmpty) return;
-                  try {
-                    final created = await ApiService.createCharacter(widget.storyId, {
-                      'name': nameController.text,
-                      'role': roleController.text,
-                      'gender': genderController.text,
-                      'personality': personalityController.text,
-                      'appearance': appearanceController.text,
-                      'relationship_status': relationshipController.text,
-                      'dialogue_style': dialogueStyleController.text,
-                      if (base64Avatar != null || fullBackgroundBase64 != null)
-                        'avatar_base64': base64Avatar ?? fullBackgroundBase64,
-                      if (fullBackgroundBase64 != null || base64Avatar != null)
-                        'background_base64': fullBackgroundBase64 ?? base64Avatar,
-                    });
-                    if (created['id'] != null && (fullBackgroundBase64 != null || base64Avatar != null)) {
-                      final prefs = await SharedPreferences.getInstance();
-                      final bgToSave = fullBackgroundBase64 ?? base64Avatar!;
-                      await prefs.setString('active_bg_${created['id']}', bgToSave);
-                    }
-                    if (mounted) Navigator.pop(context);
-                    _loadData();
-                  } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                  }
-                },
-                child: const Text('Save'),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        if (nameController.text.trim().isEmpty) return;
+                        setStateDialog(() => isSaving = true);
+                        try {
+                          final created = await ApiService.createCharacter(widget.storyId, {
+                            'name': nameController.text.trim(),
+                            'role': roleController.text.trim(),
+                            'gender': genderController.text.trim(),
+                            'personality': personalityController.text.trim(),
+                            'appearance': appearanceController.text.trim(),
+                            'relationship_status': relationshipController.text.trim(),
+                            'dialogue_style': dialogueStyleController.text.trim(),
+                            if (base64Avatar != null || fullBackgroundBase64 != null)
+                              'avatar_base64': base64Avatar ?? fullBackgroundBase64,
+                            if (fullBackgroundBase64 != null || base64Avatar != null)
+                              'background_base64': fullBackgroundBase64 ?? base64Avatar,
+                          });
+                          if (created['id'] != null && (fullBackgroundBase64 != null || base64Avatar != null)) {
+                            final prefs = await SharedPreferences.getInstance();
+                            final bgToSave = fullBackgroundBase64 ?? base64Avatar!;
+                            await prefs.setString('active_bg_${created['id']}', bgToSave);
+                          }
+                          if (mounted) Navigator.pop(context);
+                          _loadData();
+                        } catch (e) {
+                          if (mounted) {
+                            setStateDialog(() => isSaving = false);
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          }
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save'),
               ),
             ],
           );
@@ -3319,6 +3335,7 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
     String? base64Avatar = char['avatar_base64'];
     String? fullBackgroundBase64 = char['background_base64'];
     bool isUploading = false;
+    bool isSaving = false;
 
     showDialog(
       context: context,
@@ -3670,38 +3687,53 @@ class _StoryDetailsScreenState extends State<StoryDetailsScreen> {
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('Delete'),
               ),
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               ElevatedButton(
-                onPressed: () async {
-                  if (nameController.text.isEmpty) return;
-                  try {
-                    final updateData = <String, dynamic>{
-                      'name': nameController.text.trim(),
-                      'role': roleController.text.trim(),
-                      'gender': genderController.text.trim(),
-                      'personality': personalityController.text.trim(),
-                      'appearance': appearanceController.text.trim(),
-                      'relationship_status': relationshipController.text.trim(),
-                      'dialogue_style': dialogueStyleController.text.trim(),
-                    };
-                    if (base64Avatar != null) {
-                      updateData['avatar_base64'] = base64Avatar;
-                    }
-                    if (fullBackgroundBase64 != null) {
-                      updateData['background_base64'] = fullBackgroundBase64;
-                    }
-                    await ApiService.updateCharacter(widget.storyId, char['id'], updateData);
-                    if (fullBackgroundBase64 != null) {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('active_bg_${char['id']}', fullBackgroundBase64!);
-                    }
-                    if (mounted) Navigator.pop(context);
-                    _loadData();
-                  } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                  }
-                },
-                child: const Text('Save Changes'),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        if (nameController.text.trim().isEmpty) return;
+                        setStateDialog(() => isSaving = true);
+                        try {
+                          final updateData = <String, dynamic>{
+                            'name': nameController.text.trim(),
+                            'role': roleController.text.trim(),
+                            'gender': genderController.text.trim(),
+                            'personality': personalityController.text.trim(),
+                            'appearance': appearanceController.text.trim(),
+                            'relationship_status': relationshipController.text.trim(),
+                            'dialogue_style': dialogueStyleController.text.trim(),
+                          };
+                          if (base64Avatar != null) {
+                            updateData['avatar_base64'] = base64Avatar;
+                          }
+                          if (fullBackgroundBase64 != null) {
+                            updateData['background_base64'] = fullBackgroundBase64;
+                          }
+                          await ApiService.updateCharacter(widget.storyId, char['id'], updateData);
+                          if (fullBackgroundBase64 != null) {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('active_bg_${char['id']}', fullBackgroundBase64!);
+                          }
+                          if (mounted) Navigator.pop(context);
+                          _loadData();
+                        } catch (e) {
+                          if (mounted) {
+                            setStateDialog(() => isSaving = false);
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          }
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save Changes'),
               ),
             ],
           );
