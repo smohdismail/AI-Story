@@ -2534,7 +2534,7 @@ Return valid JSON with:
 
 async def extract_dialogue_memory(character_name: str, dialogue_snippet: str) -> dict:
     """Extracts any significant confessions, promises, secrets, or relationship shifts from chat."""
-    prompt = f"""Analyze this recent dialogue between the user and {character_name}. Extract any key confession, secret, emotional promise, or major agreement that should be remembered permanently. If it is only trivial chit-chat or casual pleasantries, return null for \"event_summary\".
+    prompt = f"""Analyze this recent dialogue between the user and {character_name}. Extract any key confession, secret, emotional promise, identity reveal (e.g. real religion, real name, real background, lies admitted), or major agreement that must become permanent story canon. If it is only trivial chit-chat or casual pleasantries, return null for \"event_summary\".
 
 DIALOGUE:
 {dialogue_snippet}
@@ -2542,7 +2542,8 @@ DIALOGUE:
 Return JSON with:
 {{
   \"event_summary\": \"1-2 sentence memory of what was promised, confessed, or revealed (or null if purely trivial chit-chat)\",
-  \"emotional_impact\": \"e.g. Vulnerable confession, Passionate vow, Heated argument, Secret revealed, etc.\"
+  \"emotional_impact\": \"e.g. Vulnerable confession, Secret revealed, True identity admitted, Religious revelation, Passionate vow, Heated argument, etc.\",
+  \"is_permanent_disclosure\": true/false
 }}"""
     try:
         response = await llm_client.chat.completions.create(
@@ -2557,7 +2558,7 @@ Return JSON with:
             return json.loads(m.group(0))
         return json.loads(raw)
     except Exception:
-        return {"event_summary": None, "emotional_impact": None}
+        return {"event_summary": None, "emotional_impact": None, "is_permanent_disclosure": False}
 
 
 

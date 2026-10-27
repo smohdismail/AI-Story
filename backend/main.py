@@ -147,18 +147,50 @@ async def get_story_chapter_chronicle(story_id: uuid.UUID, db: AsyncSession) -> 
             lines.append(f"• Chapter {ch.chapter_number} ('{ch.title}'): {s}")
     return "\n".join(lines)
 
-async def get_story_persistent_memories(story_id: uuid.UUID, db: AsyncSession, limit: int = 15) -> str:
-    mems_res = await db.execute(
+async def get_story_persistent_memories(story_id: uuid.UUID, db: AsyncSession, limit: int = 25) -> str:
+    # 1. Pinned and critical canon revelations first
+    pinned_res = await db.execute(
+        select(models.StoryNarrativeMemory)
+        .where(
+            models.StoryNarrativeMemory.story_id == story_id,
+            or_(
+                models.StoryNarrativeMemory.is_pinned == True,
+                models.StoryNarrativeMemory.emotional_impact.ilike("%secret%"),
+                models.StoryNarrativeMemory.emotional_impact.ilike("%confession%"),
+                models.StoryNarrativeMemory.emotional_impact.ilike("%revealed%"),
+                models.StoryNarrativeMemory.emotional_impact.ilike("%identity%"),
+                models.StoryNarrativeMemory.emotional_impact.ilike("%religion%"),
+                models.StoryNarrativeMemory.emotional_impact.ilike("%truth%"),
+            )
+        )
+        .order_by(models.StoryNarrativeMemory.created_at.asc())
+    )
+    pinned_mems = list(pinned_res.scalars().all())
+
+    # 2. Recent narrative memories
+    recent_res = await db.execute(
         select(models.StoryNarrativeMemory)
         .where(models.StoryNarrativeMemory.story_id == story_id)
         .order_by(models.StoryNarrativeMemory.created_at.desc())
         .limit(limit)
     )
-    mems = list(reversed(mems_res.scalars().all()))
-    if not mems:
+    recent_mems = list(reversed(recent_res.scalars().all()))
+
+    # Deduplicate preserving order
+    seen_ids = set()
+    all_mems = []
+    for m in pinned_mems + recent_mems:
+        if m.id not in seen_ids:
+            seen_ids.add(m.id)
+            all_mems.append(m)
+
+    from datetime import datetime as _dt
+    all_mems.sort(key=lambda x: x.created_at or _dt.min)
+
+    if not all_mems:
         return ""
     lines = []
-    for m in mems:
+    for m in all_mems:
         prefix = f"[{m.source.upper()}]" if m.source else "[MEMORY]"
         who = f" with {m.character_name}" if m.character_name else ""
         lines.append(f"• {prefix}{who}: {m.event_summary} ({m.emotional_impact or 'Moment'})")
@@ -210,15 +242,41 @@ async def bg_evaluate_chat_for_memory(character_id: uuid.UUID, character_name: s
         mem_data = await llm_service.extract_dialogue_memory(character_name, dialogue_snippet)
         event_summary = mem_data.get("event_summary")
         if event_summary:
+            impact = mem_data.get("emotional_impact", "Confession") or "Confession"
+            is_perm = bool(mem_data.get("is_permanent_disclosure"))
+            
+            critical_keywords = [
+                "secret", "confess", "religion", "faith", "hindu", "muslim",
+                "identity", "real name", "fake", "deception", "lying", "lie",
+                "true name", "truth revealed", "promised", "promise"
+            ]
+            check_str = f"{event_summary} {impact}".lower()
+            if any(k in check_str for k in critical_keywords):
+                is_perm = True
+
             async for db in get_db():
                 db_mem = models.StoryNarrativeMemory(
                     story_id=story_id,
+                    character_id=character_id,
                     source="character_chat",
                     character_name=character_name,
                     event_summary=event_summary,
-                    emotional_impact=mem_data.get("emotional_impact", "Confession")
+                    emotional_impact=impact,
+                    is_pinned=is_perm
                 )
                 db.add(db_mem)
+
+                # Synchronize with master story summary if it's a major disclosure
+                if is_perm:
+                    story_obj = await db.get(models.Story, story_id)
+                    if story_obj:
+                        canon_note = f"\n[CANONICAL CHAT REVELATION]: {character_name} and the protagonist discussed: {event_summary} (Characters are fully aware of this truth)."
+                        if story_obj.story_summary:
+                            if event_summary[:25] not in story_obj.story_summary:
+                                story_obj.story_summary = f"{story_obj.story_summary.strip()}\n{canon_note}"
+                        else:
+                            story_obj.story_summary = canon_note
+
                 await db.commit()
                 break
     except Exception as e:
@@ -1684,24 +1742,82 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                 )
 
             # Unified Narrative Synchronization (Memories from 1-on-1 Chat and Tavern Group Chat)
-            mem_res = await db.execute(
+            # 1. Fetch permanent canonical disclosures (pinned, secrets, confessions, identity revelations)
+            crucial_res = await db.execute(
+                select(models.StoryNarrativeMemory)
+                .where(
+                    models.StoryNarrativeMemory.story_id == request.story_id,
+                    or_(
+                        models.StoryNarrativeMemory.is_pinned == True,
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%secret%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%confession%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%revealed%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%identity%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%religion%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%faith%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%truth%"),
+                        models.StoryNarrativeMemory.emotional_impact.ilike("%vow%"),
+                        models.StoryNarrativeMemory.event_summary.ilike("%not muslim%"),
+                        models.StoryNarrativeMemory.event_summary.ilike("%hindu%"),
+                        models.StoryNarrativeMemory.event_summary.ilike("%lying about%"),
+                        models.StoryNarrativeMemory.event_summary.ilike("%fake profile%"),
+                    )
+                )
+                .order_by(models.StoryNarrativeMemory.created_at.asc())
+            )
+            canonical_mems = list(crucial_res.scalars().all())
+
+            # 2. Fetch the latest narrative memories from 1-on-1 chats and tavern
+            recent_res = await db.execute(
                 select(models.StoryNarrativeMemory)
                 .where(models.StoryNarrativeMemory.story_id == request.story_id)
                 .order_by(models.StoryNarrativeMemory.created_at.desc())
-                .limit(6)
+                .limit(16)
             )
-            narrative_mems = mem_res.scalars().all()
-            if narrative_mems:
+            recent_mems = list(reversed(recent_res.scalars().all()))
+
+            # Deduplicate preserving chronological order
+            seen_m_ids = set()
+            all_narrative_mems = []
+            for m in canonical_mems + recent_mems:
+                if m.id not in seen_m_ids:
+                    seen_m_ids.add(m.id)
+                    all_narrative_mems.append(m)
+            
+            from datetime import datetime as _dt
+            all_narrative_mems.sort(key=lambda x: x.created_at or _dt.min)
+
+            if canonical_mems:
                 story_context += (
-                    "--- 🔗 UNIFIED NARRATIVE SYNCHRONIZATION (Events from Character & Tavern Chats) ---\n"
-                    "The following memorable interactions, confessions, and banter recently took place between the user and characters in private chats or the tavern:\n"
+                    "========================================================================================\n"
+                    "🚨 ABSOLUTE CANONICAL DISCLOSURES & ESTABLISHED TRUTHS (ALREADY KNOWN TO CHARACTERS)\n"
+                    "========================================================================================\n"
+                    "The following vital secrets, identity revelations, and confessions have ALREADY been revealed by the protagonist/user to the characters in private 1-on-1 conversations:\n"
                 )
-                for m in reversed(narrative_mems):
-                    story_context += f"• [{m.source.upper()}] with {m.character_name or 'Lead'}: \"{m.event_summary}\" (Emotional tone: {m.emotional_impact or 'Chemistry'})\n"
+                for m in canonical_mems:
+                    who = f" with {m.character_name}" if m.character_name else ""
+                    story_context += f"• [{m.source.upper()}]{who}: \"{m.event_summary}\" (Status: {m.emotional_impact or 'Established Canon'})\n"
                 story_context += (
-                    "CRITICAL CONTINUITY INSTRUCTION: You MUST naturally reference, acknowledge, or build upon these recent private chat/tavern developments in this chapter! "
-                    "Characters must remember what they whispered, argued about, or promised in conversation.\n"
-                    "-----------------------------------------------------------------------------------\n\n"
+                    "\nSTRICT CANON CONTINUITY RULES (MANDATORY):\n"
+                    "1. THE CHARACTERS ALREADY KNOW THESE TRUTHS 100%. Under NO circumstance should any character act oblivious, surprised, or hear this information for the first time in this chapter!\n"
+                    "2. NEVER RE-ENACT THE CONFESSION SCENE! Do NOT write a scene where the protagonist nervously reveals their secret/identity for the first time if it is already listed above. The confession ALREADY happened.\n"
+                    "3. WRITE FROM THE ONGOING REALITY & AFTERMATH: If a character was asked for 'time to think' or had religious/personal hesitation, write their ongoing emotional processing, their follow-up thoughts, or their next honest conversation—NOT initial shock or disbelief.\n"
+                    "4. The characters' inner thoughts, dialogue, and body language MUST be completely consistent with having already received this truth.\n"
+                    "========================================================================================\n\n"
+                )
+
+            recent_other_mems = [m for m in all_narrative_mems if m not in canonical_mems]
+            if recent_other_mems:
+                story_context += (
+                    "--- 🔗 RECENT CHAT & TAVERN INTERACTIONS ---\n"
+                    "The following recent events, banter, and emotional moments also took place in 1-on-1 chats and group interactions:\n"
+                )
+                for m in recent_other_mems:
+                    who = f" with {m.character_name}" if m.character_name else ""
+                    story_context += f"• [{m.source.upper()}]{who}: \"{m.event_summary}\" ({m.emotional_impact or 'Chemistry'})\n"
+                story_context += (
+                    "Naturally weave these recent emotional vibes and promises into the chapter.\n"
+                    "--------------------------------------------\n\n"
                 )
             
             # Fetch and inject world items
@@ -1746,7 +1862,13 @@ async def generate_chapter(request: GenerateRequest, db: AsyncSession = Depends(
                 if story and story.story_summary:
                     rolling_context += f"MASTER STORY SUMMARY:\n{story.story_summary}\n\n"
                 
-                rolling_context += f"--- IMMEDIATE PREVIOUS CHAPTER (Chapter {last_chapter.chapter_number}) ---\n...{last_chapter.content[-2500:]}\n\n[CONTINUE THE STORY FROM HERE]"
+                continuation_note = "[CONTINUE THE STORY FROM HERE]\n"
+                if canonical_mems:
+                    continuation_note += (
+                        "CRITICAL REMINDER: All private chat confessions and identity disclosures (e.g. true religion, real identity) are ALREADY ESTABLISHED CANON. "
+                        "Do not write a scene where characters hear these secrets for the first time. Continue from where the previous chapter left off, honoring all established truths.\n"
+                    )
+                rolling_context += f"--- IMMEDIATE PREVIOUS CHAPTER (Chapter {last_chapter.chapter_number}) ---\n...{last_chapter.content[-2500:]}\n\n{continuation_note}"
                 request.context = rolling_context
         else:
             # Chapter 1 Master Introduction & Character Portrait Directive
